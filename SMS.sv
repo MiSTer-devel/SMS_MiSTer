@@ -210,39 +210,11 @@ sdram ram
 	.ready()
 );
 
-/*
-assign SDRAM_CKE = 1;
-
-sdram2 ram
-(
-	.clk(clk_mem),
-	.init(~locked),
-	.clkref(clk_cpu),
-
-	.sd_data(SDRAM_DQ),
-	.sd_addr(SDRAM_A),
-	.sd_dqm({SDRAM_DQMH, SDRAM_DQML}),
-	.sd_cs(SDRAM_nCS),
-	.sd_ba(SDRAM_BA),
-	.sd_we(SDRAM_nWE),
-	.sd_ras(SDRAM_nRAS),
-	.sd_cas(SDRAM_nCAS),
-
-	.addr(ioctl_download ? ioctl_addr : ram_addr),
-	.din(ioctl_dout),
-	.we(ioctl_wr),
-	.dout(ram_dout),
-	.oe(~ram_rd_n)
-);
-*/
-
-
 assign CLK_VIDEO = clk_cpu;
 assign CE_PIXEL = 1;
 
 wire [5:0] audio;
 
-//wire [15:0] compr[7:0] = '{ {1'b1, audio[13:0], 1'b0}, 16'h8000, 16'h8000, 16'h8000, 16'h7FFF, 16'h7FFF, 16'h7FFF,  {1'b0, audio[13:0], 1'b0}};
 assign AUDIO_L = {audio, audio, audio[5:3]};
 assign AUDIO_R = AUDIO_L;
 assign AUDIO_S = 0;
