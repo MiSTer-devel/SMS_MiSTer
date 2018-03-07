@@ -9,7 +9,8 @@ entity ntsc_video is
 		y:					out unsigned(7 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
-		de:            out std_logic);
+		hblank:			out std_logic;
+		vblank:			out std_logic);
 end ntsc_video;
 
 architecture Behavioral of ntsc_video is
@@ -51,10 +52,16 @@ begin
 	process (clk8)
 	begin
 		if rising_edge(clk8) then
-			if (hcount>=164 and hcount<420 and vcount>=40 and vcount<232) then
-				de <= '1';
+			if (hcount>=164 and hcount<420) then
+				hblank <= '0';
 			else
-				de <= '0';
+				hblank <= '1';
+			end if;
+			
+			if (vcount>=40 and vcount<232) then
+				vblank <= '0';
+			else
+				vblank <= '1';
 			end if;
 		end if;
 	end process;

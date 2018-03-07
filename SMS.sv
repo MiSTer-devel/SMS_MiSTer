@@ -114,11 +114,12 @@ localparam CONF_STR = {
 	"F,SMS,Load ROM;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
+	"O34,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"O2,TV System,NTSC,PAL;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"-;",
-	"TA,Reset;",
+	"RA,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
 	"V,v1.0.",`BUILD_DATE
 };
@@ -166,6 +167,8 @@ wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
 
+wire        forced_scandoubler;
+
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
 	.clk_sys(clk_sys),
@@ -178,6 +181,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 
 	.buttons(buttons),
 	.status(status),
+	.forced_scandoubler(forced_scandoubler),
 
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0),
@@ -213,9 +217,6 @@ sdram ram
 	.rd(ram_rd),
 	.ready()
 );
-
-assign CLK_VIDEO = clk_vid;
-assign CE_PIXEL = ce_pix;
 
 wire [5:0] audio;
 
@@ -269,7 +270,6 @@ system system
 wire [8:0] x;
 wire [7:0] y;
 wire [5:0] color;
-assign {VGA_R, VGA_G, VGA_B} = {{4{color[1:0]}}, {4{color[3:2]}}, {4{color[5:4]}}};
 
 video video
 (
@@ -278,17 +278,43 @@ video video
 	.x(x),
 	.y(y),
 
-	.hsync(VGA_HS),
-	.vsync(VGA_VS),
-	.de(VGA_DE)
+	.hsync(HSync),
+	.vsync(VSync),
+	.hblank(HBlank),
+	.vblank(VBlank)
 );
 
 reg ce_pix;
 always @(posedge clk_vid) begin
-	reg old_clk;
+	reg clkd, clkd2;
 	
-	old_clk <= clk_cpu;
-	ce_pix <= ~old_clk & clk_cpu;
+	clkd  <= clk_cpu;
+	clkd2 <= clkd;
+	ce_pix <= ~clkd2 & clkd;
 end
+
+wire HSync, VSync;
+wire HBlank, VBlank;
+
+wire [1:0] scale = status[4:3];
+
+assign CLK_VIDEO = clk_vid;
+
+video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
+(
+	.*,
+	.clk_sys(clk_vid),
+	.ce_pix_out(CE_PIXEL),
+	
+	.scanlines({scale == 3, scale == 2}),
+	.scandoubler(scale || forced_scandoubler),
+	.hq2x(scale==1),
+	.mono(0),
+
+	.R({4{color[1:0]}}),
+	.G({4{color[3:2]}}),
+	.B({4{color[5:4]}})
+);
+
 
 endmodule
