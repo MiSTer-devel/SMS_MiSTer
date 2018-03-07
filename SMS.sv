@@ -2,7 +2,7 @@
 //  SMS replica
 // 
 //  Port to MiSTer
-//  Copyright (C) 2017 Sorgelig
+//  Copyright (C) 2017,2018 Sorgelig
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -29,7 +29,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [37:0] HPS_BUS,
+	inout  [44:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -51,7 +51,7 @@ module emu
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
-	// b[1]: 0 - LED status is system status ORed with b[0]
+	// b[1]: 0 - LED status is system status OR'd with b[0]
 	//       1 - LED status is controled solely by b[0]
 	// hint: supply 2'b00 to let the system control the LED.
 	output  [1:0] LED_POWER,
@@ -60,6 +60,7 @@ module emu
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
 	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
+	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
 	input         TAPE_IN,
 
 	// SD-SPI
@@ -67,6 +68,7 @@ module emu
 	output        SD_MOSI,
 	input         SD_MISO,
 	output        SD_CS,
+	input         SD_CD,
 
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
@@ -128,6 +130,7 @@ wire locked;
 wire clk_sys = clk_cpu;
 wire clk_mem;
 wire clk_cpu;
+wire clk_vid;
 
 pll pll
 (
@@ -136,6 +139,7 @@ pll pll
 	.outclk_0(clk_mem),
 	.outclk_1(SDRAM_CLK),
 	.outclk_2(clk_cpu),
+	.outclk_3(clk_vid),
 	.locked(locked)
 );
 
@@ -210,14 +214,15 @@ sdram ram
 	.ready()
 );
 
-assign CLK_VIDEO = clk_cpu;
-assign CE_PIXEL = 1;
+assign CLK_VIDEO = clk_vid;
+assign CE_PIXEL = ce_pix;
 
 wire [5:0] audio;
 
 assign AUDIO_L = {audio, audio, audio[5:3]};
 assign AUDIO_R = AUDIO_L;
 assign AUDIO_S = 0;
+assign AUDIO_MIX = 0;
 
 wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
 wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
@@ -278,5 +283,12 @@ video video
 	.de(VGA_DE)
 );
 
+reg ce_pix;
+always @(posedge clk_vid) begin
+	reg old_clk;
+	
+	old_clk <= clk_cpu;
+	ce_pix <= ~old_clk & clk_cpu;
+end
 
 endmodule

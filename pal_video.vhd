@@ -44,7 +44,7 @@ begin
 		end if;
 	end process;
 	
-	x	<= hcount-164;
+	x	<= hcount-166;
 	y9	<= vcount-64;
 	y	<= y9(7 downto 0);
 

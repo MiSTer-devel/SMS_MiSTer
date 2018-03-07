@@ -33,7 +33,7 @@
 module hps_io #(parameter STRLEN=0, PS2DIV=2000, WIDE=0, VDNUM=1, PS2WE=0)
 (
 	input             clk_sys,
-	inout      [37:0] HPS_BUS,
+	inout      [44:0] HPS_BUS,
 
 	// parameter STRLEN and the actual length of conf_str have to match
 	input [(8*STRLEN)-1:0] conf_str,
@@ -79,7 +79,10 @@ module hps_io #(parameter STRLEN=0, PS2DIV=2000, WIDE=0, VDNUM=1, PS2WE=0)
 	input             ioctl_wait,
 
 	// RTC MSM6242B layout
-	output reg [63:0] RTC,
+	output reg [64:0] RTC,
+
+	// Seconds since 1970-01-01 00:00:00
+	output reg [32:0] TIMESTAMP,
 
 	// ps2 keyboard emulation
 	output            ps2_kbd_clk_out,
@@ -93,7 +96,15 @@ module hps_io #(parameter STRLEN=0, PS2DIV=2000, WIDE=0, VDNUM=1, PS2WE=0)
 	output            ps2_mouse_clk_out,
 	output            ps2_mouse_data_out,
 	input             ps2_mouse_clk_in,
-	input             ps2_mouse_data_in
+	input             ps2_mouse_data_in,
+
+	// ps2 alternative interface.
+
+	// [8] - extended, [9] - pressed, [10] - toggles with every press/release
+	output reg [10:0] ps2_key = 0,
+	
+	// [24] - toggles with every event
+	output reg [24:0] ps2_mouse = 0
 );
 
 localparam DW = (WIDE) ? 15 : 7;
@@ -136,11 +147,115 @@ wire [15:0] sd_cmd =
 	sd_rd[0]
 };
 
+///////////////// calc video parameters //////////////////
+
+wire clk_100 = HPS_BUS[43];
+wire clk_vid = HPS_BUS[42];
+wire ce_pix  = HPS_BUS[41];
+wire de      = HPS_BUS[40];
+wire hs      = HPS_BUS[39];
+wire vs      = HPS_BUS[38];
+wire vs_hdmi = HPS_BUS[44];
+
+reg [31:0] vid_hcnt = 0;
+reg [31:0] vid_vcnt = 0;
+reg  [7:0] vid_nres = 0;
+integer hcnt;
+
+always @(posedge clk_vid) begin
+	integer vcnt;
+	reg old_vs= 0, old_de = 0;
+	reg calch = 0;
+
+	if(ce_pix) begin
+		old_vs <= vs;
+		old_de <= de;
+
+		if(~vs & ~old_de & de) vcnt <= vcnt + 1;
+		if(calch & de) hcnt <= hcnt + 1;
+		if(old_de & ~de) calch <= 0;
+
+		if(old_vs & ~vs) begin
+			if(hcnt && vcnt) begin
+				if(vid_hcnt != hcnt || vid_vcnt != vcnt) vid_nres <= vid_nres + 1'd1;
+				vid_hcnt <= hcnt;
+				vid_vcnt <= vcnt;
+			end
+			vcnt <= 0;
+			hcnt <= 0;
+			calch <= 1;
+		end
+	end
+end
+
+reg [31:0] vid_htime = 0;
+reg [31:0] vid_vtime = 0;
+reg [31:0] vid_pix = 0;
+
+always @(posedge clk_100) begin
+	integer vtime, htime, hcnt;
+	reg old_vs, old_hs, old_vs2, old_hs2, old_de, old_de2;
+	reg calch = 0;
+
+	old_vs <= vs;
+	old_hs <= hs;
+
+	old_vs2 <= old_vs;
+	old_hs2 <= old_hs;
+
+	vtime <= vtime + 1'd1;
+	htime <= htime + 1'd1;
+
+	if(~old_vs2 & old_vs) begin
+		vid_pix <= hcnt;
+		vid_vtime <= vtime;
+		vtime <= 0;
+		hcnt <= 0;
+	end
+
+	if(old_vs2 & ~old_vs) calch <= 1;
+
+	if(~old_hs2 & old_hs) begin
+		vid_htime <= htime;
+		htime <= 0;
+	end
+
+	old_de   <= de;
+	old_de2  <= old_de;
+
+	if(calch & old_de) hcnt <= hcnt + 1;
+	if(old_de2 & ~old_de) calch <= 0;
+end
+
+reg [31:0] vid_vtime_hdmi;
+always @(posedge clk_100) begin
+	integer vtime;
+	reg old_vs, old_vs2;
+
+	old_vs <= vs_hdmi;
+	old_vs2 <= old_vs;
+
+	vtime <= vtime + 1'd1;
+
+	if(~old_vs2 & old_vs) begin
+		vid_vtime_hdmi <= vtime;
+		vtime <= 0;
+	end
+end
+
+
+/////////////////////////////////////////////////////////
+
+reg [31:0] ps2_key_raw = 0;
+wire       pressed  = (ps2_key_raw[15:8] != 8'hf0);
+wire       extended = (~pressed ? (ps2_key_raw[23:16] == 8'he0) : (ps2_key_raw[15:8] == 8'he0));
+
 always@(posedge clk_sys) begin
 	reg [15:0] cmd;
 	reg  [9:0] byte_cnt;   // counts bytes
 	reg  [2:0] b_wr;
 	reg  [2:0] stick_idx;
+	reg        ps2skip = 0;
 
 	sd_buff_wr <= b_wr[0];
 	if(b_wr[2] && (~&sd_buff_addr)) sd_buff_addr <= sd_buff_addr + 1'b1;
@@ -149,10 +264,21 @@ always@(posedge clk_sys) begin
 	{kbd_rd,kbd_we,mouse_rd,mouse_we} <= 0;
 	
 	if(~io_enable) begin
+		if(cmd == 4 && !ps2skip) ps2_mouse[24] <= ~ps2_mouse[24];
+		if(cmd == 5 && !ps2skip) begin
+			ps2_key <= {~ps2_key[10], pressed, extended, ps2_key_raw[7:0]};
+			if(ps2_key_raw == 'hE012E07C) ps2_key[9:0] <= 'h37C; // prnscr pressed
+			if(ps2_key_raw == 'h7CE0F012) ps2_key[9:0] <= 'h17C; // prnscr released
+			if(ps2_key_raw == 'hF014F077) ps2_key[9:0] <= 'h377; // pause  pressed
+		end
+		if(cmd == 'h22) RTC[64] <= ~RTC[64];
+		if(cmd == 'h24) TIMESTAMP[32] <= ~TIMESTAMP[32];
+		cmd <= 0;
 		byte_cnt <= 0;
 		sd_ack <= 0;
 		sd_ack_conf <= 0;
 		io_dout <= 0;
+		ps2skip <= 0;
 	end else begin
 		if(io_strobe) begin
 
@@ -170,6 +296,7 @@ always@(posedge clk_sys) begin
 
 				sd_buff_addr <= 0;
 				img_mounted <= 0;
+				if(io_din == 5) ps2_key_raw <= 0;
 			end else begin
 
 				case(cmd)
@@ -182,12 +309,22 @@ always@(posedge clk_sys) begin
 					'h04: begin
 							mouse_data <= io_din[7:0];
 							mouse_we   <= 1;
+							if(&io_din[15:8]) ps2skip <= 1;
+							if(~&io_din[15:8] & ~ps2skip) begin
+								case(byte_cnt)
+									1: ps2_mouse[7:0]   <= io_din[7:0];
+									2: ps2_mouse[15:8]  <= io_din[7:0];
+									3: ps2_mouse[23:16] <= io_din[7:0];
+								endcase
+							end
 						end
 
 					// store incoming ps2 keyboard bytes 
 					'h05: begin
+							if(&io_din[15:8]) ps2skip <= 1;
+							if(~&io_din[15:8] & ~ps2skip) ps2_key_raw[31:0] <= {ps2_key_raw[23:0], io_din[7:0]};
 							kbd_data <= io_din[7:0];
-							kbd_we   <= 1;
+							kbd_we <= 1;
 						end
 
 					// reading config string
@@ -263,6 +400,28 @@ always@(posedge clk_sys) begin
 						end
 					//RTC
 					'h22: RTC[(byte_cnt-6'd1)<<4 +:16] <= io_din;
+
+					//Video res.
+					'h23: begin
+								case(byte_cnt)
+									1: io_dout <= vid_nres;
+									2: io_dout <= vid_hcnt[15:0];
+									3: io_dout <= vid_hcnt[31:16];
+									4: io_dout <= vid_vcnt[15:0];
+									5: io_dout <= vid_vcnt[31:16];
+									6: io_dout <= vid_htime[15:0];
+									7: io_dout <= vid_htime[31:16];
+									8: io_dout <= vid_vtime[15:0];
+									9: io_dout <= vid_vtime[31:16];
+								  10: io_dout <= vid_pix[15:0];
+								  11: io_dout <= vid_pix[31:16];
+								  12: io_dout <= vid_vtime_hdmi[15:0];
+								  13: io_dout <= vid_vtime_hdmi[31:16];
+								endcase
+						end
+
+					//RTC
+					'h24: TIMESTAMP[(byte_cnt-6'd1)<<4 +:16] <= io_din;
 				endcase
 			end
 		end
@@ -397,6 +556,7 @@ module ps2_device #(parameter PS2_FIFO_BITS=5)
 	input        ps2_clk,
 	output reg   ps2_clk_out,
 	output reg   ps2_dat_out,
+	output reg   tx_empty,
 
 	input        ps2_clk_in,
 	input        ps2_dat_in,
@@ -428,6 +588,8 @@ always@(posedge clk_sys) begin
 	reg [3:0] rx_cnt;
 
 	reg c1,c2,d1;
+
+	tx_empty <= ((wptr == rptr) && (tx_state == 0));
 
 	if(we) begin
 		fifo[wptr] <= wdata;
