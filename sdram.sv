@@ -30,6 +30,7 @@ module sdram
 (
    input             init,        // reset to initialize RAM
    input             clk,         // clock ~100MHz
+	input             clk_ref,     // sync to slower clock (8MHz)
                                   //
                                   // SDRAM_* - signals to the MT48LC16M16 chip
    inout  reg [15:0] SDRAM_DQ,    // 16 bit bidirectional data bus
@@ -102,7 +103,8 @@ typedef enum
 	STATE_WRITE,
 	STATE_READ,
 	STATE_IDLE,	  STATE_IDLE_1, STATE_IDLE_2, STATE_IDLE_3,
-	STATE_IDLE_4, STATE_IDLE_5, STATE_IDLE_6, STATE_IDLE_7
+	STATE_IDLE_4, STATE_IDLE_5, STATE_IDLE_6, STATE_IDLE_7,
+	STATE_WAIT_CLK
 } state_t;
 
 always @(posedge clk) begin
@@ -187,26 +189,32 @@ always @(posedge clk) begin
 		STATE_IDLE_5: state <= STATE_IDLE_4;
 		STATE_IDLE_4: state <= STATE_IDLE_3;
 		STATE_IDLE_3: state <= STATE_IDLE_2;
-		STATE_IDLE_2: state <= STATE_IDLE_1;
+		STATE_IDLE_2: state <= STATE_WAIT_CLK;
+		STATE_WAIT_CLK: begin
+			if(clk_ref) begin
+				state <= STATE_IDLE;
+			end
+		end
 		STATE_IDLE_1: begin
 			SDRAM_DQ   <= 16'bZZZZZZZZZZZZZZZZ;
 			state      <= STATE_IDLE;
 			// mask possible refresh to reduce colliding.
-			if(refresh_count > cycles_per_refresh) begin
             //------------------------------------------------------------------------
             //-- Start the refresh cycle. 
             //-- This tasks tRFC (66ns), so 6 idle cycles are needed @ 100MHz
             //------------------------------------------------------------------------
 				state    <= STATE_IDLE_7;
 				command  <= CMD_AUTO_REFRESH;
-				refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
-			end
+				if(refresh_count >= cycles_per_refresh) begin
+					refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
+				end else begin
+					refresh_count <= 0;
+				end
 		end
 
 		STATE_IDLE: begin
 			// Priority is to issue a refresh if one is outstanding
-			if(refresh_count > (cycles_per_refresh<<1)) state <= STATE_IDLE_1;
-			else if(new_rd | new_we) begin
+			if((refresh_count <= cycles_per_refresh) & (new_rd | new_we)) begin
 				new_we   <= 0;
 				new_rd   <= 0;
 				save_addr<= addr;
@@ -215,6 +223,8 @@ always @(posedge clk) begin
 				command  <= CMD_ACTIVE;
 				SDRAM_A  <= addr[13:1];
 				SDRAM_BA <= addr[24:23];
+			end else begin
+				state    <= STATE_IDLE_1;
 			end
 		end
 

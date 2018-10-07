@@ -209,6 +209,7 @@ sdram ram
 	.*,
 	.init(~locked),
 	.clk(clk_mem),
+	.clk_ref(clk_cpu),
 	.dout(ram_dout),
 	.din (ioctl_dout),
 	.addr(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
@@ -217,6 +218,22 @@ sdram ram
 	.rd(ram_rd),
 	.ready()
 );
+
+//	GENERIC
+//	(
+//		init_file			: string := "none";
+//		widthad_a			: natural;
+//		width_a				: natural := 8;
+//    outdata_reg_a : string := "UNREGISTERED"
+//spram #(.widthad_a(18)) ram
+//(
+////	.address(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
+//	.address(ioctl_download ? ioctl_addr : {ram_addr[17:14] & cart_sz[3:0], ram_addr[13:0]}),
+//	.clock(clk_mem),
+//	.data(ioctl_dout),
+//	.wren(ioctl_wr),
+//	.q(ram_dout)
+//);
 
 wire [5:0] audio;
 
