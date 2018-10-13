@@ -79,7 +79,8 @@ architecture Behavioral of system is
 		D_out:			out STD_LOGIC_VECTOR(7 downto 0);			
 		x:					in  unsigned(8 downto 0);
 		y:					in  unsigned(7 downto 0);
-		color: 			out std_logic_vector (5 downto 0));
+		color: 			out std_logic_vector (5 downto 0);
+		reset_n:       in  STD_LOGIC);
 	end component;
 	
 	component psg is
@@ -193,7 +194,8 @@ begin
 		D_out		=> vdp_D_out,
 		x			=> x,
 		y			=> y,
-		color		=> color
+		color		=> color,
+		reset_n  => reset
 	);
 
 	psg_inst: psg
