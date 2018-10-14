@@ -8,6 +8,7 @@ entity system is
 	port (
 		clk_cpu:		in		STD_LOGIC;
 		clk_vdp:		in		STD_LOGIC;
+		clk_sys:		in		STD_LOGIC;
 		
 		rom_rd:  	out	STD_LOGIC;
 		rom_a:		out	STD_LOGIC_VECTOR(21 downto 0);
@@ -33,7 +34,13 @@ entity system is
 		color:		out	STD_LOGIC_VECTOR(5 downto 0);
 		audio:		out	STD_LOGIC_VECTOR(5 downto 0);
 
-		dbr:    in STD_LOGIC);
+		dbr:    in STD_LOGIC;
+		
+		--Backup RAM
+		add_bk:	in STD_LOGIC_VECTOR(14 downto 0);
+		data_bk:	in STD_LOGIC_VECTOR(7 downto 0);
+		wren_bk:	in STD_LOGIC;
+		q_bk:		out STD_LOGIC_VECTOR(7 downto 0));
 end system;
 
 architecture Behavioral of system is
@@ -79,7 +86,8 @@ architecture Behavioral of system is
 		D_out:			out STD_LOGIC_VECTOR(7 downto 0);			
 		x:					in  unsigned(8 downto 0);
 		y:					in  unsigned(7 downto 0);
-		color: 			out std_logic_vector (5 downto 0));
+		color: 			out std_logic_vector (5 downto 0);
+		reset_n:       in  STD_LOGIC);
 	end component;
 	
 	component psg is
@@ -87,7 +95,8 @@ architecture Behavioral of system is
 		clk:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
-		output:			out STD_LOGIC_VECTOR (5 downto 0));
+		output:			out STD_LOGIC_VECTOR (5 downto 0);
+		reset_n:			in  STD_LOGIC);
 	end component;
 	
 	component io is
@@ -193,7 +202,8 @@ begin
 		D_out		=> vdp_D_out,
 		x			=> x,
 		y			=> y,
-		color		=> color
+		color		=> color,
+		reset_n  => reset
 	);
 
 	psg_inst: psg
@@ -202,7 +212,8 @@ begin
 		clk		=> clk_cpu,
 		WR_n		=> psg_WR_n,
 		D_in		=> D_in,
-		output	=> audio
+		output	=> audio,
+		reset_n	=> reset
 	);
 
 	io_inst: io
@@ -243,18 +254,23 @@ begin
 		q			=> ram_D_out
 	);
 
-	nvram_inst : entity work.spram
+	nvram_inst : entity work.dpram
 	generic map
 	(
 		widthad_a=> 15
 	)
 	port map
 	(
-		clock		=> clk_cpu,
-		address	=> (nvram_p and not A(14)) & A(13 downto 0),
-		wren		=> nvram_WR,
-		data		=> D_in,
-		q			=> nvram_D_out
+		clock_a		=> clk_cpu,
+		address_a	=> (nvram_p and not A(14)) & A(13 downto 0),
+		wren_a		=> nvram_WR,
+		data_a		=> D_in,
+		q_a			=> nvram_D_out,
+		clock_b		=> clk_sys,
+		address_b	=> add_bk,
+		wren_b		=> wren_bk,
+		data_b		=> data_bk,
+		q_b			=> q_bk
 	);
 
 	boot_rom_inst : entity work.sprom
@@ -287,6 +303,7 @@ begin
 		if rising_edge(clk_cpu) then
 			if reset='0' then 
 				bootloader <= '0';
+				reset_counter <= (others=>'1');
 			end if;
 
 			-- memory control
@@ -302,7 +319,7 @@ begin
 	end process;
 	reset_n <= '0' when reset_counter>0 else '1';
 	
-	irom_D_out <=	boot_rom_D_out when bootloader='0' and A(15 downto 14)="00" and dbr='0' else rom_do;
+	irom_D_out <=	boot_rom_D_out when bootloader='0' and A(15 downto 14)="00" else rom_do;
 	
 	process (io_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e)
 	begin

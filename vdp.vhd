@@ -14,7 +14,8 @@ entity vdp is
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
 		x:					unsigned(8 downto 0);
 		y:					unsigned(7 downto 0);
-		color:			out std_logic_vector (5 downto 0));
+		color:			out std_logic_vector (5 downto 0);
+		reset_n:       in  STD_LOGIC);
 end vdp;
 
 architecture Behavioral of vdp is
@@ -169,7 +170,24 @@ begin
 
 	process (cpu_clk)
 	begin
-		if rising_edge(cpu_clk) then
+		if reset_n='0' then
+			disable_hscroll<= '0';--36
+			mask_column0	<= '1';--
+			irq_line_en		<= '1';--
+			spr_shift		<= '0';--
+			display_on		<= '0';--80
+			irq_frame_en	<= '0';--
+			spr_tall			<= '0';--
+			bg_address		<= "111";--FF
+			spr_address		<= "111111";--FF
+			spr_high_bit	<= '0';--FB
+			overscan			<= "0000";--00
+			bg_scroll_x		<= to_unsigned(0, bg_scroll_x'length);--00
+			bg_scroll_y		<= to_unsigned(0, bg_scroll_y'length);--00
+			irq_line_count	<= to_unsigned(255, irq_line_count'length);--FF
+			reset_virq_flag<= true;
+			address_ff		<= '0';
+		elsif rising_edge(cpu_clk) then
 			if WR_n='0' then
 				if A(0)='0' then
 					xram_cpu_A_incr <= '1';
@@ -248,7 +266,7 @@ begin
 			
 			if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
 				if(vbi_done='0') then
-					vbl_irq <= irq_frame_en;
+					vbl_irq <= '1';
 					vbi_done <= '1';
 				end if;
 			else
@@ -292,7 +310,7 @@ begin
 	process (vdp_clk)
 	begin
 		if rising_edge(vdp_clk) then
-			if vbl_irq='1' or hbl_irq='1' then
+			if (vbl_irq='1' and irq_frame_en='1') or hbl_irq='1' then
 				irq_counter <= (others=>'1');
 			elsif irq_counter>0 then
 				irq_counter <= irq_counter-1;

@@ -100,7 +100,7 @@ module emu
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
-assign LED_USER  = 0;
+assign LED_USER  = ioctl_download | bk_state;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 
@@ -108,10 +108,20 @@ assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 
 `include "build_id.v"
-localparam CONF_STR = {
+parameter CONF_STR1 = {
 	"SMS;;",
 	"-;",
-	"F,SMS,Load ROM;",
+	"FS,SMS;",
+	"-;"
+};
+parameter CONF_STR2 = {
+	"AB,Save Slot,1,2,3,4;"
+};
+parameter CONF_STR3 = {
+	"6,Load state;"
+};
+parameter CONF_STR4 = {
+	"7,Save state;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O34,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
@@ -145,7 +155,7 @@ pll pll
 );
 
 wire cold_reset = RESET | status[0] | ~initReset_n;
-wire reset = cold_reset | buttons[1] | status[10] | ioctl_download;
+wire reset = cold_reset | buttons[1] | status[10] | ioctl_download | bk_loading;
 
 reg initReset_n = 0;
 always @(posedge clk_sys) begin
@@ -167,14 +177,27 @@ wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
 
+reg  [31:0] sd_lba;
+reg         sd_rd = 0;
+reg         sd_wr = 0;
+wire        sd_ack;
+wire  [8:0] sd_buff_addr;
+wire  [7:0] sd_buff_dout;
+wire  [7:0] sd_buff_din;
+wire        sd_buff_wr;
+wire        img_mounted;
+wire        img_readonly;
+wire [63:0] img_size;
+
 wire        forced_scandoubler;
 
-hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
+
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str(CONF_STR),
+	.conf_str({CONF_STR1,bk_ena ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
@@ -192,12 +215,20 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
 
-	.sd_lba(0),
-	.sd_rd(0),
-	.sd_wr(0),
 	.sd_conf(0),
-	.sd_buff_din(0),
-	.ioctl_wait(0)
+	.ioctl_wait(0),
+	
+	.sd_lba(sd_lba),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din),
+	.sd_buff_wr(sd_buff_wr),
+	.img_mounted(img_mounted),
+	.img_readonly(img_readonly),
+	.img_size(img_size),
 );
 
 wire [21:0] ram_addr;
@@ -209,6 +240,7 @@ sdram ram
 	.*,
 	.init(~locked),
 	.clk(clk_mem),
+	.clk_ref(clk_cpu),
 	.dout(ram_dout),
 	.din (ioctl_dout),
 	.addr(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
@@ -217,6 +249,22 @@ sdram ram
 	.rd(ram_rd),
 	.ready()
 );
+
+//	GENERIC
+//	(
+//		init_file			: string := "none";
+//		widthad_a			: natural;
+//		width_a				: natural := 8;
+//    outdata_reg_a : string := "UNREGISTERED"
+//spram #(.widthad_a(18)) ram
+//(
+////	.address(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
+//	.address(ioctl_download ? ioctl_addr : {ram_addr[17:14] & cart_sz[3:0], ram_addr[13:0]}),
+//	.clock(clk_mem),
+//	.data(ioctl_dout),
+//	.wren(ioctl_wr),
+//	.q(ram_dout)
+//);
 
 wire [5:0] audio;
 
@@ -230,7 +278,7 @@ wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
 
 reg  dbr = 0;
 always @(posedge clk_sys) begin
-	if(ioctl_download) dbr <= 1;
+	if(ioctl_download || bk_loading) dbr <= 1;
 end
 
 wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
@@ -239,6 +287,7 @@ system system
 (
 	.clk_cpu(clk_cpu),
 	.clk_vdp(clk_cpu),
+	.clk_sys(clk_sys),
 
 	.rom_rd(ram_rd),
 	.rom_a(ram_addr),
@@ -264,7 +313,12 @@ system system
 	.color(color),
 	.audio(audio),
 
-	.dbr(dbr)
+	.dbr(dbr),
+	
+   .add_bk({sd_lba[5:0],sd_buff_addr}),
+	.data_bk(sd_buff_dout),
+	.wren_bk(sd_buff_wr & sd_ack),
+	.q_bk(sd_buff_din)
 );
 
 wire [8:0] x;
@@ -317,4 +371,56 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 );
 
 
+/////////////////////////  STATE SAVE/LOAD  /////////////////////////////
+
+wire downloading = ioctl_download;
+reg bk_ena = 0;
+always @(posedge clk_sys) begin
+	reg old_downloading = 0;
+	
+	old_downloading <= downloading;
+	if(~old_downloading & downloading) bk_ena <= 0;
+	
+	//Save file always mounted in the end of downloading state.
+	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+end
+
+wire bk_load    = status[6];
+wire bk_save    = status[7];
+reg  bk_loading = 0;
+reg  bk_state   = 0;
+
+always @(posedge clk_sys) begin
+	reg old_load = 0, old_save = 0, old_ack;
+
+	old_load <= bk_load & bk_ena;
+	old_save <= bk_save & bk_ena;
+	old_ack  <= sd_ack;
+	
+	if(~old_ack & sd_ack) {sd_rd, sd_wr} <= 0;
+	
+	if(!bk_state) begin
+		if((~old_load & bk_load) | (~old_save & bk_save)) begin
+			bk_state <= 1;
+			bk_loading <= bk_load;
+			sd_lba <= {status[11:10],6'd0};
+			sd_rd <=  bk_load;
+			sd_wr <= ~bk_load;
+		end
+	end else begin
+		if(old_ack & ~sd_ack) begin
+			if(&sd_lba[5:0]) begin
+				bk_loading <= 0;
+				bk_state <= 0;
+			end else begin
+				sd_lba <= sd_lba + 1'd1;
+				sd_rd  <=  bk_loading;
+				sd_wr  <= ~bk_loading;
+			end
+		end
+	end
+end
+
 endmodule
+
+
