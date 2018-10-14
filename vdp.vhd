@@ -184,7 +184,9 @@ begin
 			overscan			<= "0000";--00
 			bg_scroll_x		<= to_unsigned(0, bg_scroll_x'length);--00
 			bg_scroll_y		<= to_unsigned(0, bg_scroll_y'length);--00
-			irq_line_count	<= to_unsigned(0, irq_line_count'length);--00
+			irq_line_count	<= to_unsigned(255, irq_line_count'length);--FF
+			reset_virq_flag<= true;
+			address_ff		<= '0';
 		elsif rising_edge(cpu_clk) then
 			if WR_n='0' then
 				if A(0)='0' then

@@ -6,7 +6,8 @@ entity psg is
 	port (clk	: in  STD_LOGIC;
 			WR_n	: in  STD_LOGIC;
 			D_in	: in  STD_LOGIC_VECTOR (7 downto 0);
-			output: out STD_LOGIC_VECTOR (5 downto 0));
+			output: out STD_LOGIC_VECTOR (5 downto 0);
+			reset_n	: in  STD_LOGIC);
 end entity;
 
 architecture rtl of psg is
@@ -88,7 +89,12 @@ begin
 
 	process (clk, WR_n)
 	begin
-		if rising_edge(clk) and WR_n='0' then
+		if reset_n='0' then
+			volume0 <= "1111";
+			volume1 <= "1111";
+			volume2 <= "1111";
+			volume3 <= "1111";
+		elsif rising_edge(clk) and WR_n='0' then
 			if D_in(7)='1' then
 				case D_in(6 downto 4) is
 					when "000" => tone0(3 downto 0) <= D_in(3 downto 0);
