@@ -87,7 +87,7 @@ begin
 	end process;
 	clk32 <= std_logic(clk_divide(4));
 
-	process (clk, WR_n)
+	process (clk, WR_n, reset_n)
 	begin
 		if reset_n='0' then
 			volume0 <= "1111";

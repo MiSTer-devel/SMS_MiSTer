@@ -24,9 +24,9 @@ begin
 	process (clk8)
 	begin
 		if rising_edge(clk8) then
-			if hcount=507 then
+			if hcount=511 then
 				hcount <= (others => '0');
-				hsync <= '1';
+				hsync <= '0';
 				if vcount=261 then
 					vcount <= (others=>'0');
 					vsync <= '1';
@@ -38,21 +38,23 @@ begin
 				end if;
 			else
 				hcount <= hcount + 1;
-				if hcount = 37 then
-					hsync <= '0';
+				--if hcount = 488 then
+				if hcount = 317 then
+					hcount <= hcount + 171;
+					hsync <= '1';
 				end if;
 			end if;
 		end if;
 	end process;
 	
-	x	<= hcount-164;
+	x	<= hcount-24;
 	y9	<= vcount-40;
 	y	<= y9(7 downto 0);
 
 	process (clk8)
 	begin
 		if rising_edge(clk8) then
-			if (hcount>=164 and hcount<420) then
+			if (hcount>=24 and hcount<280) then
 				hblank <= '0';
 			else
 				hblank <= '1';

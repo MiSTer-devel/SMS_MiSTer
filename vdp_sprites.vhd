@@ -4,6 +4,7 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity vdp_sprites is
 	port (clk				: in  std_logic;
+			clk_pix			: in  std_logic;
 			table_address	: in  STD_LOGIC_VECTOR (13 downto 8);
 			char_high_bit	: in  std_logic;
 			tall				: in  std_logic;
@@ -61,7 +62,7 @@ begin
 	for i in 0 to 7 generate
 	begin
 		shifter: vpd_sprite_shifter
-		port map(clk	=> clk,
+		port map(clk	=> clk_pix,
 					x		=> x(7 downto 0),
 					spr_x	=> spr_x(i),
 					spr_d0=> spr_d0(i),

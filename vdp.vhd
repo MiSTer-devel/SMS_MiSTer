@@ -6,6 +6,7 @@ entity vdp is
 	port (
 		cpu_clk:			in  STD_LOGIC;
 		vdp_clk:			in  STD_LOGIC;
+		pix_clk:			in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -23,6 +24,7 @@ architecture Behavioral of vdp is
 	component vdp_main is
 	port (
 		clk:					in  std_logic;			
+		clk_pix:				in  std_logic;			
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
 		cram_A:				out std_logic_vector(4 downto 0);
@@ -98,7 +100,7 @@ architecture Behavioral of vdp is
 	signal vbi_done:			std_logic := '0';
 	signal virq_flag:			std_logic := '0';
 	signal reset_virq_flag:	boolean := false;
-	signal irq_counter:		unsigned(5 downto 0) := (others=>'0');
+	signal irq_counter:		unsigned(6 downto 0) := (others=>'0');
 	signal hbl_counter:		unsigned(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
@@ -108,6 +110,7 @@ begin
 	vdp_main_inst: vdp_main
 	port map(
 		clk				=> vdp_clk,
+		clk_pix			=> pix_clk,
 		vram_A			=> vram_vdp_A,
 		vram_D			=> vram_vdp_D,
 		cram_A			=> cram_vdp_A,
@@ -168,7 +171,7 @@ begin
 	cram_cpu_WE <= data_write when to_cram else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
-	process (cpu_clk)
+	process (cpu_clk, reset_n)
 	begin
 		if reset_n='0' then
 			disable_hscroll<= '0';--36
