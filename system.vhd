@@ -315,7 +315,6 @@ begin
 			elsif ctl_WR_n='0' then
 				if bootloader='0' then
 					bootloader <= '1';
-					reset_counter <= (others=>'1');
 				end if;
 			end if;
 		end if;
