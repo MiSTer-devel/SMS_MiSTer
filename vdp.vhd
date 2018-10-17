@@ -71,7 +71,9 @@ architecture Behavioral of vdp is
 	signal vram_cpu_WE:		std_logic;
 	signal cram_cpu_WE:		std_logic;
 	signal vram_cpu_D_out:	std_logic_vector(7 downto 0);	
+	signal vram_cpu_D_outl:	std_logic_vector(7 downto 0);	
 	signal xram_cpu_A_incr:	std_logic := '0';
+	signal xram_cpu_read:	std_logic := '0';
 	
 	-- vram and cram lines for the video interface
 	signal vram_vdp_A:		std_logic_vector(13 downto 0);
@@ -190,17 +192,22 @@ begin
 			irq_line_count	<= to_unsigned(255, irq_line_count'length);--FF
 			reset_virq_flag<= true;
 			address_ff		<= '0';
+			xram_cpu_read	<= '0';
 		elsif rising_edge(cpu_clk) then
 			if WR_n='0' then
 				if A(0)='0' then
 					xram_cpu_A_incr <= '1';
-					
+					address_ff		<= '0';
+					vram_cpu_D_outl <= D_in;
 				else
 					if address_ff='0' then
 						xram_cpu_A(7 downto 0) <= D_in;
 					else
 						xram_cpu_A(13 downto 8) <= D_in(5 downto 0);
 						to_cram <= D_in(7 downto 6)="11";
+						if D_in(7 downto 6)="00" then
+							xram_cpu_read <= '1';
+						end if;
 						case D_in is
 						when "10000000" =>
 							disable_hscroll<= xram_cpu_A(6);
@@ -232,14 +239,17 @@ begin
 				end if;
 				
 			elsif RD_n='0' then
+				address_ff		<= '0';
 				case A(7 downto 6)&A(0) is
 				when "010" =>
 					D_out <= std_logic_vector(y);
 				when "011" =>
 					D_out <= std_logic_vector(x(7 downto 0));
 				when "100" =>
-					D_out <= vram_cpu_D_out;
+					--D_out <= vram_cpu_D_out;
+					D_out <= vram_cpu_D_outl;
 					xram_cpu_A_incr <= '1';
+					xram_cpu_read <= '1';
 				when "101" =>
 					D_out(7) <= virq_flag;
 					D_out(6 downto 0) <= (others=>'0');
@@ -250,7 +260,14 @@ begin
 			elsif xram_cpu_A_incr='1' then
 				xram_cpu_A <= std_logic_vector(unsigned(xram_cpu_A) + 1);
 				xram_cpu_A_incr <= '0';
-				
+				if xram_cpu_read='1' then
+					vram_cpu_D_outl <= vram_cpu_D_out;
+				end if;
+				xram_cpu_read <= '0';
+
+			elsif xram_cpu_read='1' then
+				xram_cpu_A_incr <= '1';
+
 			else
 				reset_virq_flag <= false;
 			end if;
