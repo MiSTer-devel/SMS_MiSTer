@@ -5,6 +5,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity vdp_main is
 	port (
 		clk:					in  std_logic;			
+		clk_pix:				in  std_logic;			
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
 		cram_A:				out std_logic_vector(4 downto 0);
@@ -49,6 +50,7 @@ architecture Behavioral of vdp_main is
 	component vdp_sprites is
 	port (
 		clk:					in  std_logic;
+		clk_pix:				in  std_logic;
 		table_address:		in  std_logic_vector(13 downto 8);
 		char_high_bit:		in  std_logic;
 		tall:					in  std_logic;
@@ -85,7 +87,7 @@ begin
 		
 	vdp_bg_inst: vdp_background
 	port map (
-		clk				=> clk,
+		clk				=> clk_pix,
 		table_address	=> bg_address,
 		reset				=> line_reset,
 		disable_hscroll=> disable_hscroll,
@@ -100,6 +102,7 @@ begin
 	vdp_spr_inst: vdp_sprites
 	port map (
 		clk				=> clk,
+		clk_pix			=> clk_pix,
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,

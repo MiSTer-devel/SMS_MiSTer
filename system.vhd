@@ -8,6 +8,7 @@ entity system is
 	port (
 		clk_cpu:		in		STD_LOGIC;
 		clk_vdp:		in		STD_LOGIC;
+		clk_pix:		in		STD_LOGIC;
 		clk_sys:		in		STD_LOGIC;
 		
 		rom_rd:  	out	STD_LOGIC;
@@ -78,6 +79,7 @@ architecture Behavioral of system is
 	port (
 		cpu_clk:			in  STD_LOGIC;
 		vdp_clk:			in  STD_LOGIC;
+		pix_clk:			in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -194,6 +196,7 @@ begin
 	(
 		cpu_clk	=> clk_cpu,
 		vdp_clk	=> clk_vdp,
+		pix_clk	=> clk_pix,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
 		IRQ_n		=> IRQ_n,
@@ -312,7 +315,6 @@ begin
 			elsif ctl_WR_n='0' then
 				if bootloader='0' then
 					bootloader <= '1';
-					reset_counter <= (others=>'1');
 				end if;
 			end if;
 		end if;

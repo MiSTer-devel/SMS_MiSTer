@@ -149,7 +149,7 @@ pll pll
 	.rst(0),
 	.outclk_0(clk_mem),
 	.outclk_1(SDRAM_CLK),
-	.outclk_2(clk_cpu),
+	//.outclk_2(clk_cpu),
 	.outclk_3(clk_vid),
 	.locked(locked)
 );
@@ -228,7 +228,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.sd_buff_wr(sd_buff_wr),
 	.img_mounted(img_mounted),
 	.img_readonly(img_readonly),
-	.img_size(img_size),
+	.img_size(img_size)
 );
 
 wire [21:0] ram_addr;
@@ -286,7 +286,8 @@ wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 system system
 (
 	.clk_cpu(clk_cpu),
-	.clk_vdp(clk_cpu),
+	.clk_vdp(clk_vdp),
+	.clk_pix(clk_pix),
 	.clk_sys(clk_sys),
 
 	.rom_rd(ram_rd),
@@ -327,7 +328,7 @@ wire [5:0] color;
 
 video video
 (
-	.clk8(clk_cpu),
+	.clk8(clk_pix),
 	.pal(status[2]),
 	.x(x),
 	.y(y),
@@ -338,13 +339,34 @@ video video
 	.vblank(VBlank)
 );
 
-reg ce_pix;
+reg [4:0] clkd;
+reg clk_vdp;
+reg clk_pix;
 always @(posedge clk_vid) begin
-	reg clkd, clkd2;
-	
-	clkd  <= clk_cpu;
-	clkd2 <= clkd;
-	ce_pix <= ~clkd2 & clkd;
+
+	clk_vdp <= 0;//div5
+	clk_pix <= 0;//div10
+	clk_cpu <= 0;//div15
+	clkd <= clkd + 1'd1;
+	if (clkd=='b11101) begin
+		clkd <= 'b00000;
+		clk_vdp <= 1;
+		clk_pix <= 1;
+		clk_cpu <= 1;
+	end else if (clkd=='b11000) begin
+		clk_vdp <= 1;
+	end else if (clkd=='b10011) begin
+		clk_vdp <= 1;
+		clk_pix <= 1;
+	end else if (clkd=='b01110) begin
+		clk_vdp <= 1;
+		clk_cpu <= 1;
+	end else if (clkd=='b01001) begin
+		clk_vdp <= 1;
+		clk_pix <= 1;
+	end else if (clkd=='b00100) begin
+		clk_vdp <= 1;
+	end
 end
 
 wire HSync, VSync;
@@ -359,6 +381,7 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 	.*,
 	.clk_sys(clk_vid),
 	.ce_pix_out(CE_PIXEL),
+	.ce_pix(clk_pix),
 	
 	.scanlines({scale == 3, scale == 2}),
 	.scandoubler(scale || forced_scandoubler),
