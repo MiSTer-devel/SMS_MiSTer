@@ -105,6 +105,7 @@ begin
 					d9 := d9-256;
 				end if;
 				delta := y9-d9;
+				overflow <= '0';
 				
 				case state is
 				when COMPARE =>
