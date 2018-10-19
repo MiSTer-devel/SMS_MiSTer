@@ -92,15 +92,6 @@ architecture Behavioral of system is
 		reset_n:       in  STD_LOGIC);
 	end component;
 	
-	component psg is
-   port (
-		clk:				in  STD_LOGIC;
-		WR_n:				in  STD_LOGIC;
-		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
-		output:			out STD_LOGIC_VECTOR (5 downto 0);
-		reset_n:			in  STD_LOGIC);
-	end component;
-	
 	component io is
    port (
 		clk:				in		STD_LOGIC;
@@ -216,7 +207,7 @@ begin
 		WR_n		=> psg_WR_n,
 		D_in		=> D_in,
 		output	=> audio,
-		reset_n	=> reset
+		reset		=> not reset
 	);
 
 	io_inst: io
