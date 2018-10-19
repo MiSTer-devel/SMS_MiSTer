@@ -113,9 +113,9 @@ begin
 	vdp_inst: entity work.vdp
 	port map
 	(
-		cpu_clk	=> clk_sys and ce_cpu,
-		vdp_clk	=> clk_sys and ce_vdp,
-		pix_clk	=> clk_sys and ce_pix,
+		clk_sys	=> clk_sys,
+		ce_vdp	=> ce_vdp,
+		ce_pix	=> ce_pix,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
 		IRQ_n		=> IRQ_n,

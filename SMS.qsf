@@ -362,7 +362,6 @@ set_global_assignment -name VHDL_FILE ntsc_video.vhd
 set_global_assignment -name VHDL_FILE sprom.vhd
 set_global_assignment -name VHDL_FILE spram.vhd
 set_global_assignment -name VHDL_FILE dpram.vhd
-set_global_assignment -name VHDL_FILE vga_video.vhd
 set_global_assignment -name VHDL_FILE vdp_sprites.vhd
 set_global_assignment -name VHDL_FILE vdp_sprite_shifter.vhd
 set_global_assignment -name VHDL_FILE vdp_main.vhd

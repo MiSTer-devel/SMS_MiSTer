@@ -348,7 +348,8 @@ wire [5:0] color;
 
 video video
 (
-	.clk8(clk_sys & ce_pix),
+	.clk(clk_sys),
+	.ce_pix(ce_pix),
 	.pal(status[2]),
 	.x(x),
 	.y(y),
