@@ -148,7 +148,6 @@ begin
   vdp_vram_inst : entity work.dpram
     generic map
     (
-      init_file		=> "vram.mif",
       widthad_a		=> 14
     )
     port map
