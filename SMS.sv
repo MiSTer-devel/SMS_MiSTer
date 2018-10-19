@@ -327,7 +327,7 @@ system system
 	.j2_right(joyb[0]),
 	.j2_tl(joyb[4]),
 	.j2_tr(joyb[5]),
-	.reset(~reset),
+	.RESET_n(~reset),
 	.pause(joya[6]&joyb[6]),
 
 	.x(x),

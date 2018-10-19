@@ -27,7 +27,7 @@ entity system is
 		j2_right:	in		STD_LOGIC;
 		j2_tl:		in		STD_LOGIC;
 		j2_tr:		in		STD_LOGIC;
-		reset:		in		STD_LOGIC;
+		RESET_n:		in		STD_LOGIC;
 		pause:		in		STD_LOGIC;
 
 		x:				in		UNSIGNED(8 downto 0);
@@ -115,7 +115,6 @@ architecture Behavioral of system is
 		RESET:			in 	STD_LOGIC);
 	end component;
 	
-	signal RESET_n:			std_logic;
 	signal RD_n:				std_logic;
 	signal WR_n:				std_logic;
 	signal IRQ_n:				std_logic;
@@ -142,7 +141,6 @@ architecture Behavioral of system is
 	
 	signal boot_rom_D_out:	std_logic_vector(7 downto 0);
 	
-	signal reset_counter:	unsigned(3 downto 0) := "1111";
 	signal bootloader:		std_logic := '0';
 	signal irom_D_out:		std_logic_vector(7 downto 0);
 	signal irom_RD_n:			std_logic := '1';
@@ -162,7 +160,7 @@ begin
 	z80_inst: T80se
 	port map
 	(
-		RESET_n	=> RESET_n and reset,
+		RESET_n	=> RESET_n,
 		CLK_n		=> clk_cpu,
 		CLKEN		=> '1',
 		WAIT_n	=> '1',
@@ -197,7 +195,7 @@ begin
 		x			=> x,
 		y			=> y,
 		color		=> color,
-		reset_n  => reset
+		reset_n  => RESET_n
 	);
 
 	psg_inst: psg
@@ -207,7 +205,7 @@ begin
 		WR_n		=> psg_WR_n,
 		D_in		=> D_in,
 		output	=> audio,
-		reset		=> not reset
+		reset		=> not RESET_n
 	);
 
 	io_inst: io
@@ -231,7 +229,7 @@ begin
 		J2_right	=> j2_right,
 		J2_tl		=> j2_tl,
 		J2_tr		=> j2_tr,
-		RESET		=> reset
+		RESET		=> RESET_n
 	);
 
 	ram_inst : entity work.spram
@@ -295,22 +293,13 @@ begin
 	process (clk_cpu)
 	begin
 		if rising_edge(clk_cpu) then
-			if reset='0' then 
+			if RESET_n='0' then 
 				bootloader <= '0';
-				reset_counter <= (others=>'1');
-			end if;
-
-			-- memory control
-			if reset_counter>0 then
-				reset_counter <= reset_counter - 1;
-			elsif ctl_WR_n='0' then
-				if bootloader='0' then
-					bootloader <= '1';
-				end if;
+			elsif ctl_WR_n='0' and bootloader='0' then
+				bootloader <= '1';
 			end if;
 		end if;
 	end process;
-	reset_n <= '0' when reset_counter>0 else '1';
 	
 	irom_D_out <=	boot_rom_D_out when bootloader='0' and A(15 downto 14)="00" else rom_do;
 	
@@ -338,9 +327,9 @@ begin
 				
 				
 	-- external ram control
-	process (RESET_n,reset,clk_cpu)
+	process (RESET_n,clk_cpu)
 	begin
-		if(RESET_n='0' or reset='0') then
+		if RESET_n='0' then
 			bank0 <= "00000000";
 			bank1 <= "00000001";
 			bank2 <= "00000010";
