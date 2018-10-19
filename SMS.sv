@@ -48,6 +48,7 @@ module emu
 	output        VGA_HS,
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
+	output  [1:0] VGA_SL,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -124,14 +125,14 @@ parameter CONF_STR4 = {
 	"7,Save state;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
-	"O34,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
+	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"-;",
-	"RA,Reset;",
+	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
-	"V,v1.0.",`BUILD_DATE
+	"V,v1.10.",`BUILD_DATE
 };
 
 
@@ -155,7 +156,7 @@ pll pll
 );
 
 wire cold_reset = RESET | status[0] | ~initReset_n;
-wire reset = cold_reset | buttons[1] | status[10] | ioctl_download | bk_loading;
+wire reset = cold_reset | buttons[1] | ioctl_download | bk_loading;
 
 reg initReset_n = 0;
 always @(posedge clk_sys) begin
@@ -372,9 +373,11 @@ end
 wire HSync, VSync;
 wire HBlank, VBlank;
 
-wire [1:0] scale = status[4:3];
+wire [2:0] scale = status[5:3];
+wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
 
 assign CLK_VIDEO = clk_vid;
+assign VGA_SL = sl[1:0];
 
 video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 (
@@ -383,7 +386,7 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 	.ce_pix_out(CE_PIXEL),
 	.ce_pix(clk_pix),
 	
-	.scanlines({scale == 3, scale == 2}),
+	.scanlines(0),
 	.scandoubler(scale || forced_scandoubler),
 	.hq2x(scale==1),
 	.mono(0),
