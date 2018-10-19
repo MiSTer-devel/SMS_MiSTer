@@ -304,12 +304,12 @@ wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 
 system system
 (
-	// gated clocks are bad in general but much better than async clocks!
-	// TODO: convert to clock enablers
-	.clk_cpu(clk_sys & ce_cpu),
-	.clk_vdp(clk_sys & ce_vdp),
-	.clk_pix(clk_sys & ce_pix),
 	.clk_sys(clk_sys),
+	.ce_cpu(ce_cpu),
+	.ce_vdp(ce_vdp),
+	.ce_pix(ce_pix),
+
+	.RESET_n(~reset),
 
 	.rom_rd(ram_rd),
 	.rom_a(ram_addr),
@@ -327,7 +327,6 @@ system system
 	.j2_right(joyb[0]),
 	.j2_tl(joyb[4]),
 	.j2_tr(joyb[5]),
-	.RESET_n(~reset),
 	.pause(joya[6]&joyb[6]),
 
 	.x(x),
