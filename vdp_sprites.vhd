@@ -12,6 +12,8 @@ entity vdp_sprites is
 			vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 			x					: in  unsigned (8 downto 0);
 			y					: in  unsigned (7 downto 0);
+			collide			: out std_logic;
+			overflow			: out std_logic;
 			color				: out STD_LOGIC_VECTOR (3 downto 0));
 end vdp_sprites;
 
@@ -39,7 +41,7 @@ architecture Behavioral of vdp_sprites is
 	constant LOAD_3:	integer := 7;
 
 	signal state:		integer	:= WAITING;
-	signal count:		integer range 0 to 7;
+	signal count:		integer range 0 to 8;
 	signal index:		unsigned(5 downto 0);
 	signal data_address: std_logic_vector(13 downto 2);
 
@@ -103,6 +105,7 @@ begin
 					d9 := d9-256;
 				end if;
 				delta := y9-d9;
+				overflow <= '0';
 				
 				case state is
 				when COMPARE =>
@@ -111,7 +114,12 @@ begin
 					elsif 0<=delta and ((delta<8 and tall='0') or (delta<16 and tall='1')) then
 						enable(count) <= true;
 						data_address(5 downto 2) <= std_logic_vector(delta(3 downto 0));
-						state <= LOAD_N;
+						if (count<8) then
+							state <= LOAD_N;
+						else
+							state <= WAITING;
+							overflow <= '1';
+						end if;
 					else
 						if index<63 then
 							index <= index+1;
@@ -146,13 +154,9 @@ begin
 					
 				when LOAD_3 =>
 					spr_d3(count)	<= vram_d;
-					if (count<7) then
-						state	<= COMPARE;
-						index	<= index+1;
-						count	<= count+1;
-					else
-						state <= WAITING;
-					end if;
+					state	<= COMPARE;
+					index	<= index+1;
+					count	<= count+1;
 					
 				when others =>
 				end case;
@@ -161,27 +165,49 @@ begin
 	end process;
 
 	process (clk)
+		variable collision 	: unsigned(7 downto 0);
 	begin
 		if rising_edge(clk) then
-			if enable(0) and active(0)='1' then
-				color <= spr_color(0);
-			elsif enable(1) and active(1)='1' then
-				color <= spr_color(1);
-			elsif enable(2) and active(2)='1' then
-				color <= spr_color(2);
-			elsif enable(3) and active(3)='1' then
-				color <= spr_color(3);
-			elsif enable(4) and active(4)='1' then
-				color <= spr_color(4);
-			elsif enable(5) and active(5)='1' then
-				color <= spr_color(5);
-			elsif enable(6) and active(6)='1' then
-				color <= spr_color(6);
-			elsif enable(7) and active(7)='1' then
+			color <= (others=>'0');
+			collision := (others=>'0');
+			if enable(7) and active(7)='1' and not (spr_color(7)="0000") then
+				collision(7) := '1';
 				color <= spr_color(7);
-			else
-				color <= (others=>'0');
 			end if;
+			if enable(6) and active(6)='1' and not (spr_color(6)="0000") then
+				collision(6) := '1';
+				color <= spr_color(6);
+			end if;
+			if enable(5) and active(5)='1' and not (spr_color(5)="0000") then
+				collision(5) := '1';
+				color <= spr_color(5);
+			end if;
+			if enable(4) and active(4)='1' and not (spr_color(4)="0000") then
+				collision(4) := '1';
+				color <= spr_color(4);
+			end if;
+			if enable(3) and active(3)='1' and not (spr_color(3)="0000") then
+				collision(3) := '1';
+				color <= spr_color(3);
+			end if;
+			if enable(2) and active(2)='1' and not (spr_color(2)="0000") then
+				collision(2) := '1';
+				color <= spr_color(2);
+			end if;
+			if enable(1) and active(1)='1' and not (spr_color(1)="0000") then
+				collision(1) := '1';
+				color <= spr_color(1);
+			end if;
+			if enable(0) and active(0)='1' and not (spr_color(0)="0000") then
+				collision(0) := '1';
+				color <= spr_color(0);
+			end if;
+			case collision is
+			when x"00" | x"01" | x"02" | x"04" | x"08" | x"10" | x"20" | x"40" | x"80" =>
+				collide <= '0';
+			when others =>
+				collide <= '1';
+			end case;
 		end if;
 	end process;
 
