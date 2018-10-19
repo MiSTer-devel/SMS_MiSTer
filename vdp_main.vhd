@@ -28,7 +28,9 @@ entity vdp_main is
 		spr_address:		in  std_logic_vector (5 downto 0);
 		spr_high_bit:		in  std_logic;
 		spr_shift:			in  std_logic;	
-		spr_tall:			in  std_logic);	
+		spr_tall:			in  std_logic;
+		spr_collide:		out std_logic;
+		spr_overflow:		out std_logic);	
 end vdp_main;
 
 architecture Behavioral of vdp_main is
@@ -58,6 +60,8 @@ architecture Behavioral of vdp_main is
 		y:						in  unsigned(7 downto 0);
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
+		collide:				out std_logic;
+		overflow:			out std_logic;
 		color:				out std_logic_vector(3 downto 0));
 	end component;
 
@@ -108,6 +112,8 @@ begin
 		tall				=> spr_tall,
 		x					=> x,
 		y					=> y,
+		collide			=> spr_collide,
+		overflow			=> spr_overflow,
 		
 		vram_A			=> spr_vram_A,
 		vram_D			=> vram_D,		
