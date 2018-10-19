@@ -1,0 +1,15 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: chriz2600/quartus-lite:latest
+    working_directory: /build
+    steps:
+      - checkout
+      - run: /usr/local/bin/quartus_wrapper "quartus_sh --flow compile SMS-lite.qsf"
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
