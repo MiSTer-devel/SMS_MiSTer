@@ -47,7 +47,9 @@ architecture Behavioral of vdp is
 		spr_address:		in  std_logic_vector (5 downto 0);
 		spr_high_bit:		in  std_logic;
 		spr_shift:			in  std_logic;	
-		spr_tall:			in  std_logic);	
+		spr_tall:			in  std_logic;	
+		spr_collide:		out std_logic;	
+		spr_overflow:		out std_logic);	
 	end component;
 	
 	component vdp_cram is
@@ -65,6 +67,8 @@ architecture Behavioral of vdp is
 	signal data_write:		std_logic;
 	signal address_ff:		std_logic := '0';
 	signal to_cram:			boolean := false;
+	signal spr_collide:		std_logic;
+	signal spr_overflow:		std_logic;
 	
 	-- vram and cram lines for the cpu interface
 	signal xram_cpu_A:		std_logic_vector(13 downto 0);
@@ -101,7 +105,9 @@ architecture Behavioral of vdp is
 	signal last_y0:			std_logic := '0';
 	signal vbi_done:			std_logic := '0';
 	signal virq_flag:			std_logic := '0';
-	signal reset_virq_flag:	boolean := false;
+	signal reset_flags:		boolean := false;
+	signal collide_flag:		std_logic := '0';
+	signal overflow_flag:	std_logic := '0';
 	signal irq_counter:		unsigned(6 downto 0) := (others=>'0');
 	signal hbl_counter:		unsigned(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
@@ -134,7 +140,9 @@ begin
 		spr_address		=> spr_address,
 		spr_high_bit	=> spr_high_bit,
 		spr_shift		=> spr_shift,
-		spr_tall			=> spr_tall);
+		spr_tall			=> spr_tall,
+		spr_collide		=> spr_collide,
+		spr_overflow	=> spr_overflow);
 
     
   vdp_vram_inst : entity work.dpram
@@ -190,7 +198,7 @@ begin
 			bg_scroll_x		<= to_unsigned(0, bg_scroll_x'length);--00
 			bg_scroll_y		<= to_unsigned(0, bg_scroll_y'length);--00
 			irq_line_count	<= to_unsigned(255, irq_line_count'length);--FF
-			reset_virq_flag<= true;
+			reset_flags		<= true;
 			address_ff		<= '0';
 			xram_cpu_read	<= '0';
 		elsif rising_edge(cpu_clk) then
@@ -252,8 +260,10 @@ begin
 					xram_cpu_read <= '1';
 				when "101" =>
 					D_out(7) <= virq_flag;
-					D_out(6 downto 0) <= (others=>'0');
-					reset_virq_flag <= true;
+					D_out(6) <= overflow_flag;
+					D_out(5) <= collide_flag;
+					D_out(4 downto 0) <= (others=>'0');
+					reset_flags <= true;
 				when others =>
 				end case;
 				
@@ -269,7 +279,7 @@ begin
 				xram_cpu_A_incr <= '1';
 
 			else
-				reset_virq_flag <= false;
+				reset_flags <= false;
 			end if;
 		end if;
 	end process;
@@ -321,8 +331,30 @@ begin
 		if rising_edge(vdp_clk) then
 			if vbl_irq='1' then
 				virq_flag <= '1';
-			elsif reset_virq_flag then
+			elsif reset_flags then
 				virq_flag <= '0';
+			end if;
+		end if;
+	end process;
+	
+	process (vdp_clk)
+	begin
+		if rising_edge(vdp_clk) then
+			if spr_collide='1' then
+				collide_flag <= '1';
+			elsif reset_flags then
+				collide_flag <= '0';
+			end if;
+		end if;
+	end process;
+	
+	process (vdp_clk)
+	begin
+		if rising_edge(vdp_clk) then
+			if spr_overflow='1' then
+				overflow_flag <= '1';
+			elsif reset_flags then
+				overflow_flag <= '0';
 			end if;
 		end if;
 	end process;
