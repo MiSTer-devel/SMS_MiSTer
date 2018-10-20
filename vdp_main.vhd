@@ -3,9 +3,14 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity vdp_main is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk:					in  std_logic;			
 		clk_pix:				in  std_logic;			
+		clk_sp:				in  std_logic;			
+		sp64:					in  std_logic;			
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
 		cram_A:				out std_logic_vector(4 downto 0);
@@ -50,9 +55,14 @@ architecture Behavioral of vdp_main is
 	end component;
 	
 	component vdp_sprites is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk:					in  std_logic;
 		clk_pix:				in  std_logic;
+		clk_sp:				in  std_logic;
+		sp64:					in  std_logic;
 		table_address:		in  std_logic_vector(13 downto 8);
 		char_high_bit:		in  std_logic;
 		tall:					in  std_logic;
@@ -104,9 +114,12 @@ begin
 		priority			=> bg_priority);
 		
 	vdp_spr_inst: vdp_sprites
+	generic map (MAX_SPPL)
 	port map (
 		clk				=> clk,
 		clk_pix			=> clk_pix,
+		clk_sp			=> clk_sp,
+		sp64				=> sp64,
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
@@ -136,7 +149,7 @@ begin
 		end if;
 	end process;
 	
-	vram_A <= spr_vram_A when x>=256 and x<384 else bg_vram_A;
+	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
 
 	color <= cram_D;
 

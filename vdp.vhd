@@ -3,10 +3,15 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity vdp is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		cpu_clk:			in  STD_LOGIC;
 		vdp_clk:			in  STD_LOGIC;
 		pix_clk:			in  STD_LOGIC;
+		sp_clk:			in  STD_LOGIC;
+		sp64:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -22,9 +27,14 @@ end vdp;
 architecture Behavioral of vdp is
 	
 	component vdp_main is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk:					in  std_logic;			
 		clk_pix:				in  std_logic;			
+		clk_sp:				in  std_logic;			
+		sp64:					in  STD_LOGIC;
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
 		cram_A:				out std_logic_vector(4 downto 0);
@@ -116,9 +126,12 @@ architecture Behavioral of vdp is
 begin
 		
 	vdp_main_inst: vdp_main
+	generic map (MAX_SPPL)
 	port map(
 		clk				=> vdp_clk,
 		clk_pix			=> pix_clk,
+		clk_sp			=> sp_clk,
+		sp64				=> sp64,
 		vram_A			=> vram_vdp_A,
 		vram_D			=> vram_vdp_D,
 		cram_A			=> cram_vdp_A,
@@ -159,7 +172,7 @@ begin
       data_a			=> D_in,
       q_a					=> vram_cpu_D_out,
 
-      clock_b			=> not vdp_clk,
+      clock_b			=> sp_clk,
       address_b		=> vram_vdp_A,
       wren_b			=> '0',
       data_b			=> (others => '0'),

@@ -97,6 +97,19 @@ module emu
 	output        SDRAM_nWE
 );
 
+//Uncomment to speed up lite build.  Needed?
+//`ifndef LITE
+`define USE_SP64
+//`endif
+
+`ifdef USE_SP64
+localparam MAX_SPPL = 63;
+localparam SP64     = 1'b1;
+`else
+localparam MAX_SPPL = 7;
+localparam SP64     = 1'b0;
+`endif
+
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
@@ -126,6 +139,9 @@ parameter CONF_STR4 = {
 	"O9,Aspect ratio,4:3,16:9;",
 	"O34,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"O2,TV System,NTSC,PAL;",
+`ifdef USE_SP64
+	"O8,Sprites per line,Std(8),All(64);",
+`endif
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"-;",
@@ -283,12 +299,13 @@ end
 
 wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 
-system system
+system #(MAX_SPPL) system
 (
 	.clk_cpu(clk_cpu),
 	.clk_vdp(clk_vdp),
 	.clk_pix(clk_pix),
 	.clk_sys(clk_sys),
+	.clk_sp(clk_vid), // faster clock for max sprites
 
 	.rom_rd(ram_rd),
 	.rom_a(ram_addr),
@@ -315,6 +332,7 @@ system system
 	.audio(audio),
 
 	.dbr(dbr),
+	.sp64(status[8] & SP64),
 	
    .add_bk({sd_lba[5:0],sd_buff_addr}),
 	.data_bk(sd_buff_dout),

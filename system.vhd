@@ -5,11 +5,15 @@ use IEEE.NUMERIC_STD.ALL;
 use work.all;
 
 entity system is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk_cpu:		in		STD_LOGIC;
 		clk_vdp:		in		STD_LOGIC;
 		clk_pix:		in		STD_LOGIC;
 		clk_sys:		in		STD_LOGIC;
+		clk_sp:		in		STD_LOGIC;
 		
 		rom_rd:  	out	STD_LOGIC;
 		rom_a:		out	STD_LOGIC_VECTOR(21 downto 0);
@@ -36,6 +40,7 @@ entity system is
 		audio:		out	STD_LOGIC_VECTOR(5 downto 0);
 
 		dbr:    in STD_LOGIC;
+		sp64:   in STD_LOGIC;
 		
 		--Backup RAM
 		add_bk:	in STD_LOGIC_VECTOR(14 downto 0);
@@ -76,10 +81,15 @@ architecture Behavioral of system is
 	end component;
 
 	component vdp is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		cpu_clk:			in  STD_LOGIC;
 		vdp_clk:			in  STD_LOGIC;
 		pix_clk:			in  STD_LOGIC;
+		sp_clk:			in  STD_LOGIC;
+		sp64:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -192,11 +202,14 @@ begin
 	);
 
 	vdp_inst: vdp
+	generic map (MAX_SPPL)
 	port map
 	(
 		cpu_clk	=> clk_cpu,
 		vdp_clk	=> clk_vdp,
 		pix_clk	=> clk_pix,
+		sp_clk	=> clk_sp,
+		sp64		=> sp64,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
 		IRQ_n		=> IRQ_n,

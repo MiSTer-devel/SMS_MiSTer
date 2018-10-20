@@ -3,8 +3,13 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity vdp_sprites is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (clk				: in  std_logic;
 			clk_pix			: in  std_logic;
+			clk_sp			: in  std_logic;
+			sp64				: in  std_logic;
 			table_address	: in  STD_LOGIC_VECTOR (13 downto 8);
 			char_high_bit	: in  std_logic;
 			tall				: in  std_logic;
@@ -41,13 +46,14 @@ architecture Behavioral of vdp_sprites is
 	constant LOAD_3:	integer := 7;
 
 	signal state:		integer	:= WAITING;
-	signal count:		integer range 0 to 8;
+	signal count:		integer range 0 to 64;
 	signal index:		unsigned(5 downto 0);
 	signal data_address: std_logic_vector(13 downto 2);
+	signal clk_spload:std_logic;
 
-	type tenable	is array (0 to 7) of boolean;
-	type tx			is array (0 to 7) of unsigned(7 downto 0);
-	type tdata		is array (0 to 7) of std_logic_vector(7 downto 0);
+	type tenable	is array (0 to MAX_SPPL) of boolean;
+	type tx			is array (0 to MAX_SPPL) of unsigned(7 downto 0);
+	type tdata		is array (0 to MAX_SPPL) of std_logic_vector(7 downto 0);
 	signal enable:	tenable;
 	signal spr_x:	tx;
 	signal spr_d0:	tdata;
@@ -55,13 +61,13 @@ architecture Behavioral of vdp_sprites is
 	signal spr_d2:	tdata;
 	signal spr_d3:	tdata;
 
-	type tcolor is array (0 to 7) of std_logic_vector(3 downto 0);
+	type tcolor is array (0 to MAX_SPPL) of std_logic_vector(3 downto 0);
 	signal spr_color:	tcolor;
-	signal active:		std_logic_vector(7 downto 0);
+	signal active:		std_logic_vector(MAX_SPPL downto 0);
 	
 begin
 	shifters:
-	for i in 0 to 7 generate
+	for i in 0 to MAX_SPPL generate
 	begin
 		shifter: vpd_sprite_shifter
 		port map(clk	=> clk_pix,
@@ -85,19 +91,21 @@ begin
 					data_address&"11"											when LOAD_3,
 					(others=>'0') when others;
 
-	process (clk)
+	clk_spload <= clk when (MAX_SPPL<8 or sp64='0') else clk;
+	process (clk_spload)
 		variable y9 	: unsigned(8 downto 0);
 		variable d9		: unsigned(8 downto 0);
 		variable delta : unsigned(8 downto 0);
 	begin
-		if rising_edge(clk) then
-			
+		if (rising_edge(clk_spload)) then
 			if x=255 then
 				count <= 0;
 				enable <= (others=>false);
 				state <= COMPARE;
 				index <= (others=>'0');
 				
+			elsif x>=496 then  --match vdp_main.vhd (384)
+				state <= WAITING;
 			else
 				y9 := "0"&y;
 				d9 := "0"&unsigned(vram_D);
@@ -112,13 +120,14 @@ begin
 					if d9=208 then
 						state <= WAITING; -- stop
 					elsif 0<=delta and ((delta<8 and tall='0') or (delta<16 and tall='1')) then
-						enable(count) <= true;
 						data_address(5 downto 2) <= std_logic_vector(delta(3 downto 0));
-						if (count<8) then
+						if (count>=8) then
+							overflow <= '1';
+						end if;
+						if ((count<MAX_SPPL+1) or (count<8 and sp64='0')) then
 							state <= LOAD_N;
 						else
 							state <= WAITING;
-							overflow <= '1';
 						end if;
 					else
 						if index<63 then
@@ -154,6 +163,7 @@ begin
 					
 				when LOAD_3 =>
 					spr_d3(count)	<= vram_d;
+					enable(count)	<= true;
 					state	<= COMPARE;
 					index	<= index+1;
 					count	<= count+1;
@@ -170,38 +180,17 @@ begin
 		if rising_edge(clk) then
 			color <= (others=>'0');
 			collision := (others=>'0');
-			if enable(7) and active(7)='1' and not (spr_color(7)="0000") then
-				collision(7) := '1';
-				color <= spr_color(7);
+			for i in MAX_SPPL downto 8 loop
+			if enable(i) and active(i)='1' and not (spr_color(i)="0000") then
+				color <= spr_color(i);
 			end if;
-			if enable(6) and active(6)='1' and not (spr_color(6)="0000") then
-				collision(6) := '1';
-				color <= spr_color(6);
+			end loop;
+			for i in 7 downto 0 loop
+			if enable(i) and active(i)='1' and not (spr_color(i)="0000") then
+				collision(i) := '1';
+				color <= spr_color(i);
 			end if;
-			if enable(5) and active(5)='1' and not (spr_color(5)="0000") then
-				collision(5) := '1';
-				color <= spr_color(5);
-			end if;
-			if enable(4) and active(4)='1' and not (spr_color(4)="0000") then
-				collision(4) := '1';
-				color <= spr_color(4);
-			end if;
-			if enable(3) and active(3)='1' and not (spr_color(3)="0000") then
-				collision(3) := '1';
-				color <= spr_color(3);
-			end if;
-			if enable(2) and active(2)='1' and not (spr_color(2)="0000") then
-				collision(2) := '1';
-				color <= spr_color(2);
-			end if;
-			if enable(1) and active(1)='1' and not (spr_color(1)="0000") then
-				collision(1) := '1';
-				color <= spr_color(1);
-			end if;
-			if enable(0) and active(0)='1' and not (spr_color(0)="0000") then
-				collision(0) := '1';
-				color <= spr_color(0);
-			end if;
+			end loop;
 			case collision is
 			when x"00" | x"01" | x"02" | x"04" | x"08" | x"10" | x"20" | x"40" | x"80" =>
 				collide <= '0';
