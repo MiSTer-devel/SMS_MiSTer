@@ -4,7 +4,8 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity ntsc_video is
 	Port (
-		clk8:				in  std_logic;
+		clk:				in  std_logic;
+		ce_pix:			in  std_logic;
 		x: 				out unsigned(8 downto 0);
 		y:					out unsigned(7 downto 0);
 		hsync:			out std_logic;
@@ -21,27 +22,29 @@ architecture Behavioral of ntsc_video is
 	
 begin
 
-	process (clk8)
+	process (clk)
 	begin
-		if rising_edge(clk8) then
-			if hcount=511 then
-				hcount <= (others => '0');
-				hsync <= '0';
-				if vcount=261 then
-					vcount <= (others=>'0');
-					vsync <= '1';
-				else
-					vcount <= vcount + 1;
-					if vcount = 8 then
-						vsync <= '0';
+		if rising_edge(clk) then
+			if ce_pix = '1' then
+				if hcount=511 then
+					hcount <= (others => '0');
+					hsync <= '0';
+					if vcount=261 then
+						vcount <= (others=>'0');
+						vsync <= '1';
+					else
+						vcount <= vcount + 1;
+						if vcount = 8 then
+							vsync <= '0';
+						end if;
 					end if;
-				end if;
-			else
-				hcount <= hcount + 1;
-				--if hcount = 488 then
-				if hcount = 317 then
-					hcount <= hcount + 171;
-					hsync <= '1';
+				else
+					hcount <= hcount + 1;
+					--if hcount = 488 then
+					if hcount = 317 then
+						hcount <= hcount + 171;
+						hsync <= '1';
+					end if;
 				end if;
 			end if;
 		end if;
@@ -51,19 +54,21 @@ begin
 	y9	<= vcount-40;
 	y	<= y9(7 downto 0);
 
-	process (clk8)
+	process (clk)
 	begin
-		if rising_edge(clk8) then
-			if (hcount>=24 and hcount<280) then
-				hblank <= '0';
-			else
-				hblank <= '1';
-			end if;
-			
-			if (vcount>=40 and vcount<232) then
-				vblank <= '0';
-			else
-				vblank <= '1';
+		if rising_edge(clk) then
+			if ce_pix = '1' then
+				if (hcount>=24 and hcount<280) then
+					hblank <= '0';
+				else
+					hblank <= '1';
+				end if;
+				
+				if (vcount>=40 and vcount<232) then
+					vblank <= '0';
+				else
+					vblank <= '1';
+				end if;
 			end if;
 		end if;
 	end process;

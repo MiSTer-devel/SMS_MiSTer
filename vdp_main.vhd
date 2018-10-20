@@ -7,9 +7,10 @@ entity vdp_main is
 		MAX_SPPL : integer := 7
 	);
 	port (
-		clk:					in  std_logic;			
-		clk_pix:				in  std_logic;			
-		clk_sp:				in  std_logic;			
+		clk_sys:				in  STD_LOGIC;
+		ce_vdp:				in  STD_LOGIC;
+		ce_pix:				in  STD_LOGIC;
+		ce_sp:				in  STD_LOGIC;
 		sp64:					in  std_logic;			
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
@@ -40,41 +41,6 @@ end vdp_main;
 
 architecture Behavioral of vdp_main is
 	
-	component vdp_background is
-	port (
-		clk:					in  std_logic;
-		reset:				in  std_logic;
-		table_address:		in  std_logic_vector(13 downto 11);
-		scroll_x:			in  unsigned(7 downto 0);
-		disable_hscroll:	in  std_logic;
-		y:						in  unsigned(7 downto 0);
-		vram_A:				out std_logic_vector(13 downto 0);
-		vram_D:				in  std_logic_vector(7 downto 0);
-		color:				out std_logic_vector(4 downto 0);
-		priority:			out std_logic);
-	end component;
-	
-	component vdp_sprites is
-	generic (
-		MAX_SPPL : integer := 7
-	);
-	port (
-		clk:					in  std_logic;
-		clk_pix:				in  std_logic;
-		clk_sp:				in  std_logic;
-		sp64:					in  std_logic;
-		table_address:		in  std_logic_vector(13 downto 8);
-		char_high_bit:		in  std_logic;
-		tall:					in  std_logic;
-		x:						in  unsigned(8 downto 0);
-		y:						in  unsigned(7 downto 0);
-		vram_A:				out std_logic_vector(13 downto 0);
-		vram_D:				in  std_logic_vector(7 downto 0);
-		collide:				out std_logic;
-		overflow:			out std_logic;
-		color:				out std_logic_vector(3 downto 0));
-	end component;
-
 	signal bg_y:			unsigned(7 downto 0);
 	signal bg_vram_A:		std_logic_vector(13 downto 0);
 	signal bg_color:		std_logic_vector(4 downto 0);
@@ -99,9 +65,10 @@ begin
 	
 	line_reset <= '1' when x=512-16 else '0';
 		
-	vdp_bg_inst: vdp_background
+	vdp_bg_inst: entity work.vdp_background
 	port map (
-		clk				=> clk_pix,
+		clk_sys			=> clk_sys,
+		ce_pix			=> ce_pix,
 		table_address	=> bg_address,
 		reset				=> line_reset,
 		disable_hscroll=> disable_hscroll,
@@ -113,12 +80,15 @@ begin
 		color				=> bg_color,
 		priority			=> bg_priority);
 		
-	vdp_spr_inst: vdp_sprites
-	generic map (MAX_SPPL)
+	vdp_spr_inst: entity work.vdp_sprites
+	generic map(
+		MAX_SPPL => MAX_SPPL
+	)
 	port map (
-		clk				=> clk,
-		clk_pix			=> clk_pix,
-		clk_sp			=> clk_sp,
+		clk_sys			=> clk_sys,
+		ce_vdp			=> ce_vdp,
+		ce_pix			=> ce_pix,
+		ce_sp				=> ce_sp,
 		sp64				=> sp64,
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,

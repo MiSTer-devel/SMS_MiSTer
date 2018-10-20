@@ -9,136 +9,54 @@ entity system is
 		MAX_SPPL : integer := 7
 	);
 	port (
-		clk_cpu:		in		STD_LOGIC;
-		clk_vdp:		in		STD_LOGIC;
-		clk_pix:		in		STD_LOGIC;
-		clk_sys:		in		STD_LOGIC;
-		clk_sp:		in		STD_LOGIC;
+		clk_sys:		in	 STD_LOGIC;
+		ce_cpu:		in	 STD_LOGIC;
+		ce_vdp:		in	 STD_LOGIC;
+		ce_pix:		in	 STD_LOGIC;
+		ce_sp:		in	 STD_LOGIC;
+
+		RESET_n:		in	 STD_LOGIC;
 		
-		rom_rd:  	out	STD_LOGIC;
-		rom_a:		out	STD_LOGIC_VECTOR(21 downto 0);
-		rom_do:		in		STD_LOGIC_VECTOR(7 downto 0);
+		rom_rd:  	out STD_LOGIC;
+		rom_a:		out STD_LOGIC_VECTOR(21 downto 0);
+		rom_do:		in	 STD_LOGIC_VECTOR(7 downto 0);
 
-		j1_up:		in		STD_LOGIC;
-		j1_down:		in		STD_LOGIC;
-		j1_left:		in		STD_LOGIC;
-		j1_right:	in		STD_LOGIC;
-		j1_tl:		in		STD_LOGIC;
-		j1_tr:		in		STD_LOGIC;
-		j2_up:		in		STD_LOGIC;
-		j2_down:		in		STD_LOGIC;
-		j2_left:		in		STD_LOGIC;
-		j2_right:	in		STD_LOGIC;
-		j2_tl:		in		STD_LOGIC;
-		j2_tr:		in		STD_LOGIC;
-		reset:		in		STD_LOGIC;
-		pause:		in		STD_LOGIC;
+		j1_up:		in	 STD_LOGIC;
+		j1_down:		in	 STD_LOGIC;
+		j1_left:		in	 STD_LOGIC;
+		j1_right:	in	 STD_LOGIC;
+		j1_tl:		in	 STD_LOGIC;
+		j1_tr:		in	 STD_LOGIC;
+		j2_up:		in	 STD_LOGIC;
+		j2_down:		in	 STD_LOGIC;
+		j2_left:		in	 STD_LOGIC;
+		j2_right:	in	 STD_LOGIC;
+		j2_tl:		in	 STD_LOGIC;
+		j2_tr:		in	 STD_LOGIC;
+		pause:		in	 STD_LOGIC;
 
-		x:				in		UNSIGNED(8 downto 0);
-		y:				in		UNSIGNED(7 downto 0);
-		color:		out	STD_LOGIC_VECTOR(5 downto 0);
-		audio:		out	STD_LOGIC_VECTOR(5 downto 0);
+		x:				in	 UNSIGNED(8 downto 0);
+		y:				in	 UNSIGNED(7 downto 0);
+		color:		out STD_LOGIC_VECTOR(5 downto 0);
+		audio:		out STD_LOGIC_VECTOR(5 downto 0);
 
-		dbr:    in STD_LOGIC;
-		sp64:   in STD_LOGIC;
+		dbr:			in  STD_LOGIC;
+		sp64:			in STD_LOGIC;
 		
 		--Backup RAM
-		add_bk:	in STD_LOGIC_VECTOR(14 downto 0);
-		data_bk:	in STD_LOGIC_VECTOR(7 downto 0);
-		wren_bk:	in STD_LOGIC;
-		q_bk:		out STD_LOGIC_VECTOR(7 downto 0));
+		add_bk:		in  STD_LOGIC_VECTOR(14 downto 0);
+		data_bk:		in  STD_LOGIC_VECTOR(7 downto 0);
+		wren_bk:		in  STD_LOGIC;
+		q_bk:			out STD_LOGIC_VECTOR(7 downto 0));
 end system;
 
 architecture Behavioral of system is
 	
---	component dummy_z80 is
-	component T80se is
-	generic(
-		Mode : integer := 0;	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
-		T2Write : integer := 0;	-- 0 => WR_n active in T3, /=0 => WR_n active in T2
-		IOWait : integer := 1	-- 0 => Single cycle I/O, 1 => Std I/O cycle
-	);
-	port(
-		RESET_n:			in std_logic;
-		CLK_n:			in std_logic;
-		CLKEN:			in std_logic;
-		WAIT_n:			in std_logic;
-		INT_n:			in std_logic;
-		NMI_n:			in std_logic;
-		BUSRQ_n:			in std_logic;
-		M1_n:				out std_logic;
-		MREQ_n:			out std_logic;
-		IORQ_n:			out std_logic;
-		RD_n:				out std_logic;
-		WR_n:				out std_logic;
-		RFSH_n:			out std_logic;
-		HALT_n:			out std_logic;
-		BUSAK_n:			out std_logic;
-		A:					out std_logic_vector(15 downto 0);
-		DI:				in std_logic_vector(7 downto 0);
-		DO:				out std_logic_vector(7 downto 0)
-	);
-	end component;
-
-	component vdp is
-	generic (
-		MAX_SPPL : integer := 7
-	);
-	port (
-		cpu_clk:			in  STD_LOGIC;
-		vdp_clk:			in  STD_LOGIC;
-		pix_clk:			in  STD_LOGIC;
-		sp_clk:			in  STD_LOGIC;
-		sp64:				in  STD_LOGIC;
-		RD_n:				in  STD_LOGIC;
-		WR_n:				in  STD_LOGIC;
-		IRQ_n:			out STD_LOGIC;
-		A:					in  STD_LOGIC_VECTOR(7 downto 0);
-		D_in:				in  STD_LOGIC_VECTOR(7 downto 0);
-		D_out:			out STD_LOGIC_VECTOR(7 downto 0);			
-		x:					in  unsigned(8 downto 0);
-		y:					in  unsigned(7 downto 0);
-		color: 			out std_logic_vector (5 downto 0);
-		reset_n:       in  STD_LOGIC);
-	end component;
-	
-	component psg is
-   port (
-		clk:				in  STD_LOGIC;
-		WR_n:				in  STD_LOGIC;
-		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
-		output:			out STD_LOGIC_VECTOR (5 downto 0);
-		reset_n:			in  STD_LOGIC);
-	end component;
-	
-	component io is
-   port (
-		clk:				in		STD_LOGIC;
-		WR_n:				in		STD_LOGIC;
-		RD_n:				in		STD_LOGIC;
-		A:					in		STD_LOGIC_VECTOR (7 downto 0);
-		D_in:				in		STD_LOGIC_VECTOR (7 downto 0);
-		D_out:			out	STD_LOGIC_VECTOR (7 downto 0);
-		J1_up:			in 	STD_LOGIC;
-		J1_down:			in 	STD_LOGIC;
-		J1_left:			in 	STD_LOGIC;
-		J1_right:		in 	STD_LOGIC;
-		J1_tl:			in 	STD_LOGIC;
-		J1_tr:			in 	STD_LOGIC;
-		J2_up:			in 	STD_LOGIC;
-		J2_down:			in 	STD_LOGIC;
-		J2_left:			in 	STD_LOGIC;
-		J2_right:		in 	STD_LOGIC;
-		J2_tl:			in 	STD_LOGIC;
-		J2_tr:			in 	STD_LOGIC;
-		RESET:			in 	STD_LOGIC);
-	end component;
-	
-	signal RESET_n:			std_logic;
 	signal RD_n:				std_logic;
 	signal WR_n:				std_logic;
 	signal IRQ_n:				std_logic;
-	signal IO_n:				std_logic;
+	signal IORQ_n:				std_logic;
+	signal M1_n:				std_logic;
 	signal MREQ_n:				std_logic;
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
@@ -161,7 +79,6 @@ architecture Behavioral of system is
 	
 	signal boot_rom_D_out:	std_logic_vector(7 downto 0);
 	
-	signal reset_counter:	unsigned(3 downto 0) := "1111";
 	signal bootloader:		std_logic := '0';
 	signal irom_D_out:		std_logic_vector(7 downto 0);
 	signal irom_RD_n:			std_logic := '1';
@@ -177,38 +94,37 @@ architecture Behavioral of system is
 	signal nvram_D_out:     std_logic_vector(7 downto 0);
 begin
 
---	z80_inst: dummy_z80
-	z80_inst: T80se
+	z80_inst: entity work.T80s
+	generic map(
+		T2Write => 0
+	)
 	port map
 	(
-		RESET_n	=> RESET_n and reset,
-		CLK_n		=> clk_cpu,
-		CLKEN		=> '1',
-		WAIT_n	=> '1',
+		RESET_n	=> RESET_n,
+		CLK		=> clk_sys,
+		CEN		=> ce_cpu,
 		INT_n		=> IRQ_n,
 		NMI_n		=> pause,
-		BUSRQ_n	=> '1',
-		M1_n		=> open,
 		MREQ_n	=> MREQ_n,
-		IORQ_n	=> IO_n,
+		IORQ_n	=> IORQ_n,
+		M1_n		=> M1_n,
 		RD_n		=> RD_n,
 		WR_n		=> WR_n,
-		RFSH_n	=> open,
-		HALT_n	=> open,
-		BUSAK_n	=> open,
 		A			=> A,
 		DI			=> D_out,
 		DO			=> D_in
 	);
-
-	vdp_inst: vdp
-	generic map (MAX_SPPL)
+	
+	vdp_inst: entity work.vdp
+	generic map(
+		MAX_SPPL => MAX_SPPL
+	)
 	port map
 	(
-		cpu_clk	=> clk_cpu,
-		vdp_clk	=> clk_vdp,
-		pix_clk	=> clk_pix,
-		sp_clk	=> clk_sp,
+		clk_sys	=> clk_sys,
+		ce_vdp	=> ce_vdp,
+		ce_pix	=> ce_pix,
+		ce_sp		=> ce_sp,
 		sp64		=> sp64,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
@@ -219,23 +135,24 @@ begin
 		x			=> x,
 		y			=> y,
 		color		=> color,
-		reset_n  => reset
+		reset_n  => RESET_n
 	);
 
-	psg_inst: psg
+	psg_inst: entity work.psg
 	port map
 	(
-		clk		=> clk_cpu,
+		clk		=> clk_sys,
+		clken    => ce_cpu,
 		WR_n		=> psg_WR_n,
 		D_in		=> D_in,
 		output	=> audio,
-		reset_n	=> reset
+		reset		=> not RESET_n
 	);
 
-	io_inst: io
+	io_inst: entity work.io
 	port map
 	(
-		clk		=> clk_cpu,
+		clk		=> clk_sys,
 		WR_n		=> io_WR_n,
 		RD_n		=> io_RD_n,
 		A			=> A(7 downto 0),
@@ -253,7 +170,7 @@ begin
 		J2_right	=> j2_right,
 		J2_tl		=> j2_tl,
 		J2_tr		=> j2_tr,
-		RESET		=> reset
+		RESET		=> RESET_n
 	);
 
 	ram_inst : entity work.spram
@@ -263,7 +180,7 @@ begin
 	)
 	port map
 	(
-		clock		=> clk_cpu,
+		clock		=> clk_sys,
 		address	=> A(12 downto 0),
 		wren		=> ram_WR,
 		data		=> D_in,
@@ -277,7 +194,7 @@ begin
 	)
 	port map
 	(
-		clock_a		=> clk_cpu,
+		clock_a		=> clk_sys,
 		address_a	=> (nvram_p and not A(14)) & A(13 downto 0),
 		wren_a		=> nvram_WR,
 		data_a		=> D_in,
@@ -297,48 +214,39 @@ begin
 	)
 	port map
 	(
-		clock		=> clk_cpu,
+		clock		=> clk_sys,
 		address	=> A(13 downto 0),
 		q			=> boot_rom_D_out
 	);
 
 	-- glue logic
-	vdp_WR_n <= WR_n when io_n='0' and A(7 downto 6)="10" else '1';
-	vdp_RD_n <= RD_n when io_n='0' and (A(7 downto 6)="01" or A(7 downto 6)="10") else '1';
-	psg_WR_n <= WR_n when io_n='0' and A(7 downto 6)="01" else '1';
-	ctl_WR_n <=	WR_n when io_n='0' and A(7 downto 6)="00" and A(0)='0' else '1';
-	io_WR_n  <=	WR_n when io_n='0' and A(7 downto 6)="00" and A(0)='1' else '1';
-	io_RD_n  <=	RD_n when io_n='0' and A(7 downto 6)="11" else '1';
+	vdp_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="10" else '1';
+	vdp_RD_n <= RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="01" or A(7 downto 6)="10") else '1';
+	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="01" else '1';
+	ctl_WR_n <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='0' else '1';
+	io_WR_n  <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='1' else '1';
+	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="11" else '1';
 					
 	ram_WR   <= not WR_n when MREQ_n='0' and A(15 downto 14)="11" else '0';
 	nvram_WR <= not WR_n when MREQ_n='0' and ((A(15 downto 14)="10" and nvram_e = '1') or (A(15 downto 14)="11" and nvram_ex = '1')) else '0';
 	rom_RD   <= not RD_n when MREQ_n='0' and A(15 downto 14)/="11" else '0';
 
-	process (clk_cpu)
+	process (clk_sys)
 	begin
-		if rising_edge(clk_cpu) then
-			if reset='0' then 
+		if rising_edge(clk_sys) then
+			if RESET_n='0' then 
 				bootloader <= '0';
-				reset_counter <= (others=>'1');
-			end if;
-
-			-- memory control
-			if reset_counter>0 then
-				reset_counter <= reset_counter - 1;
-			elsif ctl_WR_n='0' then
-				if bootloader='0' then
-					bootloader <= '1';
-				end if;
+			elsif ctl_WR_n='0' and bootloader='0' then
+				bootloader <= '1';
 			end if;
 		end if;
 	end process;
-	reset_n <= '0' when reset_counter>0 else '1';
 	
 	irom_D_out <=	boot_rom_D_out when bootloader='0' and A(15 downto 14)="00" else rom_do;
 	
-	process (io_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e)
+	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e)
 	begin
-		if io_n='0' then
+		if IORQ_n='0' then
 			case A(7 downto 6) is
 			when "11" =>
 				D_out <= io_D_out;
@@ -360,9 +268,9 @@ begin
 				
 				
 	-- external ram control
-	process (RESET_n,reset,clk_cpu)
+	process (RESET_n,clk_sys)
 	begin
-		if(RESET_n='0' or reset='0') then
+		if RESET_n='0' then
 			bank0 <= "00000000";
 			bank1 <= "00000001";
 			bank2 <= "00000010";
@@ -370,7 +278,7 @@ begin
 			nvram_ex <= '0';
 			nvram_p  <= '0';
 		else
-			if rising_edge(clk_cpu) then
+			if rising_edge(clk_sys) then
 				if WR_n='0' and A(15 downto 2)="11111111111111" then
 					case A(1 downto 0) is
 						when "00" => 

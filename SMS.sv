@@ -48,6 +48,7 @@ module emu
 	output        VGA_HS,
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
+	output  [1:0] VGA_SL,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -137,7 +138,7 @@ parameter CONF_STR4 = {
 	"7,Save state;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
-	"O34,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
+	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
 `ifdef USE_SP64
 	"O8,Sprites per line,Std(8),All(64);",
@@ -145,19 +146,17 @@ parameter CONF_STR4 = {
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"-;",
-	"RA,Reset;",
+	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
-	"V,v1.0.",`BUILD_DATE
+	"V,v1.10.",`BUILD_DATE
 };
 
 
 ////////////////////   CLOCKS   ///////////////////
 
 wire locked;
-wire clk_sys = clk_cpu;
+wire clk_sys;
 wire clk_mem;
-wire clk_cpu;
-wire clk_vid;
 
 pll pll
 (
@@ -166,20 +165,11 @@ pll pll
 	.outclk_0(clk_mem),
 	.outclk_1(SDRAM_CLK),
 	//.outclk_2(clk_cpu),
-	.outclk_3(clk_vid),
+	.outclk_3(clk_sys),
 	.locked(locked)
 );
 
-wire cold_reset = RESET | status[0] | ~initReset_n;
-wire reset = cold_reset | buttons[1] | status[10] | ioctl_download | bk_loading;
-
-reg initReset_n = 0;
-always @(posedge clk_sys) begin
-	integer timeout = 0;
-	
-	if(timeout < 5000000) timeout <= timeout + 1;
-	else initReset_n <= 1;
-end
+wire reset = RESET | status[0] | buttons[1] | ioctl_download | bk_loading;
 
 //////////////////   HPS I/O   ///////////////////
 wire [15:0] joy_0;
@@ -192,6 +182,7 @@ wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
+wire        ioctl_wait;
 
 reg  [31:0] sd_lba;
 reg         sd_rd = 0;
@@ -232,7 +223,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.ioctl_index(ioctl_index),
 
 	.sd_conf(0),
-	.ioctl_wait(0),
+	.ioctl_wait(ioctl_wait),
 	
 	.sd_lba(sd_lba),
 	.sd_rd(sd_rd),
@@ -254,17 +245,45 @@ wire        ram_rd;
 sdram ram
 (
 	.*,
+
 	.init(~locked),
 	.clk(clk_mem),
-	.clk_ref(clk_cpu),
+	.clkref(ce_cpu),
+
+	.waddr(romwr_a),
+	.din(ioctl_dout),
+	.we(rom_wr),
+	.we_ack(sd_wrack),
+
+	.raddr({ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
 	.dout(ram_dout),
-	.din (ioctl_dout),
-	.addr(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
-	.wtbt(0),
-	.we(ioctl_wr),
 	.rd(ram_rd),
-	.ready()
+	.rd_rdy()
 );
+
+reg  rom_wr = 0;
+wire sd_wrack;
+reg  [23:0] romwr_a;
+
+always @(posedge clk_sys) begin
+	reg old_download, old_reset;
+
+	old_download <= ioctl_download;
+	old_reset <= reset;
+
+	if(~old_reset && reset) ioctl_wait <= 0;
+	if(~old_download && ioctl_download) romwr_a <= 0;
+	else begin
+		if(ioctl_wr) begin
+			ioctl_wait <= 1;
+			rom_wr <= ~rom_wr;
+		end else if(ioctl_wait && (rom_wr == sd_wrack)) begin
+			ioctl_wait <= 0;
+			romwr_a <= romwr_a + 1'd1;
+		end
+	end
+end
+
 
 //	GENERIC
 //	(
@@ -301,11 +320,13 @@ wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 
 system #(MAX_SPPL) system
 (
-	.clk_cpu(clk_cpu),
-	.clk_vdp(clk_vdp),
-	.clk_pix(clk_pix),
 	.clk_sys(clk_sys),
-	.clk_sp(clk_vid), // faster clock for max sprites
+	.ce_cpu(ce_cpu),
+	.ce_vdp(ce_vdp),
+	.ce_pix(ce_pix),
+	.ce_sp(ce_sp),
+
+	.RESET_n(~reset),
 
 	.rom_rd(ram_rd),
 	.rom_a(ram_addr),
@@ -323,7 +344,6 @@ system #(MAX_SPPL) system
 	.j2_right(joyb[0]),
 	.j2_tl(joyb[4]),
 	.j2_tr(joyb[5]),
-	.reset(~reset),
 	.pause(joya[6]&joyb[6]),
 
 	.x(x),
@@ -346,7 +366,8 @@ wire [5:0] color;
 
 video video
 (
-	.clk8(clk_pix),
+	.clk(clk_sys),
+	.ce_pix(ce_pix),
 	.pal(status[2]),
 	.x(x),
 	.y(y),
@@ -357,51 +378,56 @@ video video
 	.vblank(VBlank)
 );
 
-reg [4:0] clkd;
-reg clk_vdp;
-reg clk_pix;
-always @(posedge clk_vid) begin
+reg ce_cpu;
+reg ce_vdp;
+reg ce_pix;
+reg ce_sp;
+always @(negedge clk_sys) begin
+	reg [4:0] clkd;
 
-	clk_vdp <= 0;//div5
-	clk_pix <= 0;//div10
-	clk_cpu <= 0;//div15
+	ce_sp <= clkd[0];
+	ce_vdp <= 0;//div5
+	ce_pix <= 0;//div10
+	ce_cpu <= 0;//div15
 	clkd <= clkd + 1'd1;
-	if (clkd=='b11101) begin
-		clkd <= 'b00000;
-		clk_vdp <= 1;
-		clk_pix <= 1;
-		clk_cpu <= 1;
-	end else if (clkd=='b11000) begin
-		clk_vdp <= 1;
-	end else if (clkd=='b10011) begin
-		clk_vdp <= 1;
-		clk_pix <= 1;
-	end else if (clkd=='b01110) begin
-		clk_vdp <= 1;
-		clk_cpu <= 1;
-	end else if (clkd=='b01001) begin
-		clk_vdp <= 1;
-		clk_pix <= 1;
-	end else if (clkd=='b00100) begin
-		clk_vdp <= 1;
+	if (clkd==29) begin
+		clkd <= 0;
+		ce_vdp <= 1;
+		ce_pix <= 1;
+		ce_cpu <= 1;
+	end else if (clkd==24) begin
+		ce_vdp <= 1;
+	end else if (clkd==19) begin
+		ce_vdp <= 1;
+		ce_pix <= 1;
+	end else if (clkd==14) begin
+		ce_vdp <= 1;
+		ce_cpu <= 1;
+	end else if (clkd==9) begin
+		ce_vdp <= 1;
+		ce_pix <= 1;
+	end else if (clkd==4) begin
+		ce_vdp <= 1;
 	end
 end
 
 wire HSync, VSync;
 wire HBlank, VBlank;
 
-wire [1:0] scale = status[4:3];
+wire [2:0] scale = status[5:3];
+wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
 
-assign CLK_VIDEO = clk_vid;
+assign CLK_VIDEO = clk_sys;
+assign VGA_SL = sl[1:0];
 
 video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 (
 	.*,
-	.clk_sys(clk_vid),
+	.clk_sys(CLK_VIDEO),
 	.ce_pix_out(CE_PIXEL),
-	.ce_pix(clk_pix),
+	.ce_pix(ce_pix),
 	
-	.scanlines({scale == 3, scale == 2}),
+	.scanlines(0),
 	.scandoubler(scale || forced_scandoubler),
 	.hq2x(scale==1),
 	.mono(0),
