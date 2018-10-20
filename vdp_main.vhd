@@ -3,10 +3,15 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity vdp_main is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk_sys:				in  STD_LOGIC;
 		ce_vdp:				in  STD_LOGIC;
 		ce_pix:				in  STD_LOGIC;
+		ce_sp:				in  STD_LOGIC;
+		sp64:					in  std_logic;			
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
 		cram_A:				out std_logic_vector(4 downto 0);
@@ -76,10 +81,15 @@ begin
 		priority			=> bg_priority);
 		
 	vdp_spr_inst: entity work.vdp_sprites
+	generic map(
+		MAX_SPPL => MAX_SPPL
+	)
 	port map (
 		clk_sys			=> clk_sys,
 		ce_vdp			=> ce_vdp,
 		ce_pix			=> ce_pix,
+		ce_sp				=> ce_sp,
+		sp64				=> sp64,
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
@@ -109,7 +119,7 @@ begin
 		end if;
 	end process;
 	
-	vram_A <= spr_vram_A when x>=256 and x<384 else bg_vram_A;
+	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
 
 	color <= cram_D;
 
