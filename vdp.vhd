@@ -3,10 +3,15 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity vdp is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk_sys:			in  STD_LOGIC;
 		ce_vdp:			in  STD_LOGIC;
 		ce_pix:			in  STD_LOGIC;
+		ce_sp:			in  STD_LOGIC;
+		sp64:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -77,10 +82,15 @@ architecture Behavioral of vdp is
 begin
 		
 	vdp_main_inst: entity work.vdp_main
+	generic map(
+		MAX_SPPL => MAX_SPPL
+	)
 	port map(
 		clk_sys			=> clk_sys,
 		ce_vdp			=> ce_vdp,
 		ce_pix			=> ce_pix,
+		ce_sp				=> ce_sp,
+		sp64				=> sp64,
 		vram_A			=> vram_vdp_A,
 		vram_D			=> vram_vdp_D,
 		cram_A			=> cram_vdp_A,

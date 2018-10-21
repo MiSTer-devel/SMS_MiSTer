@@ -98,6 +98,19 @@ module emu
 	output        SDRAM_nWE
 );
 
+//Uncomment to speed up lite build.  Needed?
+//`ifndef LITE
+`define USE_SP64
+//`endif
+
+`ifdef USE_SP64
+localparam MAX_SPPL = 63;
+localparam SP64     = 1'b1;
+`else
+localparam MAX_SPPL = 7;
+localparam SP64     = 1'b0;
+`endif
+
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
@@ -127,6 +140,9 @@ parameter CONF_STR4 = {
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
+`ifdef USE_SP64
+	"O8,Sprites per line,Std(8),All(64);",
+`endif
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"-;",
@@ -302,12 +318,13 @@ end
 
 wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 
-system system
+system #(MAX_SPPL) system
 (
 	.clk_sys(clk_sys),
 	.ce_cpu(ce_cpu),
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
+	.ce_sp(ce_sp),
 
 	.RESET_n(~reset),
 
@@ -335,6 +352,7 @@ system system
 	.audio(audio),
 
 	.dbr(dbr),
+	.sp64(status[8] & SP64),
 	
    .add_bk({sd_lba[5:0],sd_buff_addr}),
 	.data_bk(sd_buff_dout),
@@ -363,9 +381,11 @@ video video
 reg ce_cpu;
 reg ce_vdp;
 reg ce_pix;
+reg ce_sp;
 always @(negedge clk_sys) begin
 	reg [4:0] clkd;
 
+	ce_sp <= clkd[0];
 	ce_vdp <= 0;//div5
 	ce_pix <= 0;//div10
 	ce_cpu <= 0;//div15

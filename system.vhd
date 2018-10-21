@@ -5,11 +5,15 @@ use IEEE.NUMERIC_STD.ALL;
 use work.all;
 
 entity system is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
 		clk_sys:		in	 STD_LOGIC;
 		ce_cpu:		in	 STD_LOGIC;
 		ce_vdp:		in	 STD_LOGIC;
 		ce_pix:		in	 STD_LOGIC;
+		ce_sp:		in	 STD_LOGIC;
 
 		RESET_n:		in	 STD_LOGIC;
 		
@@ -37,6 +41,7 @@ entity system is
 		audio:		out STD_LOGIC_VECTOR(5 downto 0);
 
 		dbr:			in  STD_LOGIC;
+		sp64:			in STD_LOGIC;
 		
 		--Backup RAM
 		add_bk:		in  STD_LOGIC_VECTOR(14 downto 0);
@@ -111,11 +116,16 @@ begin
 	);
 	
 	vdp_inst: entity work.vdp
+	generic map(
+		MAX_SPPL => MAX_SPPL
+	)
 	port map
 	(
 		clk_sys	=> clk_sys,
 		ce_vdp	=> ce_vdp,
 		ce_pix	=> ce_pix,
+		ce_sp		=> ce_sp,
+		sp64		=> sp64,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
 		IRQ_n		=> IRQ_n,
