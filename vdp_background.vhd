@@ -46,7 +46,7 @@ begin
 			if ce_pix = '1' then
 				if (reset='1') then
 					if disable_hscroll='0' or y>=16 then
-						x <= 240-scroll_x;
+						x <= 240-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
 					else
 						x <= "11110000"; -- 240
 					end if;
