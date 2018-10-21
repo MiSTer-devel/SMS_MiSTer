@@ -102,11 +102,11 @@ begin
 		vram_D			=> vram_D,		
 		color				=> spr_color);
 
-	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan)
+	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on)
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
-		if x<256 and y<192 and (mask_column0='0' or x>=8) then
+		if x<256 and y<192 and (mask_column0='0' or x>=8) and display_on='1' then
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
 			if (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
