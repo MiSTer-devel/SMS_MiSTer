@@ -156,16 +156,13 @@ parameter CONF_STR4 = {
 
 wire locked;
 wire clk_sys;
-wire clk_mem;
 
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_mem),
+	.outclk_0(clk_sys),
 	.outclk_1(SDRAM_CLK),
-	//.outclk_2(clk_cpu),
-	.outclk_3(clk_sys),
 	.locked(locked)
 );
 
@@ -247,7 +244,7 @@ sdram ram
 	.*,
 
 	.init(~locked),
-	.clk(clk_mem),
+	.clk(clk_sys),
 	.clkref(ce_cpu),
 
 	.waddr(romwr_a),
