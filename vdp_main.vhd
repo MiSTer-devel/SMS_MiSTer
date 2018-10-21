@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
 entity vdp_main is
 	generic (
@@ -17,8 +18,8 @@ entity vdp_main is
 		cram_A:				out std_logic_vector(4 downto 0);
 		cram_D:				in  std_logic_vector(5 downto 0);
 			
-		x:						unsigned(8 downto 0);
-		y:						unsigned(7 downto 0);
+		x:						in  std_logic_vector(8 downto 0);
+		y:						in  std_logic_vector(7 downto 0);
 			
 		color:				out std_logic_vector (5 downto 0);
 					
@@ -27,8 +28,8 @@ entity vdp_main is
 		overscan:			in  std_logic_vector (3 downto 0);
 
 		bg_address:			in  std_logic_vector (2 downto 0);
-		bg_scroll_x:		in  unsigned(7 downto 0);
-		bg_scroll_y:		in  unsigned(7 downto 0);
+		bg_scroll_x:		in  std_logic_vector(7 downto 0);
+		bg_scroll_y:		in  std_logic_vector(7 downto 0);
 		disable_hscroll:	in  std_logic;
 			
 		spr_address:		in  std_logic_vector (5 downto 0);
@@ -41,7 +42,7 @@ end vdp_main;
 
 architecture Behavioral of vdp_main is
 	
-	signal bg_y:			unsigned(7 downto 0);
+	signal bg_y:			std_logic_vector(7 downto 0);
 	signal bg_vram_A:		std_logic_vector(13 downto 0);
 	signal bg_color:		std_logic_vector(4 downto 0);
 	signal bg_priority:	std_logic;
@@ -54,7 +55,7 @@ architecture Behavioral of vdp_main is
 begin
 
 	process (y,bg_scroll_y)
-		variable sum: unsigned(8 downto 0);
+		variable sum: std_logic_vector(8 downto 0);
 	begin
 		sum := ('0'&y)+('0'&bg_scroll_y);
 		if (sum>=224) then

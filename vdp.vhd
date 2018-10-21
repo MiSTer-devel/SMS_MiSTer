@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity vdp is
 	generic (
@@ -18,9 +19,9 @@ entity vdp is
 		A:					in  STD_LOGIC_VECTOR (7 downto 0);
 		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
-		x:					unsigned(8 downto 0);
-		y:					unsigned(7 downto 0);
-		color:			out std_logic_vector (5 downto 0);
+		x:					in  STD_LOGIC_VECTOR (8 downto 0);
+		y:					in  STD_LOGIC_VECTOR (7 downto 0);
+		color:			out STD_LOGIC_VECTOR (5 downto 0);
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -58,10 +59,10 @@ architecture Behavioral of vdp is
 	signal overscan:			std_logic_vector (3 downto 0) := "0000";	
 	signal irq_frame_en:		std_logic := '0';
 	signal irq_line_en:		std_logic := '0';
-	signal irq_line_count:	unsigned(7 downto 0) := (others=>'1');	
+	signal irq_line_count:	std_logic_vector(7 downto 0) := (others=>'1');	
 	signal bg_address:		std_logic_vector (2 downto 0) := (others=>'0');
-	signal bg_scroll_x:		unsigned(7 downto 0) := (others=>'0');
-	signal bg_scroll_y:		unsigned(7 downto 0) := (others=>'0');
+	signal bg_scroll_x:		std_logic_vector(7 downto 0) := (others=>'0');
+	signal bg_scroll_y:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal spr_address:		std_logic_vector (5 downto 0) := (others=>'0');
 	signal spr_shift:			std_logic := '0';
 	signal spr_tall:			std_logic := '0';
@@ -74,8 +75,8 @@ architecture Behavioral of vdp is
 	signal reset_flags:		boolean := false;
 	signal collide_flag:		std_logic := '0';
 	signal overflow_flag:	std_logic := '0';
-	signal irq_counter:		unsigned(6 downto 0) := (others=>'0');
-	signal hbl_counter:		unsigned(7 downto 0) := (others=>'0');
+	signal irq_counter:		std_logic_vector(6 downto 0) := (others=>'0');
+	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
 	
@@ -165,9 +166,9 @@ begin
 			spr_address		<= "111111";--FF
 			spr_high_bit	<= '0';--FB
 			overscan			<= "0000";--00
-			bg_scroll_x		<= to_unsigned(0, bg_scroll_x'length);--00
-			bg_scroll_y		<= to_unsigned(0, bg_scroll_y'length);--00
-			irq_line_count	<= to_unsigned(255, irq_line_count'length);--FF
+			bg_scroll_x		<= (others => '0');--00
+			bg_scroll_y		<= (others => '0');--00
+			irq_line_count	<= (others=>'1');--FF
 			reset_flags		<= true;
 			address_ff		<= '0';
 			xram_cpu_read	<= '0';
@@ -211,11 +212,11 @@ begin
 							when "10000111" =>
 								overscan			<= xram_cpu_A(3 downto 0);
 							when "10001000" =>
-								bg_scroll_x		<= unsigned(xram_cpu_A(7 downto 0));
+								bg_scroll_x		<= xram_cpu_A(7 downto 0);
 							when "10001001" =>
-								bg_scroll_y		<= unsigned(xram_cpu_A(7 downto 0));
+								bg_scroll_y		<= xram_cpu_A(7 downto 0);
 							when "10001010" =>
-								irq_line_count	<= unsigned(xram_cpu_A(7 downto 0));
+								irq_line_count	<= xram_cpu_A(7 downto 0);
 							when others =>
 							end case;
 						end if;
@@ -226,9 +227,9 @@ begin
 					address_ff		<= '0';
 					case A(7 downto 6)&A(0) is
 					when "010" =>
-						D_out <= std_logic_vector(y);
+						D_out <= y;
 					when "011" =>
-						D_out <= std_logic_vector(x(7 downto 0));
+						D_out <= x(7 downto 0);
 					when "100" =>
 						--D_out <= vram_cpu_D_out;
 						D_out <= vram_cpu_D_outl;
@@ -244,7 +245,7 @@ begin
 					end case;
 					
 				elsif xram_cpu_A_incr='1' then
-					xram_cpu_A <= std_logic_vector(unsigned(xram_cpu_A) + 1);
+					xram_cpu_A <= xram_cpu_A + 1;
 					xram_cpu_A_incr <= '0';
 					if xram_cpu_read='1' then
 						vram_cpu_D_outl <= vram_cpu_D_out;

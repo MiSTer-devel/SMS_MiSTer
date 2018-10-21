@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
 use work.all;
 
@@ -35,8 +36,8 @@ entity system is
 		j2_tr:		in	 STD_LOGIC;
 		pause:		in	 STD_LOGIC;
 
-		x:				in	 UNSIGNED(8 downto 0);
-		y:				in	 UNSIGNED(7 downto 0);
+		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
+		y:				in	 STD_LOGIC_VECTOR(7 downto 0);
 		color:		out STD_LOGIC_VECTOR(5 downto 0);
 		audio:		out STD_LOGIC_VECTOR(5 downto 0);
 

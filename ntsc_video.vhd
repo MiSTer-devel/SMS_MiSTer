@@ -1,13 +1,14 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
 entity ntsc_video is
 	Port (
 		clk:				in  std_logic;
 		ce_pix:			in  std_logic;
-		x: 				out unsigned(8 downto 0);
-		y:					out unsigned(7 downto 0);
+		x: 				out std_logic_vector(8 downto 0);
+		y:					out std_logic_vector(7 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
 		hblank:			out std_logic;
@@ -16,9 +17,9 @@ end ntsc_video;
 
 architecture Behavioral of ntsc_video is
 
-	signal hcount:			unsigned(8 downto 0) := (others => '0');
-	signal vcount:			unsigned(8 downto 0) := (others => '0');
-	signal y9:				unsigned(8 downto 0);
+	signal hcount:			std_logic_vector(8 downto 0) := (others => '0');
+	signal vcount:			std_logic_vector(8 downto 0) := (others => '0');
+	signal y9:				std_logic_vector(8 downto 0);
 	
 begin
 
