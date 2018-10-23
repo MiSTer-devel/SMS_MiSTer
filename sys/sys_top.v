@@ -217,7 +217,7 @@ always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
 	reg        old_strobe;
-	reg  [3:0] cnt = 0;
+	reg  [7:0] cnt = 0;
 
 	old_strobe <= io_strobe;
 
@@ -234,28 +234,27 @@ always@(posedge clk_sys) begin
 			cnt <= 0;
 		end
 		else begin
-			if(~&cnt) cnt <= cnt + 1'd1;
-
 			if(cmd == 1) begin
 				cfg <= io_din;
 				cfg_set <= 1;
 			end
 			if(cmd == 'h20) begin
 				cfg_set <= 0;
+				cnt <= cnt + 1'd1;
 				if(cnt<8) begin
 `ifndef LITE
 					if(!cnt) vip_newcfg <= ~cfg_ready;
-					case(cnt)
-						0: if(WIDTH  != io_din[11:0]) begin WIDTH  <= io_din[11:0]; vip_newcfg <= 1; end
-						1: if(HFP    != io_din[11:0]) begin HFP    <= io_din[11:0]; vip_newcfg <= 1; end
-						2: if(HS     != io_din[11:0]) begin HS     <= io_din[11:0]; vip_newcfg <= 1; end
-						3: if(HBP    != io_din[11:0]) begin HBP    <= io_din[11:0]; vip_newcfg <= 1; end
-						4: if(HEIGHT != io_din[11:0]) begin HEIGHT <= io_din[11:0]; vip_newcfg <= 1; end
-						5: if(VFP    != io_din[11:0]) begin VFP    <= io_din[11:0]; vip_newcfg <= 1; end
-						6: if(VS     != io_din[11:0]) begin VS     <= io_din[11:0]; vip_newcfg <= 1; end
-						7: if(VBP    != io_din[11:0]) begin VBP    <= io_din[11:0]; vip_newcfg <= 1; end
-					endcase
 `endif
+					case(cnt)
+						0: if(WIDTH  != io_din[11:0]) begin WIDTH  <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						1: if(HFP    != io_din[11:0]) begin HFP    <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						2: if(HS     != io_din[11:0]) begin HS     <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						3: if(HBP    != io_din[11:0]) begin HBP    <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						4: if(HEIGHT != io_din[11:0]) begin HEIGHT <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						5: if(VFP    != io_din[11:0]) begin VFP    <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						6: if(VS     != io_din[11:0]) begin VS     <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+						7: if(VBP    != io_din[11:0]) begin VBP    <= io_din[11:0]; `ifndef LITE vip_newcfg <= 1; `endif end
+					endcase
 					if(cnt == 1) begin
 						cfg_custom_p1 <= 0;
 						cfg_custom_p2 <= 0;
@@ -373,7 +372,7 @@ vip vip
 	.in_v_sync(vs),
 	.in_h_sync(hs),
 	.in_ce(ce_pix),
-	.in_f(0),
+	.in_f(f1),
 
 	//HDMI output
 	.hdmi_clk(iHdmiClk),
@@ -878,7 +877,7 @@ wire signed [15:0] audio_ls, audio_rs;
 wire        audio_s;
 wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
-wire        vs, hs, de;
+wire        vs, hs, de, f1;
 wire  [1:0] scanlines;
 wire        clk_sys, clk_vid, ce_pix;
 
@@ -916,6 +915,7 @@ emu emu
 	.VGA_HS(hs_emu),
 	.VGA_VS(vs_emu),
 	.VGA_DE(de),
+	.VGA_F1(f1),
 	.VGA_SL(scanlines),
 
 	.LED_USER(led_user),
