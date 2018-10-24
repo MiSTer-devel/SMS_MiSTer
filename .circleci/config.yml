@@ -7,6 +7,8 @@ jobs:
     steps:
       - checkout
       - run: /usr/local/bin/quartus_wrapper "quartus_sh --flow compile SMS-lite.qsf"
+      - store_artifacts:
+        path: /build/output_files
 
 workflows:
   version: 2
