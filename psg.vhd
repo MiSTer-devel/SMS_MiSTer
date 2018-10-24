@@ -1,19 +1,27 @@
+-- Modified from SMS version in MiST:
+-- DAC removed
+-- Added clock enable
+-- Jose Tejada, 26 Feb 2017
+
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity psg is
-	port (clk	: in  STD_LOGIC;
-			WR_n	: in  STD_LOGIC;
-			D_in	: in  STD_LOGIC_VECTOR (7 downto 0);
-			output: out STD_LOGIC_VECTOR (5 downto 0);
-			reset_n	: in  STD_LOGIC);
+	port (
+		clk	: in  STD_LOGIC;
+		clken	: in  STD_LOGIC := '1';
+		reset	: in  STD_LOGIC;
+		WR_n	: in  STD_LOGIC;
+		D_in	: in  STD_LOGIC_VECTOR(7 downto 0);
+		output: out STD_LOGIC_VECTOR(5 downto 0)
+	);
 end entity;
 
 architecture rtl of psg is
 
-	signal clk_divide	: unsigned(4 downto 0) := "00000";
-	signal clk32		: std_logic;
+	signal en         : std_logic;
+	signal clk_divide	: unsigned(3 downto 0) := "0000";
 	signal regn			: std_logic_vector(2 downto 0);
 	signal tone0		: std_logic_vector(9 downto 0):="0000100000";
 	signal tone1		: std_logic_vector(9 downto 0):="0000100000";
@@ -27,53 +35,37 @@ architecture rtl of psg is
 	signal output1		: std_logic_vector(3 downto 0);
 	signal output2		: std_logic_vector(3 downto 0);
 	signal output3		: std_logic_vector(3 downto 0);
-	
-	component psg_tone is
-   port (clk	: in  STD_LOGIC;
-			tone	: in  STD_LOGIC_VECTOR (9 downto 0);
-			volume: in  STD_LOGIC_VECTOR (3 downto 0);
-			output: out STD_LOGIC_VECTOR (3 downto 0));
-	end component;
-
-	component psg_noise is
-	port (clk	: in  STD_LOGIC;
-			style	: in  STD_LOGIC_VECTOR (2 downto 0);
-			tone	: in  STD_LOGIC_VECTOR (9 downto 0);
-			volume: in  STD_LOGIC_VECTOR (3 downto 0);
-			output: out STD_LOGIC_VECTOR (3 downto 0));
-	end component;
-	
-	component dac is
-	port (clk	: in  STD_LOGIC;
-			input	: in  STD_LOGIC_VECTOR (5 downto 0);
-			output: out STD_LOGIC);
-	end component;
+	signal old_WR_n   : std_logic;
 begin
 
-	t0: psg_tone
+	t0: work.psg_tone
 	port map (
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> en,
 		tone		=> tone0,
 		volume	=> volume0,
 		output	=> output0);
 		
-	t1: psg_tone
+	t1: work.psg_tone
 	port map (
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> en,
 		tone		=> tone1,
 		volume	=> volume1,
 		output	=> output1);
 		
-	t2: psg_tone
+	t2: work.psg_tone
 	port map (
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> en,
 		tone		=> tone2,
 		volume	=> volume2,
 		output	=> output2);
 
-	t3: psg_noise
-	port map(
-		clk		=> clk32,
+	t3: work.psg_noise
+	port map (
+		clk		=> clk,
+		clk_en	=> en,
 		style		=> ctrl3,
 		tone		=> tone2,
 		volume	=> volume3,
@@ -82,44 +74,59 @@ begin
 	process (clk)
 	begin
 		if rising_edge(clk) then
-			clk_divide <= clk_divide+1;
+			en <= '0';
+			if clken='1' then
+				clk_divide <= clk_divide+1;
+				if clk_divide = 0 then
+					en <= '1';
+				end if;
+			end if;
 		end if;
 	end process;
-	clk32 <= std_logic(clk_divide(4));
 
-	process (clk, WR_n, reset_n)
+	process (clk)
 	begin
-		if reset_n='0' then
-			volume0 <= "1111";
-			volume1 <= "1111";
-			volume2 <= "1111";
-			volume3 <= "1111";
-		elsif rising_edge(clk) and WR_n='0' then
-			if D_in(7)='1' then
-				case D_in(6 downto 4) is
-					when "000" => tone0(3 downto 0) <= D_in(3 downto 0);
-					when "010" => tone1(3 downto 0) <= D_in(3 downto 0);
-					when "100" => tone2(3 downto 0) <= D_in(3 downto 0);
-					when "110" => ctrl3 <= D_in(2 downto 0);
-					when "001" => volume0 <= D_in(3 downto 0);
-					when "011" => volume1 <= D_in(3 downto 0);
-					when "101" => volume2 <= D_in(3 downto 0);
-					when "111" => volume3 <= D_in(3 downto 0);
-					when others =>
-				end case;
-				regn <= D_in(6 downto 4);
-			else
-				case regn is
-					when "000" => tone0(9 downto 4) <= D_in(5 downto 0);
-					when "010" => tone1(9 downto 4) <= D_in(5 downto 0);
-					when "100" => tone2(9 downto 4) <= D_in(5 downto 0);
-					when "110" => 
-					when "001" => volume0 <= D_in(3 downto 0);
-					when "011" => volume1 <= D_in(3 downto 0);
-					when "101" => volume2 <= D_in(3 downto 0);
-					when "111" => volume3 <= D_in(3 downto 0);
-					when others =>
-				end case;
+		if rising_edge(clk) then
+
+			old_WR_n <= WR_n;
+
+			if reset = '1' then
+				volume0 <= (others => '1');
+				volume1 <= (others => '1');
+				volume2 <= (others => '1');
+				volume3 <= (others => '1');
+				tone0 <= (others => '0');
+				tone1 <= (others => '0');
+				tone2 <= (others => '0');
+				ctrl3 <= (others => '0');
+
+			elsif old_WR_n = '1' and WR_n='0' then
+				if D_in(7)='1' then
+					case D_in(6 downto 4) is
+						when "000" => tone0(3 downto 0) <= D_in(3 downto 0);
+						when "010" => tone1(3 downto 0) <= D_in(3 downto 0);
+						when "100" => tone2(3 downto 0) <= D_in(3 downto 0);
+						when "110" => ctrl3 <= D_in(2 downto 0);
+						when "001" => volume0 <= D_in(3 downto 0);
+						when "011" => volume1 <= D_in(3 downto 0);
+						when "101" => volume2 <= D_in(3 downto 0);
+						when "111" => volume3 <= D_in(3 downto 0);
+						when others =>
+					end case;
+					regn <= D_in(6 downto 4);
+				else
+					case regn is
+						when "000" => tone0(9 downto 4) <= D_in(5 downto 0);
+						when "010" => tone1(9 downto 4) <= D_in(5 downto 0);
+						when "100" => tone2(9 downto 4) <= D_in(5 downto 0);
+						when "110" => 
+						when "001" => volume0 <= D_in(3 downto 0);
+						when "011" => volume1 <= D_in(3 downto 0);
+						when "101" => volume2 <= D_in(3 downto 0);
+						when "111" => volume3 <= D_in(3 downto 0);
+						when others =>
+					end case;
+				end if;
 			end if;
 		end if;
 	end process;
@@ -132,4 +139,3 @@ begin
 	);
 
 end rtl;
-

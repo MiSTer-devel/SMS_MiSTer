@@ -1,13 +1,15 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
 entity video is
 	Port (
-		clk8:				in  std_logic;
+		clk:				in  std_logic;
+		ce_pix:			in  std_logic;
 		pal:				in  std_logic;
-		x: 				out unsigned(8 downto 0);
-		y:					out unsigned(7 downto 0);
+		x: 				out std_logic_vector(8 downto 0);
+		y:					out std_logic_vector(7 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
 		hblank:			out std_logic;
@@ -16,36 +18,14 @@ end video;
 
 architecture Behavioral of video is
 
-	component ntsc_video is
-	port (
-		clk8:				in  std_logic;
-		x: 				out unsigned(8 downto 0);
-		y:					out unsigned(7 downto 0);
-		hsync:			out std_logic;
-		vsync:			out std_logic;
-		hblank:			out std_logic;
-		vblank:			out std_logic);
-	end component;
-
-	component pal_video is
-	port (
-		clk8:				in  std_logic;
-		x: 				out unsigned(8 downto 0);
-		y:					out unsigned(7 downto 0);
-		hsync:			out std_logic;
-		vsync:			out std_logic;
-		hblank:			out std_logic;
-		vblank:			out std_logic);
-	end component;
-
-	signal ntsc_x:			unsigned(8 downto 0);
-	signal ntsc_y:			unsigned(7 downto 0);
+	signal ntsc_x:			std_logic_vector(8 downto 0);
+	signal ntsc_y:			std_logic_vector(7 downto 0);
 	signal ntsc_hsync:	std_logic;
 	signal ntsc_vsync:	std_logic;
 	signal ntsc_de:	   std_logic;
 
-	signal pal_x:			unsigned(8 downto 0);
-	signal pal_y:			unsigned(7 downto 0);
+	signal pal_x:			std_logic_vector(8 downto 0);
+	signal pal_y:			std_logic_vector(7 downto 0);
 	signal pal_hsync:		std_logic;
 	signal pal_vsync:		std_logic;
 	signal pal_hblank:   std_logic;
@@ -63,9 +43,10 @@ begin
 	hblank<= pal_hblank when pal='1' else ntsc_hblank;
 	vblank<= pal_vblank when pal='1' else ntsc_vblank;
 
-	ntsc_inst: ntsc_video
+	ntsc_inst: entity work.ntsc_video
 	port map (
-		clk8	 => clk8,
+		clk	 => clk,
+		ce_pix => ce_pix,
 		x	 	 => ntsc_x,
 		y		 => ntsc_y,
 		hsync	 => ntsc_hsync,
@@ -74,9 +55,10 @@ begin
 		vblank => ntsc_vblank
 	);
 
-	pal_inst: pal_video
+	pal_inst: entity work.pal_video
 	port map (
-		clk8	 => clk8,
+		clk	 => clk,
+		ce_pix => ce_pix,
 		x	 	 => pal_x,
 		y		 => pal_y,
 		hsync	 => pal_hsync,

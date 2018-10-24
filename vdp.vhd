@@ -1,68 +1,35 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity vdp is
+	generic (
+		MAX_SPPL : integer := 7
+	);
 	port (
-		cpu_clk:			in  STD_LOGIC;
-		vdp_clk:			in  STD_LOGIC;
-		pix_clk:			in  STD_LOGIC;
+		clk_sys:			in  STD_LOGIC;
+		ce_vdp:			in  STD_LOGIC;
+		ce_pix:			in  STD_LOGIC;
+		ce_sp:			in  STD_LOGIC;
+		sp64:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
 		A:					in  STD_LOGIC_VECTOR (7 downto 0);
 		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
-		x:					unsigned(8 downto 0);
-		y:					unsigned(7 downto 0);
-		color:			out std_logic_vector (5 downto 0);
+		x:					in  STD_LOGIC_VECTOR (8 downto 0);
+		y:					in  STD_LOGIC_VECTOR (7 downto 0);
+		color:			out STD_LOGIC_VECTOR (5 downto 0);
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
 architecture Behavioral of vdp is
 	
-	component vdp_main is
-	port (
-		clk:					in  std_logic;			
-		clk_pix:				in  std_logic;			
-		vram_A:				out std_logic_vector(13 downto 0);
-		vram_D:				in  std_logic_vector(7 downto 0);
-		cram_A:				out std_logic_vector(4 downto 0);
-		cram_D:				in  std_logic_vector(5 downto 0);
-			
-		x:						unsigned(8 downto 0);
-		y:						unsigned(7 downto 0);
-			
-		color:				out std_logic_vector (5 downto 0);
-					
-		display_on:			in  std_logic;
-		mask_column0:		in  std_logic;
-		overscan:			in  std_logic_vector (3 downto 0);
+	signal old_RD_n:			STD_LOGIC;
+	signal old_WR_n:			STD_LOGIC;
 
-		bg_address:			in  std_logic_vector (2 downto 0);
-		bg_scroll_x:		in  unsigned(7 downto 0);
-		bg_scroll_y:		in  unsigned(7 downto 0);
-		disable_hscroll:	in  std_logic;
-			
-		spr_address:		in  std_logic_vector (5 downto 0);
-		spr_high_bit:		in  std_logic;
-		spr_shift:			in  std_logic;	
-		spr_tall:			in  std_logic;	
-		spr_collide:		out std_logic;	
-		spr_overflow:		out std_logic);	
-	end component;
-	
-	component vdp_cram is
-	port (
-		cpu_clk:			in  STD_LOGIC;
-		cpu_WE:			in  std_logic;
-		cpu_A:			in  std_logic_vector(4 downto 0);
-		cpu_D:			in  std_logic_vector(5 downto 0);
-		vdp_clk:			in  STD_LOGIC;
-		vdp_A:			in  std_logic_vector(4 downto 0);
-		vdp_D:			out std_logic_vector(5 downto 0));
-	end component;
-	
 	-- helper bits
 	signal data_write:		std_logic;
 	signal address_ff:		std_logic := '0';
@@ -92,10 +59,10 @@ architecture Behavioral of vdp is
 	signal overscan:			std_logic_vector (3 downto 0) := "0000";	
 	signal irq_frame_en:		std_logic := '0';
 	signal irq_line_en:		std_logic := '0';
-	signal irq_line_count:	unsigned(7 downto 0) := (others=>'1');	
+	signal irq_line_count:	std_logic_vector(7 downto 0) := (others=>'1');	
 	signal bg_address:		std_logic_vector (2 downto 0) := (others=>'0');
-	signal bg_scroll_x:		unsigned(7 downto 0) := (others=>'0');
-	signal bg_scroll_y:		unsigned(7 downto 0) := (others=>'0');
+	signal bg_scroll_x:		std_logic_vector(7 downto 0) := (others=>'0');
+	signal bg_scroll_y:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal spr_address:		std_logic_vector (5 downto 0) := (others=>'0');
 	signal spr_shift:			std_logic := '0';
 	signal spr_tall:			std_logic := '0';
@@ -108,17 +75,23 @@ architecture Behavioral of vdp is
 	signal reset_flags:		boolean := false;
 	signal collide_flag:		std_logic := '0';
 	signal overflow_flag:	std_logic := '0';
-	signal irq_counter:		unsigned(6 downto 0) := (others=>'0');
-	signal hbl_counter:		unsigned(7 downto 0) := (others=>'0');
+	signal irq_counter:		std_logic_vector(6 downto 0) := (others=>'0');
+	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
 	
 begin
 		
-	vdp_main_inst: vdp_main
+	vdp_main_inst: entity work.vdp_main
+	generic map(
+		MAX_SPPL => MAX_SPPL
+	)
 	port map(
-		clk				=> vdp_clk,
-		clk_pix			=> pix_clk,
+		clk_sys			=> clk_sys,
+		ce_vdp			=> ce_vdp,
+		ce_pix			=> ce_pix,
+		ce_sp				=> ce_sp,
+		sp64				=> sp64,
 		vram_A			=> vram_vdp_A,
 		vram_D			=> vram_vdp_D,
 		cram_A			=> cram_vdp_A,
@@ -148,40 +121,38 @@ begin
   vdp_vram_inst : entity work.dpram
     generic map
     (
-      init_file		=> "vram.mif",
       widthad_a		=> 14
     )
     port map
     (
-      clock_a			=> cpu_clk,
+      clock_a			=> clk_sys,
       address_a		=> xram_cpu_A(13 downto 0),
       wren_a			=> vram_cpu_WE,
       data_a			=> D_in,
-      q_a					=> vram_cpu_D_out,
+      q_a				=> vram_cpu_D_out,
 
-      clock_b			=> not vdp_clk,
+      clock_b			=> clk_sys,
       address_b		=> vram_vdp_A,
       wren_b			=> '0',
       data_b			=> (others => '0'),
-      q_b					=> vram_vdp_D
+      q_b				=> vram_vdp_D
     );
 
-	vdp_cram_inst: vdp_cram
+	vdp_cram_inst: entity work.vdp_cram
 	port map (
-		cpu_clk			=> cpu_clk,
+		cpu_clk			=> clk_sys,
 		cpu_WE			=> cram_cpu_WE,
 		cpu_A 			=> xram_cpu_A(4 downto 0),
 		cpu_D				=> D_in(5 downto 0),
-		vdp_clk			=> vdp_clk,
+		vdp_clk			=> clk_sys,
 		vdp_A				=> cram_vdp_A,
-		vdp_D				=> cram_vdp_D);
+		vdp_D				=> cram_vdp_D
+	);
 		
-		
-	data_write <= not WR_n and not A(0);
 	cram_cpu_WE <= data_write when to_cram else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
-	process (cpu_clk, reset_n)
+	process (clk_sys, reset_n)
 	begin
 		if reset_n='0' then
 			disable_hscroll<= '0';--36
@@ -195,177 +166,174 @@ begin
 			spr_address		<= "111111";--FF
 			spr_high_bit	<= '0';--FB
 			overscan			<= "0000";--00
-			bg_scroll_x		<= to_unsigned(0, bg_scroll_x'length);--00
-			bg_scroll_y		<= to_unsigned(0, bg_scroll_y'length);--00
-			irq_line_count	<= to_unsigned(255, irq_line_count'length);--FF
+			bg_scroll_x		<= (others => '0');--00
+			bg_scroll_y		<= (others => '0');--00
+			irq_line_count	<= (others=>'1');--FF
 			reset_flags		<= true;
 			address_ff		<= '0';
 			xram_cpu_read	<= '0';
-		elsif rising_edge(cpu_clk) then
-			if WR_n='0' then
-				if A(0)='0' then
-					xram_cpu_A_incr <= '1';
-					address_ff		<= '0';
-					vram_cpu_D_outl <= D_in;
-				else
-					if address_ff='0' then
-						xram_cpu_A(7 downto 0) <= D_in;
+		elsif rising_edge(clk_sys) then
+			data_write <= '0';
+
+			if ce_vdp = '1' then
+				old_WR_n <= WR_n;
+				old_RD_n <= RD_n;
+				if old_WR_n = '1' and WR_n='0' then
+					if A(0)='0' then
+						data_write <= '1';
+						xram_cpu_A_incr <= '1';
+						address_ff		<= '0';
+						vram_cpu_D_outl <= D_in;
 					else
-						xram_cpu_A(13 downto 8) <= D_in(5 downto 0);
-						to_cram <= D_in(7 downto 6)="11";
-						if D_in(7 downto 6)="00" then
-							xram_cpu_read <= '1';
+						if address_ff='0' then
+							xram_cpu_A(7 downto 0) <= D_in;
+						else
+							xram_cpu_A(13 downto 8) <= D_in(5 downto 0);
+							to_cram <= D_in(7 downto 6)="11";
+							if D_in(7 downto 6)="00" then
+								xram_cpu_read <= '1';
+							end if;
+							case D_in is
+							when "10000000" =>
+								disable_hscroll<= xram_cpu_A(6);
+								mask_column0	<= xram_cpu_A(5);
+								irq_line_en		<= xram_cpu_A(4);
+								spr_shift		<= xram_cpu_A(3);
+							when "10000001" =>
+								display_on		<= xram_cpu_A(6);
+								irq_frame_en	<= xram_cpu_A(5);
+								spr_tall			<= xram_cpu_A(1);
+							when "10000010" =>
+								bg_address		<= xram_cpu_A(3 downto 1);
+							when "10000101" =>
+								spr_address		<= xram_cpu_A(6 downto 1);
+							when "10000110" =>
+								spr_high_bit	<= xram_cpu_A(2);
+							when "10000111" =>
+								overscan			<= xram_cpu_A(3 downto 0);
+							when "10001000" =>
+								bg_scroll_x		<= xram_cpu_A(7 downto 0);
+							when "10001001" =>
+								bg_scroll_y		<= xram_cpu_A(7 downto 0);
+							when "10001010" =>
+								irq_line_count	<= xram_cpu_A(7 downto 0);
+							when others =>
+							end case;
 						end if;
-						case D_in is
-						when "10000000" =>
-							disable_hscroll<= xram_cpu_A(6);
-							mask_column0	<= xram_cpu_A(5);
-							irq_line_en		<= xram_cpu_A(4);
-							spr_shift		<= xram_cpu_A(3);
-						when "10000001" =>
-							display_on		<= xram_cpu_A(6);
-							irq_frame_en	<= xram_cpu_A(5);
-							spr_tall			<= xram_cpu_A(1);
-						when "10000010" =>
-							bg_address		<= xram_cpu_A(3 downto 1);
-						when "10000101" =>
-							spr_address		<= xram_cpu_A(6 downto 1);
-						when "10000110" =>
-							spr_high_bit	<= xram_cpu_A(2);
-						when "10000111" =>
-							overscan			<= xram_cpu_A(3 downto 0);
-						when "10001000" =>
-							bg_scroll_x		<= unsigned(xram_cpu_A(7 downto 0));
-						when "10001001" =>
-							bg_scroll_y		<= unsigned(xram_cpu_A(7 downto 0));
-						when "10001010" =>
-							irq_line_count	<= unsigned(xram_cpu_A(7 downto 0));
-						when others =>
-						end case;
+						address_ff <= not address_ff;
 					end if;
-					address_ff <= not address_ff;
-				end if;
-				
-			elsif RD_n='0' then
-				address_ff		<= '0';
-				case A(7 downto 6)&A(0) is
-				when "010" =>
-					D_out <= std_logic_vector(y);
-				when "011" =>
-					D_out <= std_logic_vector(x(7 downto 0));
-				when "100" =>
-					--D_out <= vram_cpu_D_out;
-					D_out <= vram_cpu_D_outl;
+					
+				elsif old_RD_n = '1' and RD_n='0' then
+					address_ff		<= '0';
+					case A(7 downto 6)&A(0) is
+					when "010" =>
+						D_out <= y;
+					when "011" =>
+						D_out <= x(7 downto 0);
+					when "100" =>
+						--D_out <= vram_cpu_D_out;
+						D_out <= vram_cpu_D_outl;
+						xram_cpu_A_incr <= '1';
+						xram_cpu_read <= '1';
+					when "101" =>
+						D_out(7) <= virq_flag;
+						D_out(6) <= overflow_flag;
+						D_out(5) <= collide_flag;
+						D_out(4 downto 0) <= (others=>'0');
+						reset_flags <= true;
+					when others =>
+					end case;
+					
+				elsif xram_cpu_A_incr='1' then
+					xram_cpu_A <= xram_cpu_A + 1;
+					xram_cpu_A_incr <= '0';
+					if xram_cpu_read='1' then
+						vram_cpu_D_outl <= vram_cpu_D_out;
+					end if;
+					xram_cpu_read <= '0';
+
+				elsif xram_cpu_read='1' then
 					xram_cpu_A_incr <= '1';
-					xram_cpu_read <= '1';
-				when "101" =>
-					D_out(7) <= virq_flag;
-					D_out(6) <= overflow_flag;
-					D_out(5) <= collide_flag;
-					D_out(4 downto 0) <= (others=>'0');
-					reset_flags <= true;
-				when others =>
-				end case;
+
+				else
+					reset_flags <= false;
+				end if;
+			end if;
+		end if;
+	end process;
+
+	process (clk_sys)
+	begin
+		if rising_edge(clk_sys) then
+			if ce_vdp = '1' then
+				-- we need to make sure we only send one vbi per image since the 
+				-- y counter repeats within the image and the value 192 occurs twice
+				if y=0 then
+					vbi_done <= '0';
+				end if;
 				
-			elsif xram_cpu_A_incr='1' then
-				xram_cpu_A <= std_logic_vector(unsigned(xram_cpu_A) + 1);
-				xram_cpu_A_incr <= '0';
-				if xram_cpu_read='1' then
-					vram_cpu_D_outl <= vram_cpu_D_out;
-				end if;
-				xram_cpu_read <= '0';
-
-			elsif xram_cpu_read='1' then
-				xram_cpu_A_incr <= '1';
-
-			else
-				reset_flags <= false;
-			end if;
-		end if;
-	end process;
-		
-	
-	process (vdp_clk)
-	begin
-		if rising_edge(vdp_clk) then
-			-- we need to make sure we only send one vbi per image since the 
-			-- y counter repeats within the image and the value 192 occurs twice
-			if y=0 then
-				vbi_done <= '0';
-			end if;
-			
-			if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
-				if(vbi_done='0') then
-					vbl_irq <= '1';
-					vbi_done <= '1';
-				end if;
-			else
-				vbl_irq <= '0';
-			end if;
-		end if;
-	end process;
-	
-	process (vdp_clk)
-	begin
-		if rising_edge(vdp_clk) then
-			if x=256 and not (last_y0=std_logic(y(0))) then
-				last_y0 <= std_logic(y(0));
-				if y<192 then
-					if hbl_counter=0 then
-						hbl_irq <= irq_line_en;
-						hbl_counter <= irq_line_count;
-					else
-						hbl_counter <= hbl_counter-1;
+				if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
+					if(vbi_done='0') then
+						vbl_irq <= '1';
+						vbi_done <= '1';
 					end if;
 				else
-					hbl_counter <= irq_line_count;
+					vbl_irq <= '0';
 				end if;
-			else
-				hbl_irq <= '0';
 			end if;
 		end if;
 	end process;
 	
-	process (vdp_clk)
+	process (clk_sys)
 	begin
-		if rising_edge(vdp_clk) then
-			if vbl_irq='1' then
-				virq_flag <= '1';
-			elsif reset_flags then
-				virq_flag <= '0';
+		if rising_edge(clk_sys) then
+			if ce_vdp = '1' then
+				if x=256 and not (last_y0=std_logic(y(0))) then
+					last_y0 <= std_logic(y(0));
+					if y<192 then
+						if hbl_counter=0 then
+							hbl_irq <= irq_line_en;
+							hbl_counter <= irq_line_count;
+						else
+							hbl_counter <= hbl_counter-1;
+						end if;
+					else
+						hbl_counter <= irq_line_count;
+					end if;
+				else
+					hbl_irq <= '0';
+				end if;
 			end if;
 		end if;
 	end process;
 	
-	process (vdp_clk)
+	process (clk_sys)
 	begin
-		if rising_edge(vdp_clk) then
-			if spr_collide='1' then
-				collide_flag <= '1';
-			elsif reset_flags then
-				collide_flag <= '0';
-			end if;
-		end if;
-	end process;
-	
-	process (vdp_clk)
-	begin
-		if rising_edge(vdp_clk) then
-			if spr_overflow='1' then
-				overflow_flag <= '1';
-			elsif reset_flags then
-				overflow_flag <= '0';
-			end if;
-		end if;
-	end process;
-	
-	process (vdp_clk)
-	begin
-		if rising_edge(vdp_clk) then
-			if (vbl_irq='1' and irq_frame_en='1') or hbl_irq='1' then
-				irq_counter <= (others=>'1');
-			elsif irq_counter>0 then
-				irq_counter <= irq_counter-1;
+		if rising_edge(clk_sys) then
+			if ce_vdp = '1' then
+				if vbl_irq='1' then
+					virq_flag <= '1';
+				elsif reset_flags then
+					virq_flag <= '0';
+				end if;
+
+				if spr_collide='1' then
+					collide_flag <= '1';
+				elsif reset_flags then
+					collide_flag <= '0';
+				end if;
+
+				if spr_overflow='1' then
+					overflow_flag <= '1';
+				elsif reset_flags then
+					overflow_flag <= '0';
+				end if;
+
+				if (vbl_irq='1' and irq_frame_en='1') or hbl_irq='1' then
+					irq_counter <= (others=>'1');
+				elsif irq_counter>0 then
+					irq_counter <= irq_counter-1;
+				end if;
 			end if;
 		end if;
 	end process;
