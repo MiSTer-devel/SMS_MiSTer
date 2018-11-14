@@ -15,6 +15,7 @@ entity system is
 		ce_vdp:		in	 STD_LOGIC;
 		ce_pix:		in	 STD_LOGIC;
 		ce_sp:		in	 STD_LOGIC;
+		gg:			in	 STD_LOGIC;
 
 		RESET_n:		in	 STD_LOGIC;
 		
@@ -38,7 +39,7 @@ entity system is
 
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		y:				in	 STD_LOGIC_VECTOR(7 downto 0);
-		color:		out STD_LOGIC_VECTOR(5 downto 0);
+		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		audio:		out STD_LOGIC_VECTOR(5 downto 0);
 
 		dbr:			in  STD_LOGIC;
@@ -105,7 +106,7 @@ begin
 		CLK		=> clk_sys,
 		CEN		=> ce_cpu,
 		INT_n		=> IRQ_n,
-		NMI_n		=> pause,
+		NMI_n		=> pause or not gg,
 		MREQ_n	=> MREQ_n,
 		IORQ_n	=> IORQ_n,
 		M1_n		=> M1_n,
@@ -127,6 +128,7 @@ begin
 		ce_pix	=> ce_pix,
 		ce_sp		=> ce_sp,
 		sp64		=> sp64,
+		gg			=> gg,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
 		IRQ_n		=> IRQ_n,
@@ -171,6 +173,7 @@ begin
 		J2_right	=> j2_right,
 		J2_tl		=> j2_tl,
 		J2_tr		=> j2_tr,
+		Pause		=> pause,
 		RESET		=> RESET_n
 	);
 
@@ -226,7 +229,7 @@ begin
 	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="01" else '1';
 	ctl_WR_n <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='0' else '1';
 	io_WR_n  <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='1' else '1';
-	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="11" else '1';
+	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) else '1';
 					
 	ram_WR   <= not WR_n when MREQ_n='0' and A(15 downto 14)="11" else '0';
 	nvram_WR <= not WR_n when MREQ_n='0' and ((A(15 downto 14)="10" and nvram_e = '1') or (A(15 downto 14)="11" and nvram_ex = '1')) else '0';
@@ -248,12 +251,11 @@ begin
 	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e)
 	begin
 		if IORQ_n='0' then
-			case A(7 downto 6) is
-			when "11" =>
+			if (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
 				D_out <= io_D_out;
-			when others =>
+			else
 				D_out <= vdp_D_out;
-			end case;
+			end if;
 		else
 			if    A(15 downto 14)="11" and nvram_ex = '1' then
 				D_out <= nvram_D_out;

@@ -12,6 +12,7 @@ entity vdp is
 		ce_vdp:			in  STD_LOGIC;
 		ce_pix:			in  STD_LOGIC;
 		ce_sp:			in  STD_LOGIC;
+		gg:				in  STD_LOGIC;
 		sp64:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
@@ -21,7 +22,7 @@ entity vdp is
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
 		x:					in  STD_LOGIC_VECTOR (8 downto 0);
 		y:					in  STD_LOGIC_VECTOR (7 downto 0);
-		color:			out STD_LOGIC_VECTOR (5 downto 0);
+		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -50,7 +51,9 @@ architecture Behavioral of vdp is
 	signal vram_vdp_A:		std_logic_vector(13 downto 0);
 	signal vram_vdp_D:		std_logic_vector(7 downto 0);	
 	signal cram_vdp_A:		std_logic_vector(4 downto 0);
-	signal cram_vdp_D:		std_logic_vector(5 downto 0);
+	signal cram_vdp_D:		std_logic_vector(11 downto 0);
+	signal cram_vdp_A_in:	std_logic_vector(4 downto 0);
+	signal cram_vdp_D_in:	std_logic_vector(11 downto 0);
 			
 	-- control bits
 	signal display_on:		std_logic := '1';
@@ -79,6 +82,8 @@ architecture Behavioral of vdp is
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
+
+	signal cram_latch:		std_logic_vector(7 downto 0);
 	
 begin
 		
@@ -91,6 +96,7 @@ begin
 		ce_vdp			=> ce_vdp,
 		ce_pix			=> ce_pix,
 		ce_sp				=> ce_sp,
+		gg					=> gg,
 		sp64				=> sp64,
 		vram_A			=> vram_vdp_A,
 		vram_D			=> vram_vdp_D,
@@ -142,14 +148,17 @@ begin
 	port map (
 		cpu_clk			=> clk_sys,
 		cpu_WE			=> cram_cpu_WE,
-		cpu_A 			=> xram_cpu_A(4 downto 0),
-		cpu_D				=> D_in(5 downto 0),
+		cpu_A 			=> cram_vdp_A_in,
+		cpu_D				=> cram_vdp_D_in,
 		vdp_clk			=> clk_sys,
 		vdp_A				=> cram_vdp_A,
 		vdp_D				=> cram_vdp_D
 	);
-		
-	cram_cpu_WE <= data_write when to_cram else '0';
+
+	cram_vdp_A_in <= xram_cpu_A(4 downto 0) when gg='0' else xram_cpu_A(5 downto 1);
+	cram_vdp_D_in <= (D_in(5 downto 4) & D_in(5 downto 4) & D_in(3 downto 2) & D_in(3 downto 2) & D_in(1 downto 0) & D_in(1 downto 0))
+							when gg='0' else (D_in(3 downto 0) & cram_latch);
+	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
 	process (clk_sys, reset_n)
@@ -184,6 +193,9 @@ begin
 						xram_cpu_A_incr <= '1';
 						address_ff		<= '0';
 						vram_cpu_D_outl <= D_in;
+						if (to_cram and xram_cpu_A(0)='0') then
+							cram_latch <= D_in;
+						end if;
 					else
 						if address_ff='0' then
 							xram_cpu_A(7 downto 0) <= D_in;

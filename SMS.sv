@@ -126,7 +126,7 @@ parameter CONF_STR1 = {
 	"SMS;;",
 	"-;",
 	"FS,SMS;",
-	"-;"
+	"FS,GG;",
 };
 parameter CONF_STR2 = {
 	"AB,Save Slot,1,2,3,4;"
@@ -314,6 +314,7 @@ always @(posedge clk_sys) begin
 end
 
 wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
+wire gg = ioctl_index==8'd2;
 
 system #(MAX_SPPL) system
 (
@@ -322,6 +323,7 @@ system #(MAX_SPPL) system
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
+	.gg(gg),
 
 	.RESET_n(~reset),
 
@@ -359,13 +361,14 @@ system #(MAX_SPPL) system
 
 wire [8:0] x;
 wire [7:0] y;
-wire [5:0] color;
+wire [11:0] color;
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
 	.pal(status[2]),
+	.gg(gg),
 	.x(x),
 	.y(y),
 
@@ -429,9 +432,9 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 	.hq2x(scale==1),
 	.mono(0),
 
-	.R({4{color[1:0]}}),
-	.G({4{color[3:2]}}),
-	.B({4{color[5:4]}})
+	.R({2{color[3:0]}}),
+	.G({2{color[7:4]}}),
+	.B({2{color[11:8]}})
 );
 
 

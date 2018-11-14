@@ -12,16 +12,17 @@ entity vdp_main is
 		ce_vdp:				in  STD_LOGIC;
 		ce_pix:				in  STD_LOGIC;
 		ce_sp:				in  STD_LOGIC;
+		gg:					in  std_logic;			
 		sp64:					in  std_logic;			
 		vram_A:				out std_logic_vector(13 downto 0);
 		vram_D:				in  std_logic_vector(7 downto 0);
 		cram_A:				out std_logic_vector(4 downto 0);
-		cram_D:				in  std_logic_vector(5 downto 0);
+		cram_D:				in  std_logic_vector(11 downto 0);
 			
 		x:						in  std_logic_vector(8 downto 0);
 		y:						in  std_logic_vector(7 downto 0);
 			
-		color:				out std_logic_vector (5 downto 0);
+		color:				out std_logic_vector (11 downto 0);
 					
 		display_on:			in  std_logic;
 		mask_column0:		in  std_logic;
@@ -107,7 +108,8 @@ begin
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
-		if x<256 and y<192 and (mask_column0='0' or x>=8) and display_on='1' then
+--		if x<256 and y<192 and (mask_column0='0' or x>=8) and display_on='1' then
+		if ((x>=48 and x<208) or (gg='0' and x<256)) and ((y>=24 and y<168) or (gg='0' and y<192)) and (mask_column0='0' or x>=8) and display_on='1' then
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
 			if (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then

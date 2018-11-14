@@ -7,16 +7,16 @@ entity vdp_cram is
 		cpu_clk:	in  STD_LOGIC;
 		cpu_WE:	in  STD_LOGIC;
 		cpu_A:	in  STD_LOGIC_VECTOR (4 downto 0);
-		cpu_D:	in  STD_LOGIC_VECTOR (5 downto 0);
+		cpu_D:	in  STD_LOGIC_VECTOR (11 downto 0);
 		vdp_clk:	in  STD_LOGIC;
 		vdp_A:	in  STD_LOGIC_VECTOR (4 downto 0);
-		vdp_D:	out STD_LOGIC_VECTOR (5 downto 0));
+		vdp_D:	out STD_LOGIC_VECTOR (11 downto 0));
 end vdp_cram;
 
 architecture Behavioral of vdp_cram is
 
-	type t_ram is array (0 to 31) of std_logic_vector(5 downto 0);
-	signal ram : t_ram := (others => "111111");
+	type t_ram is array (0 to 31) of std_logic_vector(11 downto 0);
+	signal ram : t_ram := (others => "111111111111");
 	
 begin
 
