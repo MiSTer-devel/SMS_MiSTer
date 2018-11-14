@@ -7,6 +7,7 @@ entity ntsc_video is
 	Port (
 		clk:				in  std_logic;
 		ce_pix:			in  std_logic;
+		gg:				in  std_logic;
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(7 downto 0);
 		hsync:			out std_logic;
@@ -59,12 +60,14 @@ begin
 	begin
 		if rising_edge(clk) then
 			if ce_pix = '1' then
+--				if ((hcount>=72 and hcount<232) or (gg='0' and (hcount>=24 and hcount<280))) then
 				if (hcount>=24 and hcount<280) then
 					hblank <= '0';
 				else
 					hblank <= '1';
 				end if;
 				
+--				if ((vcount>=64 and vcount<208) or (gg='0' and (vcount>=40 and vcount<232))) then
 				if (vcount>=40 and vcount<232) then
 					vblank <= '0';
 				else

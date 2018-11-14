@@ -8,6 +8,7 @@ entity video is
 		clk:				in  std_logic;
 		ce_pix:			in  std_logic;
 		pal:				in  std_logic;
+		gg:				in  std_logic;
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(7 downto 0);
 		hsync:			out std_logic;
@@ -47,6 +48,7 @@ begin
 	port map (
 		clk	 => clk,
 		ce_pix => ce_pix,
+		gg		 => gg,
 		x	 	 => ntsc_x,
 		y		 => ntsc_y,
 		hsync	 => ntsc_hsync,
@@ -59,6 +61,7 @@ begin
 	port map (
 		clk	 => clk,
 		ce_pix => ce_pix,
+		gg		 => gg,
 		x	 	 => pal_x,
 		y		 => pal_y,
 		hsync	 => pal_hsync,

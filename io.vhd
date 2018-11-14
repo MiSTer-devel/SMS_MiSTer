@@ -21,6 +21,7 @@ entity io is
 		J2_right:in 	STD_LOGIC;
 		J2_tl:	in 	STD_LOGIC;
 		J2_tr:	in STD_LOGIC;
+		Pause:	in STD_LOGIC;
 		RESET:	in 	STD_LOGIC);
 end io;
 
@@ -46,7 +47,11 @@ begin
 	begin
 		if rising_edge(clk) then
 			if RD_n='0' then
-				if A(0)='0' then
+				if A(7)='0' then
+					D_out(7) <= Pause;
+					D_out(6) <= '1'; -- 1=Export (USA/Europe)/0=Japan
+					D_out(5 downto 0) <= "111111";
+				elsif A(0)='0' then
 					D_out(7) <= J2_down;
 					D_out(6) <= J2_up;
 					-- 5=j1_tr
