@@ -1,6 +1,7 @@
-library ieee;
-use ieee.std_logic_1164.all;
-use IEEE.NUMERIC_STD.ALL;
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity vdp_background is
 port (
@@ -8,9 +9,9 @@ port (
 	ce_pix:				in  STD_LOGIC;
 	reset:				in  std_logic;
 	table_address:		in  std_logic_vector(13 downto 11);
-	scroll_x:			in  unsigned(7 downto 0);
+	scroll_x:			in  std_logic_vector(7 downto 0);
 	disable_hscroll:	in  std_logic;
-	y:						in  unsigned(7 downto 0);
+	y:						in  std_logic_vector(7 downto 0);
 
 	vram_A:				out std_logic_vector(13 downto 0);
 	vram_D:				in  std_logic_vector(7 downto 0);
@@ -23,7 +24,7 @@ end entity;
 architecture rtl of vdp_background is
 
 	signal tile_index		: std_logic_vector (8 downto 0);
-	signal x					: unsigned (7 downto 0);
+	signal x					: std_logic_vector (7 downto 0);
 	signal tile_y			: std_logic_vector (2 downto 0);
 	signal palette			: std_logic;
 	signal priority_latch: std_logic;
@@ -46,7 +47,7 @@ begin
 			if ce_pix = '1' then
 				if (reset='1') then
 					if disable_hscroll='0' or y>=16 then
-						x <= 240-scroll_x;
+						x <= 240-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
 					else
 						x <= "11110000"; -- 240
 					end if;
@@ -64,8 +65,8 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
 				char_address(12 downto 10)	:= table_address;
-				char_address(9 downto 5)	:= std_logic_vector(y(7 downto 3));
-				char_address(4 downto 0)	:= std_logic_vector(x(7 downto 3) + 1);
+				char_address(9 downto 5)	:= y(7 downto 3);
+				char_address(4 downto 0)	:= x(7 downto 3) + 1;
 				data_address					:= tile_index & tile_y;
 				
 				case x(2 downto 0) is

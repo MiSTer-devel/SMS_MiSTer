@@ -110,7 +110,7 @@ always @(posedge clk) begin
 		else   rd_rdy <= 1;
 	end
 
-	q <= q + 1'd1;
+	if(~&q) q <= q + 1'd1;
 	if(~old_ref & clkref) q <= STATE_IDLE;
 end
 

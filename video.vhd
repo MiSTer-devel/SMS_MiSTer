@@ -1,14 +1,15 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
 entity video is
 	Port (
 		clk:				in  std_logic;
 		ce_pix:			in  std_logic;
 		pal:				in  std_logic;
-		x: 				out unsigned(8 downto 0);
-		y:					out unsigned(7 downto 0);
+		x: 				out std_logic_vector(8 downto 0);
+		y:					out std_logic_vector(7 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
 		hblank:			out std_logic;
@@ -17,14 +18,14 @@ end video;
 
 architecture Behavioral of video is
 
-	signal ntsc_x:			unsigned(8 downto 0);
-	signal ntsc_y:			unsigned(7 downto 0);
+	signal ntsc_x:			std_logic_vector(8 downto 0);
+	signal ntsc_y:			std_logic_vector(7 downto 0);
 	signal ntsc_hsync:	std_logic;
 	signal ntsc_vsync:	std_logic;
 	signal ntsc_de:	   std_logic;
 
-	signal pal_x:			unsigned(8 downto 0);
-	signal pal_y:			unsigned(7 downto 0);
+	signal pal_x:			std_logic_vector(8 downto 0);
+	signal pal_y:			std_logic_vector(7 downto 0);
 	signal pal_hsync:		std_logic;
 	signal pal_vsync:		std_logic;
 	signal pal_hblank:   std_logic;

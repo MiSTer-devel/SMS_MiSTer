@@ -1,13 +1,14 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 
 entity vpd_sprite_shifter is
 Port(
 	clk_sys:in  STD_LOGIC;
 	ce_pix: in  STD_LOGIC;
-	x		: in  unsigned (7 downto 0);
-	spr_x	: in  unsigned (7 downto 0);
+	x		: in  std_logic_vector (7 downto 0);
+	spr_x	: in  std_logic_vector (7 downto 0);
 	spr_d0: in  std_logic_vector (7 downto 0);
 	spr_d1: in  std_logic_vector (7 downto 0);
 	spr_d2: in  std_logic_vector (7 downto 0);
