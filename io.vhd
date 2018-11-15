@@ -34,7 +34,7 @@ begin
 	process (clk)
 	begin
 		if rising_edge(clk) then
-			if WR_n='0' then
+			if WR_n='0' and ((A(7 downto 4)/="0000") or (A(3 downto 0)="0000")) then
 				ctrl <= D_in;
 			end if;
 		end if;
