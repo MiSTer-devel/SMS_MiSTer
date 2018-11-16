@@ -9,12 +9,14 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity psg is
 	port (
-		clk	: in  STD_LOGIC;
-		clken	: in  STD_LOGIC := '1';
-		reset	: in  STD_LOGIC;
-		WR_n	: in  STD_LOGIC;
-		D_in	: in  STD_LOGIC_VECTOR(7 downto 0);
-		output: out STD_LOGIC_VECTOR(5 downto 0)
+		clk	 : in  STD_LOGIC;
+		clken	 : in  STD_LOGIC := '1';
+		reset	 : in  STD_LOGIC;
+		WR_n	 : in  STD_LOGIC;
+		WR_Bal : in  STD_LOGIC;
+		D_in	 : in  STD_LOGIC_VECTOR(7 downto 0);
+		outputL: out STD_LOGIC_VECTOR(5 downto 0);
+		outputR: out STD_LOGIC_VECTOR(5 downto 0)
 	);
 end entity;
 
@@ -36,6 +38,16 @@ architecture rtl of psg is
 	signal output2		: std_logic_vector(3 downto 0);
 	signal output3		: std_logic_vector(3 downto 0);
 	signal old_WR_n   : std_logic;
+	signal Balance		: std_logic_vector(7 downto 0);
+	signal output0L	: std_logic_vector(3 downto 0);
+	signal output1L	: std_logic_vector(3 downto 0);
+	signal output2L	: std_logic_vector(3 downto 0);
+	signal output3L	: std_logic_vector(3 downto 0);
+	signal output0R	: std_logic_vector(3 downto 0);
+	signal output1R	: std_logic_vector(3 downto 0);
+	signal output2R	: std_logic_vector(3 downto 0);
+	signal output3R	: std_logic_vector(3 downto 0);
+	
 begin
 
 	t0: work.psg_tone
@@ -99,9 +111,12 @@ begin
 				tone1 <= (others => '0');
 				tone2 <= (others => '0');
 				ctrl3 <= (others => '0');
+				Balance <= (others => '1');
 
 			elsif old_WR_n = '1' and WR_n='0' then
-				if D_in(7)='1' then
+				if WR_Bal='1' then
+					Balance <= D_in;
+				elsif D_in(7)='1' then
 					case D_in(6 downto 4) is
 						when "000" => tone0(3 downto 0) <= D_in(3 downto 0);
 						when "010" => tone1(3 downto 0) <= D_in(3 downto 0);
@@ -131,11 +146,25 @@ begin
 		end if;
 	end process;
 	
-	output <= std_logic_vector(
-		  unsigned("00"&output0)
-		+ unsigned("00"&output1)
-		+ unsigned("00"&output2)
-		+ unsigned("00"&output3)
+	output0R <= output0 when Balance(0)='1' else "0000";
+	output1R <= output1 when Balance(1)='1' else "0000";
+	output2R <= output2 when Balance(2)='1' else "0000";
+	output3R <= output3 when Balance(3)='1' else "0000";
+	output0L <= output0 when Balance(4)='1' else "0000";
+	output1L <= output1 when Balance(5)='1' else "0000";
+	output2L <= output2 when Balance(6)='1' else "0000";
+	output3L <= output3 when Balance(7)='1' else "0000";
+	outputR <= std_logic_vector(
+		  unsigned("00"&output0R)
+		+ unsigned("00"&output1R)
+		+ unsigned("00"&output2R)
+		+ unsigned("00"&output3R)
+	);
+	outputL <= std_logic_vector(
+		  unsigned("00"&output0L)
+		+ unsigned("00"&output1L)
+		+ unsigned("00"&output2L)
+		+ unsigned("00"&output3L)
 	);
 
 end rtl;
