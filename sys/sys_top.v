@@ -189,16 +189,14 @@ cyclonev_hps_interface_mpu_general_purpose h2f_gp
 
 reg [15:0] cfg;
 
-reg        cfg_got   = 0;
-reg        cfg_set   = 0;
+reg  cfg_got   = 0;
+reg  cfg_set   = 0;
 //wire [2:0] hdmi_res  = cfg[10:8];
-wire       dvi_mode  = cfg[7];
-wire       audio_96k = cfg[6];
-wire       ypbpr_en  = cfg[5];
-wire       csync     = cfg[3];
-`ifndef LITE
+wire dvi_mode  = cfg[7];
+wire audio_96k = cfg[6];
+wire ypbpr_en  = cfg[5];
+wire csync     = cfg[3];
 wire vga_scaler= cfg[2];
-`endif
 
 reg        cfg_custom_t = 0;
 reg  [5:0] cfg_custom_p1;
@@ -206,12 +204,18 @@ reg [31:0] cfg_custom_p2;
 
 reg  [4:0] vol_att = 0;
 
-`ifndef LITE
 reg  [6:0] coef_addr;
 reg  [8:0] coef_data;
 reg        coef_wr = 0;
-reg        vip_newcfg = 0;
+
+`ifndef LITE
+reg vip_newcfg = 0;
+reg coef_set = 0;
 `endif
+
+wire  [7:0] ARX, ARY;
+reg  [11:0] VSET = 0;
+reg   [2:0] scaler_flt;
 
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
@@ -220,12 +224,14 @@ always@(posedge clk_sys) begin
 	reg  [7:0] cnt = 0;
 
 	old_strobe <= io_strobe;
-
-`ifndef LITE
 	coef_wr <= 0;
-`endif
 
-	if(~io_uio) has_cmd <= 0;
+	if(~io_uio) begin
+		has_cmd <= 0;
+`ifndef LITE
+		if(has_cmd && cmd == 'h2A) coef_set <= ~coef_set;
+`endif
+	end
 	else
 	if(~old_strobe & io_strobe) begin
 		if(!has_cmd) begin
@@ -273,10 +279,9 @@ always@(posedge clk_sys) begin
 			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
-`ifndef LITE
 			if(cmd == 'h27) VSET    <= io_din[11:0];
 			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
-`endif
+			if(cmd == 'h2B) scaler_flt <= io_din[2:0];
 		end
 	end
 end
@@ -365,6 +370,16 @@ vip vip
 	.ram2_byteenable(0),
 	.ram2_write(0),
 
+	.uart_ri(0),
+	.uart_dsr(uart_dsr),
+	.uart_dcd(uart_dsr),
+	.uart_dtr(uart_dtr),
+
+	.uart_cts(uart_cts),
+	.uart_rts(uart_rts),
+	.uart_rxd(uart_rxd),
+	.uart_txd(uart_txd), 
+
 	//Video input
 	.in_clk(clk_vid),
 	.in_data({r_out, g_out, b_out}),
@@ -372,7 +387,7 @@ vip vip
 	.in_v_sync(vs),
 	.in_h_sync(hs),
 	.in_ce(ce_pix),
-	.in_f(0),
+	.in_f(f1),
 
 	//HDMI output
 	.hdmi_clk(iHdmiClk),
@@ -387,8 +402,6 @@ wire        ctl_write;
 wire [31:0] ctl_writedata;
 wire        ctl_waitrequest;
 wire        ctl_reset;
-wire  [7:0] ARX, ARY;
-reg  [11:0] VSET = 0;
 
 vip_config vip_config
 (
@@ -409,10 +422,12 @@ vip_config vip_config
 	.VS(VS),
 	.VSET(VSET),
 
+	.coef_set(coef_set),
 	.coef_clk(clk_sys),
 	.coef_addr(coef_addr),
 	.coef_data(coef_data),
 	.coef_wr(coef_wr),
+	.scaler_flt(scaler_flt),
 
 	.address(ctl_address),
 	.write(ctl_write),
@@ -425,71 +440,6 @@ vip_config vip_config
 /////////////////////////  Lite version  ////////////////////////////////
 
 `ifdef LITE
-
-wire [11:0] x;
-wire [11:0] y;
-
-sync_vg #(.X_BITS(12), .Y_BITS(12)) sync_vg
-(
-	.clk(iHdmiClk),
-	.reset(reset),
-	.v_total(HEIGHT+VFP+VBP+VS),
-	.v_fp(VFP),
-	.v_bp(VBP),
-	.v_sync(VS),
-	.h_total(WIDTH+HFP+HBP+HS),
-	.h_fp(HFP),
-	.h_bp(HBP),
-	.h_sync(HS),
-	.hv_offset(0),
-	.vde_out(vde),
-	.hde_out(hde),
-	.vs_out(vs_hdmi),
-	.v_count_out(),
-	.h_count_out(),
-	.x_out(x),
-	.y_out(y),
-	.hs_out(hs_hdmi)
-);
-
-wire vde, hde;
-wire vs_hdmi;
-wire hs_hdmi;
-
-`ifndef HDMI_LITE
-
-pattern_vg
-#(
-	.B(8), // Bits per channel
-	.X_BITS(12),
-	.Y_BITS(12),
-	.FRACTIONAL_BITS(12) // Number of fractional bits for ramp pattern
-)
-pattern_vg
-(
-	.reset(reset),
-	.clk_in(iHdmiClk),
-	.x(x),
-	.y(y),
-	.vn_in(vs_hdmi),
-	.hn_in(hs_hdmi),
-	.dn_in(vde & hde),
-	.r_in(0),
-	.g_in(0),
-	.b_in(0),
-	.vn_out(HDMI_TX_VS),
-	.hn_out(HDMI_TX_HS),
-	.den_out(hdmi_de),
-	.r_out(hdmi_data[23:16]),
-	.g_out(hdmi_data[15:8]),
-	.b_out(hdmi_data[7:0]),
-	.total_active_pix(WIDTH),
-	.total_active_lines(HEIGHT),
-	.pattern(4),
-	.ramp_step(20'h0333)
-);
-
-`endif
 
 wire reset;
 sysmem_lite sysmem
@@ -527,10 +477,18 @@ sysmem_lite sysmem
 	.ram2_read(0),
 	.ram2_writedata(0),
 	.ram2_byteenable(0),
-	.ram2_write(0)
+	.ram2_write(0),
 
-`ifdef HDMI_LITE
-	,
+	.uart_ri(0),
+	.uart_dsr(uart_dsr),
+	.uart_dcd(uart_dsr),
+	.uart_dtr(uart_dtr),
+
+	.uart_cts(uart_cts),
+	.uart_rts(uart_rts),
+	.uart_rxd(uart_rxd),
+	.uart_txd(uart_txd), 
+
 	// HDMI frame buffer
 	.vbuf_clk(clk_ctl),
 	.vbuf_address(vbuf_address),
@@ -555,46 +513,102 @@ wire [127:0] vbuf_writedata;
 wire  [15:0] vbuf_byteenable;
 wire         vbuf_write;
 
-assign HDMI_TX_VS = vs_hdmi;
-assign HDMI_TX_HS = hs_hdmi;
-
-hdmi_lite hdmi_lite
+ascal 
+#(
+	.RAMBASE(32'h20000000),
+	.N_DW(128),
+	.N_AW(28),
+	.NPOLY(1)
+)
+ascal
 (
-	.reset(reset),
+	.reset_na (~reset_req),
+	.run      (1),
 
-	.clk_video(clk_vid),
-	.ce_pixel(ce_pix),
-	.video_vs(vs),
-	.video_de(de),
-	.video_d({r_out,g_out,b_out}),
+	.i_clk  (clk_vid),
+	.i_ce   (ce_pix),
+	.i_r    (r_out),
+	.i_g    (g_out),
+	.i_b    (b_out),
+	.i_hs   (hs_emu),
+	.i_vs   (vs_emu),
+	.i_fl   (f1),
+	.i_de   (de),
+	.iauto  (1),
+	.himin  (0),
+	.himax  (0),
+	.vimin  (0),
+	.vimax  (0),
 
-	.clk_hdmi(HDMI_TX_CLK),
-	.hdmi_hde(hde),
-	.hdmi_vde(vde),
-	.hdmi_d(hdmi_data),
-	.hdmi_de(hdmi_de),
+	.o_clk  (iHdmiClk),
+	.o_ce   (1),
+	.o_r    (hdmi_data[23:16]),
+	.o_g    (hdmi_data[15:8]),
+	.o_b    (hdmi_data[7:0]),
+	.o_hs   (HDMI_TX_HS),
+	.o_vs   (HDMI_TX_VS),
+	.o_de   (hdmi_de),
+	.htotal (WIDTH+HFP+HBP+HS),
+	.hsstart(WIDTH + HFP),
+	.hsend  (WIDTH + HFP + HS),
+	.hdisp  (WIDTH),
+	.hmin   (hmin),
+	.hmax   (hmax),
+	.vtotal (HEIGHT+VFP+VBP+VS),
+	.vsstart(HEIGHT + VFP),
+	.vsend  (HEIGHT + VFP + VS),
+	.vdisp  (HEIGHT),
+	.vmin   (vmin),
+	.vmax   (vmax),
 
-	.screen_w(WIDTH),
-	.screen_h(HEIGHT),
-	.quadbuf(1),
-	.scale_x(0),
-	.scale_y(0),
-	.scale_auto(1),
+	.mode     ({1'b1,scaler_flt ? 3'd4 : 3'd0}),
+	.poly_clk (clk_sys),
+	.poly_a   (coef_addr),
+	.poly_dw  (coef_data),
+	.poly_wr  (coef_wr),
 
-	.clk_vbuf(clk_ctl),
-	.vbuf_address(vbuf_address),
-	.vbuf_burstcount(vbuf_burstcount),
-	.vbuf_waitrequest(vbuf_waitrequest),
-	.vbuf_writedata(vbuf_writedata),
-	.vbuf_byteenable(vbuf_byteenable),
-	.vbuf_write(vbuf_write),
-	.vbuf_readdata(vbuf_readdata),
-	.vbuf_readdatavalid(vbuf_readdatavalid),
-	.vbuf_read(vbuf_read)
-
-`endif
-
+	.avl_clk          (clk_ctl),
+	.avl_waitrequest  (vbuf_waitrequest),
+	.avl_readdata     (vbuf_readdata),
+	.avl_readdatavalid(vbuf_readdatavalid),
+	.avl_burstcount   (vbuf_burstcount),
+	.avl_writedata    (vbuf_writedata),
+	.avl_address      (vbuf_address),
+	.avl_write        (vbuf_write),
+	.avl_read         (vbuf_read),
+	.avl_byteenable   (vbuf_byteenable)
 );
+
+reg [11:0] hmin;
+reg [11:0] hmax;
+reg [11:0] vmin;
+reg [11:0] vmax;
+
+always @(posedge clk_vid) begin
+	reg [31:0] wcalc;
+	reg [31:0] hcalc;
+	reg  [2:0] state;
+	reg [11:0] videow;
+	reg [11:0] videoh;
+
+	state <= state + 1'd1;
+	case(state)
+		0: begin
+				wcalc <= VSET ? (VSET*ARX)/ARY : (HEIGHT*ARX)/ARY;
+				hcalc <= (WIDTH*ARY)/ARX;
+			end
+		6: begin
+				videow <= (!VSET && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
+				videoh <= VSET ? VSET : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
+			end
+		7: begin
+				hmin <= ((WIDTH  - videow)>>1);
+				hmax <= ((WIDTH  - videow)>>1) + videow - 1'd1;
+				vmin <= ((HEIGHT - videoh)>>1);
+				vmax <= ((HEIGHT - videoh)>>1) + videoh - 1'd1;
+			end
+	endcase
+end
 
 `endif
 
@@ -767,20 +781,11 @@ vga_out vga_out
 	.ypbpr_full(1),
 	.ypbpr_en(ypbpr_en),
 	.dout(vga_o),
-`ifdef LITE
-	.din(vga_q)
-`else
 	.din(vga_scaler ? {24{HDMI_TX_DE}} & HDMI_TX_D : vga_q)
-`endif
 );
 
-`ifdef LITE
-	wire vs1 = vs;
-	wire hs1 = hs;
-`else
-	wire vs1 = vga_scaler ? HDMI_TX_VS : vs;
-	wire hs1 = vga_scaler ? HDMI_TX_HS : hs;
-`endif
+wire vs1 = vga_scaler ? HDMI_TX_VS : vs;
+wire hs1 = vga_scaler ? HDMI_TX_HS : hs;
 
 assign VGA_VS = VGA_EN ? 1'bZ      : csync ?     1'b1     : ~vs1;
 assign VGA_HS = VGA_EN ? 1'bZ      : csync ? ~(vs1 ^ hs1) : ~hs1;
@@ -877,7 +882,7 @@ wire signed [15:0] audio_ls, audio_rs;
 wire        audio_s;
 wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
-wire        vs, hs, de;
+wire        vs, hs, de, f1;
 wire  [1:0] scanlines;
 wire        clk_sys, clk_vid, ce_pix;
 
@@ -900,6 +905,13 @@ wire vs_emu, hs_emu;
 sync_fix sync_v(FPGA_CLK3_50, vs_emu, vs);
 sync_fix sync_h(FPGA_CLK3_50, hs_emu, hs);
 
+wire        uart_dtr;
+wire        uart_dsr;
+wire        uart_cts;
+wire        uart_rts;
+wire        uart_rxd;
+wire        uart_txd;
+
 emu emu
 (
 	.CLK_50M(FPGA_CLK3_50),
@@ -915,16 +927,15 @@ emu emu
 	.VGA_HS(hs_emu),
 	.VGA_VS(vs_emu),
 	.VGA_DE(de),
+	.VGA_F1(f1),
 	.VGA_SL(scanlines),
 
 	.LED_USER(led_user),
 	.LED_POWER(led_power),
 	.LED_DISK(led_disk),
 
-`ifndef LITE
 	.VIDEO_ARX(ARX),
 	.VIDEO_ARY(ARY),
-`endif
 
 	.AUDIO_L(audio_ls),
 	.AUDIO_R(audio_rs),
@@ -965,7 +976,14 @@ emu emu
 	.SDRAM_nRAS(SDRAM_nRAS),
 	.SDRAM_nCAS(SDRAM_nCAS),
 	.SDRAM_CLK(SDRAM_CLK),
-	.SDRAM_CKE(SDRAM_CKE)
+	.SDRAM_CKE(SDRAM_CKE),
+
+	.UART_CTS(uart_rts),
+	.UART_RTS(uart_cts),
+	.UART_RXD(uart_txd),
+	.UART_TXD(uart_rxd),
+	.UART_DTR(uart_dsr),
+	.UART_DSR(uart_dtr)
 );
 
 endmodule
