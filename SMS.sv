@@ -362,7 +362,7 @@ system #(MAX_SPPL) system
 );
 
 wire [8:0] x;
-wire [7:0] y;
+wire [8:0] y;
 wire [11:0] color;
 
 video video

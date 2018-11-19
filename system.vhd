@@ -38,7 +38,7 @@ entity system is
 		pause:		in	 STD_LOGIC;
 
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
-		y:				in	 STD_LOGIC_VECTOR(7 downto 0);
+		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		audioL:		out STD_LOGIC_VECTOR(5 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(5 downto 0);
@@ -108,7 +108,7 @@ begin
 		CLK		=> clk_sys,
 		CEN		=> ce_cpu,
 		INT_n		=> IRQ_n,
-		NMI_n		=> pause or not gg,
+		NMI_n		=> pause or gg,
 		MREQ_n	=> MREQ_n,
 		IORQ_n	=> IORQ_n,
 		M1_n		=> M1_n,

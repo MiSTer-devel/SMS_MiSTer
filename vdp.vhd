@@ -21,7 +21,7 @@ entity vdp is
 		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
 		x:					in  STD_LOGIC_VECTOR (8 downto 0);
-		y:					in  STD_LOGIC_VECTOR (7 downto 0);
+		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		reset_n:       in  STD_LOGIC);
 end vdp;
@@ -73,7 +73,6 @@ architecture Behavioral of vdp is
 
 	-- various counters
 	signal last_y0:			std_logic := '0';
-	signal vbi_done:			std_logic := '0';
 	signal virq_flag:			std_logic := '0';
 	signal reset_flags:		boolean := false;
 	signal collide_flag:		std_logic := '0';
@@ -104,7 +103,7 @@ begin
 		cram_D			=> cram_vdp_D,
 				
 		x					=> x,
-		y					=> y,
+		y					=> y(7 downto 0),
 		color				=> color,
 						
 		display_on		=> display_on,
@@ -239,9 +238,9 @@ begin
 					address_ff		<= '0';
 					case A(7 downto 6)&A(0) is
 					when "010" =>
-						D_out <= y;
+						D_out <= y(7 downto 0); -- Fix this Y doesn't just wrap
 					when "011" =>
-						D_out <= x(7 downto 0);
+						D_out <= x(7 downto 0); -- Fix this X is latched on TH
 					when "100" =>
 						--D_out <= vram_cpu_D_out;
 						D_out <= vram_cpu_D_outl;
@@ -278,17 +277,8 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				-- we need to make sure we only send one vbi per image since the 
-				-- y counter repeats within the image and the value 192 occurs twice
-				if y=0 then
-					vbi_done <= '0';
-				end if;
-				
 				if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
-					if(vbi_done='0') then
-						vbl_irq <= '1';
-						vbi_done <= '1';
-					end if;
+					vbl_irq <= '1';
 				else
 					vbl_irq <= '0';
 				end if;

@@ -9,7 +9,7 @@ entity ntsc_video is
 		ce_pix:			in  std_logic;
 		gg:				in  std_logic;
 		x: 				out std_logic_vector(8 downto 0);
-		y:					out std_logic_vector(7 downto 0);
+		y:					out std_logic_vector(8 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
 		hblank:			out std_logic;
@@ -20,7 +20,6 @@ architecture Behavioral of ntsc_video is
 
 	signal hcount:			std_logic_vector(8 downto 0) := (others => '0');
 	signal vcount:			std_logic_vector(8 downto 0) := (others => '0');
-	signal y9:				std_logic_vector(8 downto 0);
 	
 begin
 
@@ -33,11 +32,12 @@ begin
 					hsync <= '0';
 					if vcount=261 then
 						vcount <= (others=>'0');
-						vsync <= '1';
 					else
 						vcount <= vcount + 1;
-						if vcount = 8 then
+						if vcount = 230 then
 							vsync <= '0';
+						elsif vcount = 221 then
+							vsync <= '1';
 						end if;
 					end if;
 				else
@@ -53,8 +53,7 @@ begin
 	end process;
 	
 	x	<= hcount-24;
-	y9	<= vcount-40;
-	y	<= y9(7 downto 0);
+	y	<= vcount;
 
 	process (clk)
 	begin
@@ -67,8 +66,8 @@ begin
 					hblank <= '1';
 				end if;
 				
---				if ((vcount>=64 and vcount<208) or (gg='0' and (vcount>=40 and vcount<232))) then
-				if (vcount>=40 and vcount<232) then
+--				if ((vcount>=24 and vcount<168) or (gg='0' and (vcount>=0 and vcount<192))) then
+				if (vcount>=0 and vcount<192) then
 					vblank <= '0';
 				else
 					vblank <= '1';
