@@ -30,13 +30,15 @@ begin
 				if hcount=511 then
 					hcount <= (others => '0');
 					hsync <= '0';
-					if vcount=311 then
+					if vcount=511 then
 						vcount <= (others=>'0');
 					else
 						vcount <= vcount + 1;
-						if vcount = 276 then
+						if vcount = 242 then
+							vcount <= vcount + 201;
+						elsif vcount = 476 then
 							vsync <= '0';
-						elsif vcount = 271 then
+						elsif vcount = 471 then
 							vsync <= '1';
 						end if;
 					end if;

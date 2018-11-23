@@ -238,7 +238,7 @@ begin
 					address_ff		<= '0';
 					case A(7 downto 6)&A(0) is
 					when "010" =>
-						D_out <= y(7 downto 0); -- Fix this Y doesn't just wrap
+						D_out <= y(7 downto 0);
 					when "011" =>
 						D_out <= x(7 downto 0); -- Fix this X is latched on TH
 					when "100" =>
