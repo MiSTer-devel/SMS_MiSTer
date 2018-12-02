@@ -10,7 +10,7 @@ entity video is
 		pal:				in  std_logic;
 		gg:				in  std_logic;
 		x: 				out std_logic_vector(8 downto 0);
-		y:					out std_logic_vector(7 downto 0);
+		y:					out std_logic_vector(8 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
 		hblank:			out std_logic;
@@ -20,13 +20,13 @@ end video;
 architecture Behavioral of video is
 
 	signal ntsc_x:			std_logic_vector(8 downto 0);
-	signal ntsc_y:			std_logic_vector(7 downto 0);
+	signal ntsc_y:			std_logic_vector(8 downto 0);
 	signal ntsc_hsync:	std_logic;
 	signal ntsc_vsync:	std_logic;
 	signal ntsc_de:	   std_logic;
 
 	signal pal_x:			std_logic_vector(8 downto 0);
-	signal pal_y:			std_logic_vector(7 downto 0);
+	signal pal_y:			std_logic_vector(8 downto 0);
 	signal pal_hsync:		std_logic;
 	signal pal_vsync:		std_logic;
 	signal pal_hblank:   std_logic;

@@ -38,9 +38,10 @@ entity system is
 		pause:		in	 STD_LOGIC;
 
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
-		y:				in	 STD_LOGIC_VECTOR(7 downto 0);
+		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
-		audio:		out STD_LOGIC_VECTOR(5 downto 0);
+		audioL:		out STD_LOGIC_VECTOR(5 downto 0);
+		audioR:		out STD_LOGIC_VECTOR(5 downto 0);
 
 		dbr:			in  STD_LOGIC;
 		sp64:			in STD_LOGIC;
@@ -69,6 +70,7 @@ architecture Behavioral of system is
 	signal vdp_D_out:			std_logic_vector(7 downto 0);
 	
 	signal psg_WR_n:			std_logic;
+	signal psg_Bal:			std_logic;
 	
 	signal ctl_WR_n:			std_logic;
 	
@@ -106,7 +108,7 @@ begin
 		CLK		=> clk_sys,
 		CEN		=> ce_cpu,
 		INT_n		=> IRQ_n,
-		NMI_n		=> pause or not gg,
+		NMI_n		=> pause or gg,
 		MREQ_n	=> MREQ_n,
 		IORQ_n	=> IORQ_n,
 		M1_n		=> M1_n,
@@ -147,8 +149,10 @@ begin
 		clk		=> clk_sys,
 		clken    => ce_cpu,
 		WR_n		=> psg_WR_n,
+		WR_Bal	=> psg_Bal,
 		D_in		=> D_in,
-		output	=> audio,
+		outputL	=> audioL,
+		outputR	=> audioR,
 		reset		=> not RESET_n
 	);
 
@@ -224,12 +228,13 @@ begin
 	);
 
 	-- glue logic
+	psg_Bal  <= gg when (A(7 downto 0)="00000110") else '0';
 	vdp_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="10" else '1';
 	vdp_RD_n <= RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="01" or A(7 downto 6)="10") else '1';
-	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="01" else '1';
+	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="01" or psg_Bal='1') else '1';
 	ctl_WR_n <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='0' else '1';
 	io_WR_n  <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='1' else '1';
-	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) else '1';
+	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 1)/="11")) else '1';
 					
 	ram_WR   <= not WR_n when MREQ_n='0' and A(15 downto 14)="11" else '0';
 	nvram_WR <= not WR_n when MREQ_n='0' and ((A(15 downto 14)="10" and nvram_e = '1') or (A(15 downto 14)="11" and nvram_ex = '1')) else '0';
@@ -239,7 +244,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if RESET_n='0' then 
-				bootloader <= '0';
+				bootloader <= gg;
 			elsif ctl_WR_n='0' and bootloader='0' then
 				bootloader <= '1';
 			end if;
