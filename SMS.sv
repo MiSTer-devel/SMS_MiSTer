@@ -310,12 +310,7 @@ end
 //	.q(ram_dout)
 //);
 
-wire [5:0] audioL;
-wire [5:0] audioR;
-
-assign AUDIO_L = {audioL, audioL, audioL[5:3]};
-assign AUDIO_R = {audioR, audioR, audioR[5:3]};
-assign AUDIO_S = 0;
+assign AUDIO_S = 1;
 assign AUDIO_MIX = 1;
 
 wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
@@ -361,8 +356,8 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
-	.audioL(audioL),
-	.audioR(audioR),
+	.audioL(AUDIO_L),
+	.audioR(AUDIO_R),
 
 	.dbr(dbr),
 	.sp64(status[8] & SP64),

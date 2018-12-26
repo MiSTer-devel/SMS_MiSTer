@@ -2,8 +2,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL; 
-
-use work.all;
+use work.jt89.all;
 
 entity system is
 	generic (
@@ -40,8 +39,8 @@ entity system is
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
-		audioL:		out STD_LOGIC_VECTOR(5 downto 0);
-		audioR:		out STD_LOGIC_VECTOR(5 downto 0);
+		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
+		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
 
 		dbr:			in  STD_LOGIC;
 		sp64:			in STD_LOGIC;
@@ -69,9 +68,6 @@ architecture Behavioral of system is
 	signal vdp_WR_n:			std_logic;
 	signal vdp_D_out:			std_logic_vector(7 downto 0);
 	
-	signal psg_WR_n:			std_logic;
-	signal psg_Bal:			std_logic;
-	
 	signal ctl_WR_n:			std_logic;
 	
 	signal io_RD_n:			std_logic;
@@ -91,6 +87,18 @@ architecture Behavioral of system is
 	signal bank1:				std_logic_vector(7 downto 0) := "00000001";
 	signal bank2:				std_logic_vector(7 downto 0) := "00000010";
   
+	signal PSG_outL:			std_logic_vector(10 downto 0);
+	signal PSG_outR:			std_logic_vector(10 downto 0);
+	signal PSG_mux:			std_logic_vector(7 downto 0);
+	signal psg_WR_n:			std_logic;
+	signal bal_WR_n:			std_logic;
+
+	signal FM_out:				std_logic_vector(13 downto 0);
+	signal fm_WR_n:	   	std_logic;
+	
+	signal det_D:		   	std_logic_vector(2 downto 0);
+	signal det_WR_n:	   	std_logic;
+
 	signal nvram_WR:		   std_logic;
 	signal nvram_e:         std_logic := '0';
 	signal nvram_ex:        std_logic := '0';
@@ -143,18 +151,36 @@ begin
 		reset_n  => RESET_n
 	);
 
-	psg_inst: entity work.psg
+	psg_inst: jt89
 	port map
 	(
 		clk		=> clk_sys,
-		clken    => ce_cpu,
-		WR_n		=> psg_WR_n,
-		WR_Bal	=> psg_Bal,
-		D_in		=> D_in,
-		outputL	=> audioL,
-		outputR	=> audioR,
-		reset		=> not RESET_n
+		clk_en   => ce_cpu,
+		wr_n		=> psg_WR_n,
+		din		=> D_in,
+		
+		mux		=> PSG_mux,
+		soundL	=> PSG_outL,
+		soundR	=> PSG_outR,
+
+		rst		=> not RESET_n
 	);
+	
+	fm: work.opll
+   port map
+	(
+		xin		=> clk_sys,
+		xena		=> ce_cpu,
+		d        => D_in,
+		a        => A(0),
+		cs_n     => '0',
+		we_n		=> fm_WR_n,
+		ic_n		=> RESET_n,
+		mixout   => FM_out
+	);
+
+	audioL <= (PSG_outL(10) & PSG_outL & "0000") + (FM_out(13) & FM_out & "0");
+	audioR <= (PSG_outR(10) & PSG_outR & "0000") + (FM_out(13) & FM_out & "0");
 
 	io_inst: entity work.io
 	port map
@@ -228,13 +254,15 @@ begin
 	);
 
 	-- glue logic
-	psg_Bal  <= gg when (A(7 downto 0)="00000110") else '0';
+	bal_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)="00000110" and gg='1' else '1';
 	vdp_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="10" else '1';
 	vdp_RD_n <= RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="01" or A(7 downto 6)="10") else '1';
-	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="01" or psg_Bal='1') else '1';
+	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="01" else '1';
 	ctl_WR_n <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='0' else '1';
 	io_WR_n  <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='1' else '1';
 	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 1)/="11")) else '1';
+	fm_WR_n  <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 1)="1111000" else '1';
+	det_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)=x"F2" else '1';
 					
 	ram_WR   <= not WR_n when MREQ_n='0' and A(15 downto 14)="11" else '0';
 	nvram_WR <= not WR_n when MREQ_n='0' and ((A(15 downto 14)="10" and nvram_e = '1') or (A(15 downto 14)="11" and nvram_ex = '1')) else '0';
@@ -253,10 +281,26 @@ begin
 	
 	irom_D_out <=	boot_rom_D_out when bootloader='0' and A(15 downto 14)="00" else rom_do;
 	
-	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e)
+	process (clk_sys)
+	begin
+		if rising_edge(clk_sys) then
+			if RESET_n='0' then 
+				det_D <= "111";
+				PSG_mux <= x"FF";
+			elsif det_WR_n='0' then
+				det_D <= D_in(2 downto 0);
+			elsif bal_WR_n='0' then
+				PSG_mux <= D_in;
+			end if;
+		end if;
+	end process;
+	
+	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D)
 	begin
 		if IORQ_n='0' then
-			if (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
+			if A(7 downto 0)=x"F2" then
+				D_out <= "11111"&det_D;
+			elsif (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
 				D_out <= io_D_out;
 			else
 				D_out <= vdp_D_out;
@@ -273,8 +317,7 @@ begin
 			end if;
 		end if;
 	end process;
-				
-				
+
 	-- external ram control
 	process (RESET_n,clk_sys)
 	begin

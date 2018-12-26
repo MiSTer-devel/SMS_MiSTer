@@ -104,7 +104,7 @@ begin
 		vram_D			=> vram_D,		
 		color				=> spr_color);
 
-	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on)
+	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on, gg)
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
