@@ -339,8 +339,8 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
-	.audioL(AUDIO_L),
-	.audioR(AUDIO_R),
+	.audioL(audio_l),
+	.audioR(audio_r),
 
 	.dbr(dbr),
 	.sp64(status[8] & SP64),
@@ -350,6 +350,15 @@ system #(MAX_SPPL) system
 	.wren_bk(sd_buff_wr & sd_ack),
 	.q_bk(sd_buff_din)
 );
+
+wire [15:0] audio_l, audio_r; 
+
+compressor compressor
+(
+	clk_sys,
+	audio_l[15:4], audio_r[15:4],
+	AUDIO_L,       AUDIO_R
+); 
 
 wire [8:0] x;
 wire [8:0] y;
