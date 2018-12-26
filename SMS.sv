@@ -160,7 +160,7 @@ parameter CONF_STR4 = {
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
-	"V,v1.10.",`BUILD_DATE
+	"V,v",`BUILD_DATE
 };
 
 
@@ -292,23 +292,6 @@ always @(posedge clk_sys) begin
 		end
 	end
 end
-
-
-//	GENERIC
-//	(
-//		init_file			: string := "none";
-//		widthad_a			: natural;
-//		width_a				: natural := 8;
-//    outdata_reg_a : string := "UNREGISTERED"
-//spram #(.widthad_a(18)) ram
-//(
-////	.address(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
-//	.address(ioctl_download ? ioctl_addr : {ram_addr[17:14] & cart_sz[3:0], ram_addr[13:0]}),
-//	.clock(clk_mem),
-//	.data(ioctl_dout),
-//	.wren(ioctl_wr),
-//	.q(ram_dout)
-//);
 
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 1;
