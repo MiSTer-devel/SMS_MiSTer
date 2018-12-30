@@ -41,9 +41,10 @@ entity system is
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
+		fm_ena:	   in  STD_LOGIC;
 
 		dbr:			in  STD_LOGIC;
-		sp64:			in STD_LOGIC;
+		sp64:			in  STD_LOGIC;
 		
 		--Backup RAM
 		add_bk:		in  STD_LOGIC_VECTOR(14 downto 0);
@@ -179,8 +180,8 @@ begin
 		mixout   => FM_out
 	);
 
-	audioL <= (PSG_outL(10) & PSG_outL & "0000") + (FM_out(13) & FM_out & "0");
-	audioR <= (PSG_outR(10) & PSG_outR & "0000") + (FM_out(13) & FM_out & "0");
+	audioL <= (PSG_outL(10) & PSG_outL & "0000") + (FM_out(13) & FM_out & "0") when fm_ena = '1' else (PSG_outL(10) & PSG_outL & "0000");
+	audioR <= (PSG_outR(10) & PSG_outR & "0000") + (FM_out(13) & FM_out & "0") when fm_ena = '1' else (PSG_outR(10) & PSG_outR & "0000");
 
 	io_inst: entity work.io
 	port map
@@ -298,7 +299,7 @@ begin
 	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D)
 	begin
 		if IORQ_n='0' then
-			if A(7 downto 0)=x"F2" then
+			if A(7 downto 0)=x"F2" and fm_ena = '1' then
 				D_out <= "11111"&det_D;
 			elsif (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
 				D_out <= io_D_out;

@@ -106,10 +106,7 @@ module emu
 	input         UART_DSR
 );
 
-//Uncomment to speed up lite build.  Needed?
-//`ifndef LITE
 `define USE_SP64
-//`endif
 
 `ifdef USE_SP64
 localparam MAX_SPPL = 63;
@@ -155,6 +152,7 @@ parameter CONF_STR4 = {
 `ifdef USE_SP64
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
+	"OC,FM sound,Enable,Disable;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"-;",
@@ -339,6 +337,7 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
+	.fm_ena(~status[12]),
 	.audioL(audio_l),
 	.audioR(audio_r),
 
