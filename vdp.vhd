@@ -292,7 +292,7 @@ begin
 			if ce_vdp = '1' then
 				if x=256 and not (last_y0=std_logic(y(0))) then
 					last_y0 <= std_logic(y(0));
-					if y<192 then
+					if y<192 or y=511 then
 						if hbl_counter=0 then
 							hbl_irq <= irq_line_en;
 							hbl_counter <= irq_line_count;
