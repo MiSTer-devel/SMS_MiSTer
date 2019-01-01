@@ -305,6 +305,16 @@ end
 wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 wire gg = ioctl_index==8'd2;
 
+wire [12:0] ram_a;
+wire        ram_we;
+wire  [7:0] ram_d;
+wire  [7:0] ram_q;
+
+wire [14:0] nvram_a;
+wire        nvram_we;
+wire  [7:0] nvram_d;
+wire  [7:0] nvram_q;
+
 system #(MAX_SPPL) system
 (
 	.clk_sys(clk_sys),
@@ -343,11 +353,25 @@ system #(MAX_SPPL) system
 
 	.dbr(dbr),
 	.sp64(status[8] & SP64),
-	
-   .add_bk({sd_lba[5:0],sd_buff_addr}),
-	.data_bk(sd_buff_dout),
-	.wren_bk(sd_buff_wr & sd_ack),
-	.q_bk(sd_buff_din)
+
+	.ram_a(ram_a),
+	.ram_we(ram_we),
+	.ram_d(ram_d),
+	.ram_q(ram_q),
+
+	.nvram_a(nvram_a),
+	.nvram_we(nvram_we),
+	.nvram_d(nvram_d),
+	.nvram_q(nvram_q)
+);
+
+spram #(.widthad_a(13)) ram_inst
+(
+	.clock     (clk_sys),
+	.address   (ram_a),
+	.wren      (ram_we),
+	.data      (ram_d),
+	.q         (ram_q)
 );
 
 wire [15:0] audio_l, audio_r; 
@@ -439,6 +463,19 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////
+dpram #(.widthad_a(15)) nvram_inst
+(
+	.clock_a     (clk_sys),
+	.address_a   (nvram_a),
+	.wren_a      (nvram_we),
+	.data_a      (nvram_d),
+	.q_a         (nvram_q),
+	.clock_b     (clk_sys),
+	.address_b   ({sd_lba[5:0],sd_buff_addr}),
+	.wren_b      (sd_buff_wr & sd_ack),
+	.data_b      (sd_buff_dout),
+	.q_b         (sd_buff_din)
+);
 
 wire downloading = ioctl_download;
 reg bk_ena = 0;

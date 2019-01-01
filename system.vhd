@@ -45,12 +45,19 @@ entity system is
 
 		dbr:			in  STD_LOGIC;
 		sp64:			in  STD_LOGIC;
+
+		-- Work RAM
+		ram_a:      out STD_LOGIC_VECTOR(12 downto 0);
+		ram_d:      out STD_LOGIC_VECTOR( 7 downto 0);
+		ram_we:     out STD_LOGIC;
+		ram_q:      in  STD_LOGIC_VECTOR( 7 downto 0);
 		
-		--Backup RAM
-		add_bk:		in  STD_LOGIC_VECTOR(14 downto 0);
-		data_bk:		in  STD_LOGIC_VECTOR(7 downto 0);
-		wren_bk:		in  STD_LOGIC;
-		q_bk:			out STD_LOGIC_VECTOR(7 downto 0));
+		-- Backup RAM
+		nvram_a:    out STD_LOGIC_VECTOR(14 downto 0);
+		nvram_d:    out STD_LOGIC_VECTOR( 7 downto 0);
+		nvram_we:   out STD_LOGIC;
+		nvram_q:    in  STD_LOGIC_VECTOR( 7 downto 0)
+	);
 end system;
 
 architecture Behavioral of system is
@@ -208,38 +215,15 @@ begin
 		RESET		=> RESET_n
 	);
 
-	ram_inst : entity work.spram
-	generic map
-	(
-		widthad_a=> 13
-	)
-	port map
-	(
-		clock		=> clk_sys,
-		address	=> A(12 downto 0),
-		wren		=> ram_WR,
-		data		=> D_in,
-		q			=> ram_D_out
-	);
+	ram_a <= A(12 downto 0);
+	ram_we <= ram_WR;
+	ram_d <= D_in;
+	ram_D_out <= ram_q;
 
-	nvram_inst : entity work.dpram
-	generic map
-	(
-		widthad_a=> 15
-	)
-	port map
-	(
-		clock_a		=> clk_sys,
-		address_a	=> (nvram_p and not A(14)) & A(13 downto 0),
-		wren_a		=> nvram_WR,
-		data_a		=> D_in,
-		q_a			=> nvram_D_out,
-		clock_b		=> clk_sys,
-		address_b	=> add_bk,
-		wren_b		=> wren_bk,
-		data_b		=> data_bk,
-		q_b			=> q_bk
-	);
+	nvram_a <= (nvram_p and not A(14)) & A(13 downto 0);
+	nvram_we <= nvram_WR;
+	nvram_d <= D_in;
+	nvram_D_out <= nvram_q;
 
 	boot_rom_inst : entity work.sprom
 	generic map
