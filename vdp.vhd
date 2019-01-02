@@ -216,29 +216,29 @@ begin
 							if D_in(7 downto 6)="00" then
 								xram_cpu_read <= '1';
 							end if;
-							case D_in is
-							when "10000000" =>
+							case D_in(7 downto 6)&D_in(3 downto 0) is
+							when "100000" =>
 								disable_hscroll<= xram_cpu_A(6);
 								mask_column0	<= xram_cpu_A(5);
 								irq_line_en		<= xram_cpu_A(4);
 								spr_shift		<= xram_cpu_A(3);
-							when "10000001" =>
+							when "100001" =>
 								display_on		<= xram_cpu_A(6);
 								irq_frame_en	<= xram_cpu_A(5);
 								spr_tall			<= xram_cpu_A(1);
-							when "10000010" =>
+							when "100010" =>
 								bg_address		<= xram_cpu_A(3 downto 1);
-							when "10000101" =>
+							when "100101" =>
 								spr_address		<= xram_cpu_A(6 downto 1);
-							when "10000110" =>
+							when "100110" =>
 								spr_high_bit	<= xram_cpu_A(2);
-							when "10000111" =>
+							when "100111" =>
 								overscan			<= xram_cpu_A(3 downto 0);
-							when "10001000" =>
+							when "101000" =>
 								bg_scroll_x		<= xram_cpu_A(7 downto 0);
-							when "10001001" =>
+							when "101001" =>
 								bg_scroll_y		<= xram_cpu_A(7 downto 0);
-							when "10001010" =>
+							when "101010" =>
 								irq_line_count	<= xram_cpu_A(7 downto 0);
 							when others =>
 							end case;
