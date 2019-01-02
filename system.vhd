@@ -192,8 +192,10 @@ begin
 		mixout   => FM_out
 	);
 
-	audioL <= (PSG_outL(10) & PSG_outL & "0000") + (FM_out(13) & FM_out & "0") when fm_ena = '1' else (PSG_outL(10) & PSG_outL & "0000");
-	audioR <= (PSG_outR(10) & PSG_outR & "0000") + (FM_out(13) & FM_out & "0") when fm_ena = '1' else (PSG_outR(10) & PSG_outR & "0000");
+	audioL <= (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
+	     else (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00");
+	audioR <= (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outR & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
+	     else (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outL & "00");
 
 	io_inst: entity work.io
 	port map
@@ -287,7 +289,7 @@ begin
 		end if;
 	end process;
 	
-	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D)
+	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D,fm_ena)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
