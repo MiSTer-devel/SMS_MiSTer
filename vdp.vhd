@@ -14,6 +14,8 @@ entity vdp is
 		ce_sp:			in  STD_LOGIC;
 		gg:				in  STD_LOGIC;
 		sp64:				in  STD_LOGIC;
+		TH_A:				in  STD_LOGIC;
+		TH_B:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -30,6 +32,8 @@ architecture Behavioral of vdp is
 	
 	signal old_RD_n:			STD_LOGIC;
 	signal old_WR_n:			STD_LOGIC;
+	signal old_TH_A:			STD_LOGIC;
+	signal old_TH_B:			STD_LOGIC;
 
 	-- helper bits
 	signal data_write:		std_logic;
@@ -81,6 +85,7 @@ architecture Behavioral of vdp is
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
+	signal latched_x:		std_logic_vector(7 downto 0);
 
 	signal cram_latch:		std_logic_vector(7 downto 0);
 	
@@ -186,6 +191,13 @@ begin
 			if ce_vdp = '1' then
 				old_WR_n <= WR_n;
 				old_RD_n <= RD_n;
+
+				old_TH_A <= TH_A;
+				old_TH_B <= TH_B;
+				if (old_TH_A = '0' and TH_A = '1') or (old_TH_B = '0' and TH_B = '1') then
+					latched_x <= x(8 downto 1);
+				end if;
+
 				if old_WR_n = '1' and WR_n='0' then
 					if A(0)='0' then
 						data_write <= '1';
@@ -240,7 +252,7 @@ begin
 					when "010" =>
 						D_out <= y(7 downto 0);
 					when "011" =>
-						D_out <= x(7 downto 0); -- Fix this X is latched on TH
+						D_out <= latched_x;
 					when "100" =>
 						--D_out <= vram_cpu_D_out;
 						D_out <= vram_cpu_D_outl;

@@ -107,6 +107,9 @@ architecture Behavioral of system is
 	signal det_D:		   	std_logic_vector(2 downto 0);
 	signal det_WR_n:	   	std_logic;
 
+	signal TH_A:			std_logic;
+	signal TH_B:			std_logic;
+
 	signal nvram_WR:		   std_logic;
 	signal nvram_e:         std_logic := '0';
 	signal nvram_ex:        std_logic := '0';
@@ -134,7 +137,7 @@ begin
 		DI			=> D_out,
 		DO			=> D_in
 	);
-	
+
 	vdp_inst: entity work.vdp
 	generic map(
 		MAX_SPPL => MAX_SPPL
@@ -146,6 +149,8 @@ begin
 		ce_pix	=> ce_pix,
 		ce_sp		=> ce_sp,
 		sp64		=> sp64,
+		TH_A		=> TH_A,
+		TH_B		=> TH_B,
 		gg			=> gg,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
@@ -199,6 +204,8 @@ begin
 		A			=> A(7 downto 0),
 		D_in		=> D_in,
 		D_out		=> io_D_out,
+		TH_A		=> TH_A,
+		TH_B		=> TH_B,
 		J1_up		=> j1_up,
 		J1_down	=> j1_down,
 		J1_left	=> j1_left,
