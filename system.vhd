@@ -45,12 +45,19 @@ entity system is
 
 		dbr:			in  STD_LOGIC;
 		sp64:			in  STD_LOGIC;
+
+		-- Work RAM
+		ram_a:      out STD_LOGIC_VECTOR(12 downto 0);
+		ram_d:      out STD_LOGIC_VECTOR( 7 downto 0);
+		ram_we:     out STD_LOGIC;
+		ram_q:      in  STD_LOGIC_VECTOR( 7 downto 0);
 		
-		--Backup RAM
-		add_bk:		in  STD_LOGIC_VECTOR(14 downto 0);
-		data_bk:		in  STD_LOGIC_VECTOR(7 downto 0);
-		wren_bk:		in  STD_LOGIC;
-		q_bk:			out STD_LOGIC_VECTOR(7 downto 0));
+		-- Backup RAM
+		nvram_a:    out STD_LOGIC_VECTOR(14 downto 0);
+		nvram_d:    out STD_LOGIC_VECTOR( 7 downto 0);
+		nvram_we:   out STD_LOGIC;
+		nvram_q:    in  STD_LOGIC_VECTOR( 7 downto 0)
+	);
 end system;
 
 architecture Behavioral of system is
@@ -100,6 +107,9 @@ architecture Behavioral of system is
 	signal det_D:		   	std_logic_vector(2 downto 0);
 	signal det_WR_n:	   	std_logic;
 
+	signal TH_A:			std_logic;
+	signal TH_B:			std_logic;
+
 	signal nvram_WR:		   std_logic;
 	signal nvram_e:         std_logic := '0';
 	signal nvram_ex:        std_logic := '0';
@@ -127,7 +137,7 @@ begin
 		DI			=> D_out,
 		DO			=> D_in
 	);
-	
+
 	vdp_inst: entity work.vdp
 	generic map(
 		MAX_SPPL => MAX_SPPL
@@ -139,6 +149,8 @@ begin
 		ce_pix	=> ce_pix,
 		ce_sp		=> ce_sp,
 		sp64		=> sp64,
+		TH_A		=> TH_A,
+		TH_B		=> TH_B,
 		gg			=> gg,
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
@@ -180,8 +192,10 @@ begin
 		mixout   => FM_out
 	);
 
-	audioL <= (PSG_outL(10) & PSG_outL & "0000") + (FM_out(13) & FM_out & "0") when fm_ena = '1' else (PSG_outL(10) & PSG_outL & "0000");
-	audioR <= (PSG_outR(10) & PSG_outR & "0000") + (FM_out(13) & FM_out & "0") when fm_ena = '1' else (PSG_outR(10) & PSG_outR & "0000");
+	audioL <= (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
+	     else (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00");
+	audioR <= (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outR & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
+	     else (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outL & "00");
 
 	io_inst: entity work.io
 	port map
@@ -192,6 +206,8 @@ begin
 		A			=> A(7 downto 0),
 		D_in		=> D_in,
 		D_out		=> io_D_out,
+		TH_A		=> TH_A,
+		TH_B		=> TH_B,
 		J1_up		=> j1_up,
 		J1_down	=> j1_down,
 		J1_left	=> j1_left,
@@ -208,38 +224,15 @@ begin
 		RESET		=> RESET_n
 	);
 
-	ram_inst : entity work.spram
-	generic map
-	(
-		widthad_a=> 13
-	)
-	port map
-	(
-		clock		=> clk_sys,
-		address	=> A(12 downto 0),
-		wren		=> ram_WR,
-		data		=> D_in,
-		q			=> ram_D_out
-	);
+	ram_a <= A(12 downto 0);
+	ram_we <= ram_WR;
+	ram_d <= D_in;
+	ram_D_out <= ram_q;
 
-	nvram_inst : entity work.dpram
-	generic map
-	(
-		widthad_a=> 15
-	)
-	port map
-	(
-		clock_a		=> clk_sys,
-		address_a	=> (nvram_p and not A(14)) & A(13 downto 0),
-		wren_a		=> nvram_WR,
-		data_a		=> D_in,
-		q_a			=> nvram_D_out,
-		clock_b		=> clk_sys,
-		address_b	=> add_bk,
-		wren_b		=> wren_bk,
-		data_b		=> data_bk,
-		q_b			=> q_bk
-	);
+	nvram_a <= (nvram_p and not A(14)) & A(13 downto 0);
+	nvram_we <= nvram_WR;
+	nvram_d <= D_in;
+	nvram_D_out <= nvram_q;
 
 	boot_rom_inst : entity work.sprom
 	generic map
@@ -296,7 +289,7 @@ begin
 		end if;
 	end process;
 	
-	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D)
+	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D,fm_ena)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then

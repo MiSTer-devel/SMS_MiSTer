@@ -1,7 +1,10 @@
 //============================================================================
 //  SMS replica
-// 
-//  Port to MiSTer
+//
+//  Port to MiST
+//  Szombathelyi György
+//
+//  Based on the MiSTer top-level
 //  Copyright (C) 2017,2018 Sorgelig
 //
 //  This program is free software; you can redistribute it and/or modify it
@@ -19,92 +22,44 @@
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
 
-module emu
+module SMS
 (
-	//Master input clock
-	input         CLK_50M,
+   input         CLOCK_27[0],   // Input clock 27 MHz
 
-	//Async reset from top-level module.
-	//Can be used as initial reset.
-	input         RESET,
+   output  [5:0] VGA_R,
+   output  [5:0] VGA_G,
+   output  [5:0] VGA_B,
+   output        VGA_HS,
+   output        VGA_VS,
 
-	//Must be passed to hps_io module
-	inout  [44:0] HPS_BUS,
+   output        LED,
 
-	//Base video clock. Usually equals to CLK_SYS.
-	output        CLK_VIDEO,
+   output        AUDIO_L,
+   output        AUDIO_R,
 
-	//Multiple resolutions are supported using different CE_PIXEL rates.
-	//Must be based on CLK_VIDEO
-	output        CE_PIXEL,
+   input         UART_RX,
 
-	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output  [7:0] VIDEO_ARX,
-	output  [7:0] VIDEO_ARY,
+   input         SPI_SCK,
+   output        SPI_DO,
+   input         SPI_DI,
+   input         SPI_SS2,
+   input         SPI_SS3,
+   input         CONF_DATA0,
 
-	output  [7:0] VGA_R,
-	output  [7:0] VGA_G,
-	output  [7:0] VGA_B,
-	output        VGA_HS,
-	output        VGA_VS,
-	output        VGA_DE,    // = ~(VBlank | HBlank)
-	output        VGA_F1,
-	output  [1:0] VGA_SL,
-
-	output        LED_USER,  // 1 - ON, 0 - OFF.
-
-	// b[1]: 0 - LED status is system status OR'd with b[0]
-	//       1 - LED status is controled solely by b[0]
-	// hint: supply 2'b00 to let the system control the LED.
-	output  [1:0] LED_POWER,
-	output  [1:0] LED_DISK,
-
-	output [15:0] AUDIO_L,
-	output [15:0] AUDIO_R,
-	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
-	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
-	input         TAPE_IN,
-
-	// SD-SPI
-	output        SD_SCK,
-	output        SD_MOSI,
-	input         SD_MISO,
-	output        SD_CS,
-	input         SD_CD,
-
-	//High latency DDR3 RAM interface
-	//Use for non-critical time purposes
-	output        DDRAM_CLK,
-	input         DDRAM_BUSY,
-	output  [7:0] DDRAM_BURSTCNT,
-	output [28:0] DDRAM_ADDR,
-	input  [63:0] DDRAM_DOUT,
-	input         DDRAM_DOUT_READY,
-	output        DDRAM_RD,
-	output [63:0] DDRAM_DIN,
-	output  [7:0] DDRAM_BE,
-	output        DDRAM_WE,
-
-	//SDRAM interface with lower latency
-	output        SDRAM_CLK,
-	output        SDRAM_CKE,
-	output [12:0] SDRAM_A,
-	output  [1:0] SDRAM_BA,
-	inout  [15:0] SDRAM_DQ,
-	output        SDRAM_DQML,
-	output        SDRAM_DQMH,
-	output        SDRAM_nCS,
-	output        SDRAM_nCAS,
-	output        SDRAM_nRAS,
-	output        SDRAM_nWE,
-
-	input         UART_CTS,
-	output        UART_RTS,
-	input         UART_RXD,
-	output        UART_TXD,
-	output        UART_DTR,
-	input         UART_DSR
+   output [12:0] SDRAM_A,
+   inout  [15:0] SDRAM_DQ,
+   output        SDRAM_DQML,
+   output        SDRAM_DQMH,
+   output        SDRAM_nWE,
+   output        SDRAM_nCAS,
+   output        SDRAM_nRAS,
+   output        SDRAM_nCS,
+   output  [1:0] SDRAM_BA,
+   output        SDRAM_CLK,
+   output        SDRAM_CKE
 );
+
+assign LED  = ~ioctl_download;
 
 `define USE_SP64
 
@@ -116,49 +71,19 @@ localparam MAX_SPPL = 7;
 localparam SP64     = 1'b0;
 `endif
 
-assign VGA_F1 = 0;
-
-assign {UART_RTS, UART_TXD, UART_DTR} = 0;
-
-assign {SD_SCK, SD_MOSI, SD_CS} = '1;
-assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
-
-assign LED_USER  = ioctl_download | bk_state;
-assign LED_DISK  = 0;
-assign LED_POWER = 0;
-
-assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
-assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
-
 `include "build_id.v"
-parameter CONF_STR1 = {
+parameter CONF_STR = {
 	"SMS;;",
-	"-;",
-	"FS,SMS;",
-	"FS,GG;",
-};
-parameter CONF_STR2 = {
-	"AB,Save Slot,1,2,3,4;"
-};
-parameter CONF_STR3 = {
-	"6,Load state;"
-};
-parameter CONF_STR4 = {
-	"7,Save state;",
-	"-;",
-	"O9,Aspect ratio,4:3,16:9;",
-	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
+	"F,BINSMSGG ,Load;",
+	"O34,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
 `ifdef USE_SP64
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
 	"OC,FM sound,Enable,Disable;",
-	"-;",
 	"O1,Swap joysticks,No,Yes;",
-	"-;",
-	"R0,Reset;",
-	"J1,Fire 1,Fire 2,Pause;",
-	"V,v",`BUILD_DATE
+	"T0,Reset;",
+	"V,v1.0.",`BUILD_DATE
 };
 
 
@@ -169,20 +94,20 @@ wire clk_sys;
 
 pll pll
 (
-	.refclk(CLK_50M),
-	.rst(0),
-	.outclk_0(clk_sys),
-	.outclk_1(SDRAM_CLK),
+	.inclk0(CLOCK_27[0]),
+	.c0(clk_sys),
+	.c1(SDRAM_CLK),
 	.locked(locked)
 );
 
-wire reset = RESET | status[0] | buttons[1] | ioctl_download | bk_loading;
 
-//////////////////   HPS I/O   ///////////////////
+//////////////////   MiST I/O   ///////////////////
 wire [15:0] joy_0;
 wire [15:0] joy_1;
 wire  [1:0] buttons;
 wire [31:0] status;
+wire        ypbpr;
+wire        scandoubler_disable;
 
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
@@ -200,49 +125,52 @@ wire  [7:0] sd_buff_dout;
 wire  [7:0] sd_buff_din;
 wire        sd_buff_wr;
 wire        img_mounted;
-wire        img_readonly;
-wire [63:0] img_size;
+wire [31:0] img_size;
 
-wire        forced_scandoubler;
-
-
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
+user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 (
-	.clk_sys(clk_sys),
-	.HPS_BUS(HPS_BUS),
+		.clk_sys(clk_sys),
+		.SPI_SS_IO(CONF_DATA0),
+		.SPI_CLK(SPI_SCK),
+		.SPI_MOSI(SPI_DI),
+		.SPI_MISO(SPI_DO),
 
-	.conf_str({CONF_STR1,bk_ena ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+		.conf_str(CONF_STR),
 
-	.joystick_0(joy_0),
-	.joystick_1(joy_1),
+		.status(status),
+		.scandoubler_disable(scandoubler_disable),
+		.ypbpr(ypbpr),
+		.buttons(buttons),
+		.joystick_0(joy_0),
+		.joystick_1(joy_1),
 
-	.buttons(buttons),
-	.status(status),
-	.forced_scandoubler(forced_scandoubler),
+		.sd_conf(0),
+		.sd_sdhc(1),
+		.sd_lba(sd_lba),
+		.sd_rd(sd_rd),
+		.sd_wr(sd_wr),
+		.sd_ack(sd_ack),
+		.sd_buff_addr(sd_buff_addr),
+		.sd_dout(sd_buff_dout),
+		.sd_din(sd_buff_din),
+		.sd_dout_strobe(sd_buff_wr),
+		.img_mounted(img_mounted),
+		.img_size(img_size)
+);
 
-	.ps2_kbd_led_use(0),
-	.ps2_kbd_led_status(0),
+data_io data_io
+(
+        .clk_sys(clk_sys),
+        .SPI_SCK(SPI_SCK),
+        .SPI_DI(SPI_DI),
+        .SPI_SS2(SPI_SS2),
 
-	.ioctl_wr(ioctl_wr),
-	.ioctl_addr(ioctl_addr),
-	.ioctl_dout(ioctl_dout),
-	.ioctl_download(ioctl_download),
-	.ioctl_index(ioctl_index),
-
-	.sd_conf(0),
-	.ioctl_wait(ioctl_wait),
-	
-	.sd_lba(sd_lba),
-	.sd_rd(sd_rd),
-	.sd_wr(sd_wr),
-	.sd_ack(sd_ack),
-	.sd_buff_addr(sd_buff_addr),
-	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din(sd_buff_din),
-	.sd_buff_wr(sd_buff_wr),
-	.img_mounted(img_mounted),
-	.img_readonly(img_readonly),
-	.img_size(img_size)
+        .ioctl_wait(ioctl_wait),
+        .ioctl_wr(ioctl_wr),
+        .ioctl_addr(ioctl_addr),
+        .ioctl_dout(ioctl_dout),
+        .ioctl_download(ioctl_download),
+        .ioctl_index(ioctl_index)
 );
 
 wire [21:0] ram_addr;
@@ -255,14 +183,14 @@ sdram ram
 
 	.init(~locked),
 	.clk(clk_sys),
-	.clkref(ce_cpu),
+	.clkref(ce_cpu_p),
 
 	.waddr(romwr_a),
 	.din(ioctl_dout),
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr({ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
+	.raddr({ram_addr[21:14] & cart_sz, ram_addr[13:0]} + (romhdr ? 10'd512 : 0)),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -271,9 +199,12 @@ sdram ram
 reg  rom_wr = 0;
 wire sd_wrack;
 reg  [23:0] romwr_a;
+reg  reset;
 
 always @(posedge clk_sys) begin
 	reg old_download, old_reset;
+
+	reset <= status[0] | buttons[1] | ioctl_download;
 
 	old_download <= ioctl_download;
 	old_reset <= reset;
@@ -291,19 +222,14 @@ always @(posedge clk_sys) begin
 	end
 end
 
-assign AUDIO_S = 1;
-assign AUDIO_MIX = 1;
+wire [15:0] audioL, audioR;
 
 wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
 wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
 
-reg  dbr = 0;
-always @(posedge clk_sys) begin
-	if(ioctl_download || bk_loading) dbr <= 1;
-end
-
 wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
-wire gg = ioctl_index==8'd2;
+wire       romhdr = ioctl_addr[9]; // has 512 byte header
+wire       gg = ioctl_index[7:6] == 2'd2;
 
 wire [12:0] ram_a;
 wire        ram_we;
@@ -318,7 +244,9 @@ wire  [7:0] nvram_q;
 system #(MAX_SPPL) system
 (
 	.clk_sys(clk_sys),
-	.ce_cpu(ce_cpu),
+	.ce_cpu(ce_cpu_p),
+//	.ce_cpu_p(ce_cpu_p),
+//	.ce_cpu_n(ce_cpu_n),
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
@@ -347,11 +275,10 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
-	.fm_ena(~status[12]),
-	.audioL(audio_l),
-	.audioR(audio_r),
+	.fm_ena(~status[12]),  
+	.audioL(audioL),
+    .audioR(audioR),
 
-	.dbr(dbr),
 	.sp64(status[8] & SP64),
 
 	.ram_a(ram_a),
@@ -374,18 +301,10 @@ spram #(.widthad_a(13)) ram_inst
 	.q         (ram_q)
 );
 
-wire [15:0] audio_l, audio_r; 
-
-compressor compressor
-(
-	clk_sys,
-	audio_l[15:4], audio_r[15:4],
-	AUDIO_L,       AUDIO_R
-); 
-
 wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
+wire HSync, VSync, HBlank, VBlank;
 
 video video
 (
@@ -402,7 +321,8 @@ video video
 	.vblank(VBlank)
 );
 
-reg ce_cpu;
+reg ce_cpu_p;
+reg ce_cpu_n;
 reg ce_vdp;
 reg ce_pix;
 reg ce_sp;
@@ -412,57 +332,127 @@ always @(negedge clk_sys) begin
 	ce_sp <= clkd[0];
 	ce_vdp <= 0;//div5
 	ce_pix <= 0;//div10
-	ce_cpu <= 0;//div15
+	ce_cpu_p <= 0;//div15
+	ce_cpu_n <= 0;//div15
 	clkd <= clkd + 1'd1;
 	if (clkd==29) begin
 		clkd <= 0;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-		ce_cpu <= 1;
+		ce_cpu_p <= 1;
 	end else if (clkd==24) begin
 		ce_vdp <= 1;
+	end else if (clkd==22) begin
+		ce_cpu_n <= 1;
 	end else if (clkd==19) begin
 		ce_vdp <= 1;
 		ce_pix <= 1;
 	end else if (clkd==14) begin
 		ce_vdp <= 1;
-		ce_cpu <= 1;
+		ce_cpu_p <= 1;
 	end else if (clkd==9) begin
 		ce_vdp <= 1;
 		ce_pix <= 1;
+	end else if (clkd==7) begin
+		ce_cpu_n <= 1;
 	end else if (clkd==4) begin
 		ce_vdp <= 1;
 	end
 end
 
-wire HSync, VSync;
-wire HBlank, VBlank;
+//////////////////   VIDEO   //////////////////
+wire  [3:0] VGA_R_O = HBlank ? 2'b00 : color[3:0];
+wire  [3:0] VGA_G_O = HBlank ? 2'b00 : color[7:4];
+wire  [3:0] VGA_B_O = HBlank ? 2'b00 : color[11:8];
+wire        SD_HS_O;
+wire        SD_VS_O;
+wire        HS_O;
+wire        VS_O;
 
-wire [2:0] scale = status[5:3];
-wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
+wire  [5:0] SD_R_O;
+wire  [5:0] SD_G_O;
+wire  [5:0] SD_B_O;
+wire  [5:0] osd_r_in;
+wire  [5:0] osd_g_in;
+wire  [5:0] osd_b_in;
 
-assign CLK_VIDEO = clk_sys;
-assign VGA_SL = sl[1:0];
-
-video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
+scandoubler scandoubler
 (
-	.*,
-	.clk_sys(CLK_VIDEO),
-	.ce_pix_out(CE_PIXEL),
-	.ce_pix(ce_pix),
-	
-	.scanlines(0),
-	.scandoubler(scale || forced_scandoubler),
-	.hq2x(scale==1),
-	.mono(0),
-
-	.R({2{color[3:0]}}),
-	.G({2{color[7:4]}}),
-	.B({2{color[11:8]}})
+    .clk_sys(clk_sys),
+    .scanlines(status[4:3]),
+    .hs_in(~HSync),
+    .vs_in(~VSync),
+    .r_in(VGA_R_O),
+    .g_in(VGA_G_O),
+    .b_in(VGA_B_O),
+    .hs_out(SD_HS_O),
+    .vs_out(SD_VS_O),
+    .r_out(SD_R_O),
+    .g_out(SD_G_O),
+    .b_out(SD_B_O)
 );
 
+wire [5:0] osd_r_o, osd_g_o, osd_b_o;
+assign HS_O = scandoubler_disable ? HSync : SD_HS_O;
+assign VS_O = scandoubler_disable ? VSync : SD_VS_O;
+
+osd osd
+(
+    .clk_sys(clk_sys),
+    .SPI_DI(SPI_DI),
+    .SPI_SCK(SPI_SCK),
+    .SPI_SS3(SPI_SS3),
+    .R_in(scandoubler_disable ? {VGA_R_O, VGA_R_O[1:0]} : SD_R_O),
+    .G_in(scandoubler_disable ? {VGA_G_O, VGA_G_O[1:0]} : SD_G_O),
+    .B_in(scandoubler_disable ? {VGA_B_O, VGA_B_O[1:0]} : SD_B_O),
+    .HSync(HS_O),
+    .VSync(VS_O),
+    .R_out(osd_r_o),
+    .G_out(osd_g_o),
+    .B_out(osd_b_o)
+    );
+
+wire [5:0] Y, Pb, Pr;
+	 
+rgb2ypbpr rgb2ypbpr 
+(
+	.red   ( osd_r_o ),
+	.green ( osd_g_o ),
+	.blue  ( osd_b_o ),
+	.y     ( Y       ),
+	.pb    ( Pb      ),
+	.pr    ( Pr      )
+);
+	 
+assign VGA_R = ypbpr?Pr:osd_r_o;
+assign VGA_G = ypbpr? Y:osd_g_o;
+assign VGA_B = ypbpr?Pb:osd_b_o;
+wire        csync_out = ~(HS_O ^ VS_O);
+// a minimig vga->scart cable expects a composite sync signal on the VGA_HS output.
+// and VCC on VGA_VS (to switch into rgb mode)
+assign      VGA_HS = (scandoubler_disable || ypbpr)? csync_out : HS_O;
+assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : VS_O;
+
+//////////////////   AUDIO   //////////////////
+
+jt12_dac2 #(16) dacl
+(
+	.clk(clk_sys),
+    .rst(reset),
+    .din(audioL),
+	.dout(AUDIO_L)
+);
+
+jt12_dac2 #(16) dacr
+(
+	.clk(clk_sys),
+    .rst(reset),
+    .din(audioR),
+	.dout(AUDIO_R)
+);
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////
+/*
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
@@ -486,7 +476,7 @@ always @(posedge clk_sys) begin
 	if(~old_downloading & downloading) bk_ena <= 0;
 	
 	//Save file always mounted in the end of downloading state.
-	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+	if(downloading && img_mounted && img_size) bk_ena <= 1;
 end
 
 wire bk_load    = status[6];
@@ -524,7 +514,7 @@ always @(posedge clk_sys) begin
 		end
 	end
 end
-
+*/
 endmodule
 
 

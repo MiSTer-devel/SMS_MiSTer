@@ -9,6 +9,8 @@ entity io is
 		A:			in		STD_LOGIC_VECTOR (7 downto 0);
 		D_in:		in		STD_LOGIC_VECTOR (7 downto 0);
 		D_out:	out	STD_LOGIC_VECTOR (7 downto 0);
+		TH_A:	out STD_LOGIC;
+		TH_B:	out STD_LOGIC;
 		J1_up:	in 	STD_LOGIC;
 		J1_down:	in 	STD_LOGIC;
 		J1_left:	in 	STD_LOGIC;
@@ -39,7 +41,10 @@ begin
 			end if;
 		end if;
 	end process;
-	
+
+	TH_A <= ctrl(5);
+	TH_B <= ctrl(7);
+
 --	J1_tr <= ctrl(4) when ctrl(0)='0' else 'Z';
 --	J2_tr <= ctrl(6) when ctrl(2)='0' else 'Z';
 

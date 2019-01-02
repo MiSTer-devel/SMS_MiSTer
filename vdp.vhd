@@ -14,6 +14,8 @@ entity vdp is
 		ce_sp:			in  STD_LOGIC;
 		gg:				in  STD_LOGIC;
 		sp64:				in  STD_LOGIC;
+		TH_A:				in  STD_LOGIC;
+		TH_B:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -30,6 +32,8 @@ architecture Behavioral of vdp is
 	
 	signal old_RD_n:			STD_LOGIC;
 	signal old_WR_n:			STD_LOGIC;
+	signal old_TH_A:			STD_LOGIC;
+	signal old_TH_B:			STD_LOGIC;
 
 	-- helper bits
 	signal data_write:		std_logic;
@@ -77,10 +81,10 @@ architecture Behavioral of vdp is
 	signal reset_flags:		boolean := false;
 	signal collide_flag:		std_logic := '0';
 	signal overflow_flag:	std_logic := '0';
-	signal irq_counter:		std_logic_vector(6 downto 0) := (others=>'0');
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
+	signal latched_x:		std_logic_vector(7 downto 0);
 
 	signal cram_latch:		std_logic_vector(7 downto 0);
 	
@@ -186,6 +190,13 @@ begin
 			if ce_vdp = '1' then
 				old_WR_n <= WR_n;
 				old_RD_n <= RD_n;
+
+				old_TH_A <= TH_A;
+				old_TH_B <= TH_B;
+				if (old_TH_A = '0' and TH_A = '1') or (old_TH_B = '0' and TH_B = '1') then
+					latched_x <= x(8 downto 1);
+				end if;
+
 				if old_WR_n = '1' and WR_n='0' then
 					if A(0)='0' then
 						data_write <= '1';
@@ -204,29 +215,29 @@ begin
 							if D_in(7 downto 6)="00" then
 								xram_cpu_read <= '1';
 							end if;
-							case D_in is
-							when "10000000" =>
+							case D_in(7 downto 6)&D_in(3 downto 0) is
+							when "100000" =>
 								disable_hscroll<= xram_cpu_A(6);
 								mask_column0	<= xram_cpu_A(5);
 								irq_line_en		<= xram_cpu_A(4);
 								spr_shift		<= xram_cpu_A(3);
-							when "10000001" =>
+							when "100001" =>
 								display_on		<= xram_cpu_A(6);
 								irq_frame_en	<= xram_cpu_A(5);
 								spr_tall			<= xram_cpu_A(1);
-							when "10000010" =>
+							when "100010" =>
 								bg_address		<= xram_cpu_A(3 downto 1);
-							when "10000101" =>
+							when "100101" =>
 								spr_address		<= xram_cpu_A(6 downto 1);
-							when "10000110" =>
+							when "100110" =>
 								spr_high_bit	<= xram_cpu_A(2);
-							when "10000111" =>
+							when "100111" =>
 								overscan			<= xram_cpu_A(3 downto 0);
-							when "10001000" =>
+							when "101000" =>
 								bg_scroll_x		<= xram_cpu_A(7 downto 0);
-							when "10001001" =>
+							when "101001" =>
 								bg_scroll_y		<= xram_cpu_A(7 downto 0);
-							when "10001010" =>
+							when "101010" =>
 								irq_line_count	<= xram_cpu_A(7 downto 0);
 							when others =>
 							end case;
@@ -240,7 +251,7 @@ begin
 					when "010" =>
 						D_out <= y(7 downto 0);
 					when "011" =>
-						D_out <= x(7 downto 0); -- Fix this X is latched on TH
+						D_out <= latched_x;
 					when "100" =>
 						--D_out <= vram_cpu_D_out;
 						D_out <= vram_cpu_D_outl;
@@ -279,7 +290,7 @@ begin
 			if ce_vdp = '1' then
 				if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
 					vbl_irq <= '1';
-				else
+				elsif reset_flags then
 					vbl_irq <= '0';
 				end if;
 			end if;
@@ -292,7 +303,7 @@ begin
 			if ce_vdp = '1' then
 				if x=256 and not (last_y0=std_logic(y(0))) then
 					last_y0 <= std_logic(y(0));
-					if y<192 then
+					if y<192 or y=511 then
 						if hbl_counter=0 then
 							hbl_irq <= irq_line_en;
 							hbl_counter <= irq_line_count;
@@ -302,7 +313,7 @@ begin
 					else
 						hbl_counter <= irq_line_count;
 					end if;
-				else
+				elsif reset_flags then
 					hbl_irq <= '0';
 				end if;
 			end if;
@@ -315,31 +326,32 @@ begin
 			if ce_vdp = '1' then
 				if vbl_irq='1' then
 					virq_flag <= '1';
-				elsif reset_flags then
+				end if;
+				if reset_flags then
 					virq_flag <= '0';
 				end if;
 
 				if spr_collide='1' then
 					collide_flag <= '1';
-				elsif reset_flags then
+				end if;
+				if reset_flags then
 					collide_flag <= '0';
 				end if;
 
 				if spr_overflow='1' then
 					overflow_flag <= '1';
-				elsif reset_flags then
+				end if;
+				if reset_flags then
 					overflow_flag <= '0';
 				end if;
 
-				if (vbl_irq='1' and irq_frame_en='1') or hbl_irq='1' then
-					irq_counter <= (others=>'1');
-				elsif irq_counter>0 then
-					irq_counter <= irq_counter-1;
+				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then
+					IRQ_n <= '0';
+				else
+					IRQ_n <= '1';
 				end if;
 			end if;
 		end if;
 	end process;
-	IRQ_n <= '0' when irq_counter>0 else '1';
-
 	
 end Behavioral;

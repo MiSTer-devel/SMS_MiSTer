@@ -76,6 +76,7 @@ begin
 		disable_hscroll=> disable_hscroll,
 		scroll_x 		=> bg_scroll_x,
 		y					=> bg_y,
+		screen_y		=> y,
 		
 		vram_A			=> bg_vram_A,
 		vram_D			=> vram_D,		
