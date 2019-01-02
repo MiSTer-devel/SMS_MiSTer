@@ -81,7 +81,6 @@ architecture Behavioral of vdp is
 	signal reset_flags:		boolean := false;
 	signal collide_flag:		std_logic := '0';
 	signal overflow_flag:	std_logic := '0';
-	signal irq_counter:		std_logic_vector(6 downto 0) := (others=>'0');
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
@@ -291,7 +290,7 @@ begin
 			if ce_vdp = '1' then
 				if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
 					vbl_irq <= '1';
-				else
+				elsif reset_flags then
 					vbl_irq <= '0';
 				end if;
 			end if;
@@ -314,7 +313,7 @@ begin
 					else
 						hbl_counter <= irq_line_count;
 					end if;
-				else
+				elsif reset_flags then
 					hbl_irq <= '0';
 				end if;
 			end if;
@@ -327,31 +326,32 @@ begin
 			if ce_vdp = '1' then
 				if vbl_irq='1' then
 					virq_flag <= '1';
-				elsif reset_flags then
+				end if;
+				if reset_flags then
 					virq_flag <= '0';
 				end if;
 
 				if spr_collide='1' then
 					collide_flag <= '1';
-				elsif reset_flags then
+				end if;
+				if reset_flags then
 					collide_flag <= '0';
 				end if;
 
 				if spr_overflow='1' then
 					overflow_flag <= '1';
-				elsif reset_flags then
+				end if;
+				if reset_flags then
 					overflow_flag <= '0';
 				end if;
 
-				if (vbl_irq='1' and irq_frame_en='1') or hbl_irq='1' then
-					irq_counter <= (others=>'1');
-				elsif irq_counter>0 then
-					irq_counter <= irq_counter-1;
+				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then
+					IRQ_n <= '0';
+				else
+					IRQ_n <= '1';
 				end if;
 			end if;
 		end if;
 	end process;
-	IRQ_n <= '0' when irq_counter>0 else '1';
-
 	
 end Behavioral;
