@@ -288,7 +288,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=256 and y=192 and not (last_y0=std_logic(y(0))) then
+				if x=8 and y=192 and not (last_y0=std_logic(y(0))) then
 					vbl_irq <= '1';
 				elsif reset_flags then
 					vbl_irq <= '0';
@@ -301,7 +301,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=256 and not (last_y0=std_logic(y(0))) then
+				if x=498 and not (last_y0=std_logic(y(0))) then
 					last_y0 <= std_logic(y(0));
 					if y<192 or y=511 then
 						if hbl_counter=0 then
