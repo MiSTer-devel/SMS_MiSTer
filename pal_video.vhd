@@ -61,16 +61,16 @@ begin
 		if rising_edge(clk) then
 			if ce_pix = '1' then
 --				if ((hcount>=72 and hcount<232) or (gg='0' and (hcount>=24 and hcount<280))) then
-				if (hcount>=0 and hcount<256) then
+				if (hcount=511) then
 					hblank <= '0';
-				else
-					hblank <= '1';
+				elsif (hcount=255) then
+					hblank<='1';
 				end if;
 				
 --				if ((vcount>=24 and vcount<168) or (gg='0' and (vcount>=0 and vcount<192))) then
-				if (vcount>=0 and vcount<192) then
+				if (vcount=511) then
 					vblank <= '0';
-				else
+				elsif (vcount=191) then
 					vblank <= '1';
 				end if;
 			end if;
