@@ -27,7 +27,7 @@ begin
 	begin
 		if rising_edge(clk) then
 			if ce_pix = '1' then
-				if hcount=256 then
+				if hcount=498 then
 					vcount <= vcount + 1;
 					if vcount = 242 then
 						vcount <= vcount + 201;
