@@ -27,14 +27,15 @@ begin
 	begin
 		if rising_edge(clk) then
 			if ce_pix = '1' then
-				if hcount=498 then
+				if hcount=494 then
 					vcount <= vcount + 1;
+					-- VCounter: 0-242, 442-511 = 313 steps
 					if vcount = 242 then
-						vcount <= vcount + 201;
-					elsif vcount = 476 then
-						vsync <= '0';
-					elsif vcount = 471 then
+						vcount <= conv_std_logic_vector(442,9);
+					elsif vcount = 458 then
 						vsync <= '1';
+					elsif vcount = 461 then
+						vsync <= '0';
 					end if;
 				end if;
 
@@ -43,9 +44,9 @@ begin
 				if hcount = 295 then
 					hcount <= conv_std_logic_vector(466,9);
 				end if;
-				if hcount = 288 then
+				if hcount = 280 then
 					hsync <= '1';
-				elsif hcount = 482 then
+				elsif hcount = 474 then
 					hsync <= '0';
 				end if;
 			end if;

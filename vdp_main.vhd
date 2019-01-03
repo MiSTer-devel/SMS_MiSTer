@@ -20,7 +20,7 @@ entity vdp_main is
 		cram_D:				in  std_logic_vector(11 downto 0);
 			
 		x:						in  std_logic_vector(8 downto 0);
-		y:						in  std_logic_vector(7 downto 0);
+		y:						in  std_logic_vector(8 downto 0);
 			
 		color:				out std_logic_vector (11 downto 0);
 					
@@ -58,7 +58,7 @@ begin
 	process (y,bg_scroll_y)
 		variable sum: std_logic_vector(8 downto 0);
 	begin
-		sum := ('0'&y)+('0'&bg_scroll_y);
+		sum := y+('0'&bg_scroll_y);
 		if (sum>=224) then
 			sum := sum-224;
 		end if;
@@ -97,7 +97,7 @@ begin
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
 		x					=> x,
-		y					=> y,
+		y					=> y(7 downto 0),
 		collide			=> spr_collide,
 		overflow			=> spr_overflow,
 		

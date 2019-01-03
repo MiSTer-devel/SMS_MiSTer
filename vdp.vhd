@@ -107,7 +107,7 @@ begin
 		cram_D			=> cram_vdp_D,
 				
 		x					=> x,
-		y					=> y(7 downto 0),
+		y					=> y,
 		color				=> color,
 						
 		display_on		=> display_on,
@@ -248,16 +248,16 @@ begin
 				elsif old_RD_n = '1' and RD_n='0' then
 					address_ff		<= '0';
 					case A(7 downto 6)&A(0) is
-					when "010" =>
+					when "010" => -- VCounter
 						D_out <= y(7 downto 0);
-					when "011" =>
+					when "011" => -- HCounter
 						D_out <= latched_x;
-					when "100" =>
+					when "100" => -- Data port
 						--D_out <= vram_cpu_D_out;
 						D_out <= vram_cpu_D_outl;
 						xram_cpu_A_incr <= '1';
 						xram_cpu_read <= '1';
-					when "101" =>
+					when "101" => --Ctrl port
 						D_out(7) <= virq_flag;
 						D_out(6) <= overflow_flag;
 						D_out(5) <= collide_flag;
@@ -301,7 +301,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=498 and not (last_y0=std_logic(y(0))) then
+				if x=494 and not (last_y0=std_logic(y(0))) then
 					last_y0 <= std_logic(y(0));
 					if y<192 or y=511 then
 						if hbl_counter=0 then
