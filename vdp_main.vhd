@@ -97,7 +97,7 @@ begin
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
 		x					=> x,
-		y					=> y(7 downto 0),
+		y					=> y,
 		collide			=> spr_collide,
 		overflow			=> spr_overflow,
 		

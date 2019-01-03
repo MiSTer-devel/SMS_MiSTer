@@ -19,7 +19,7 @@ port (
 	vram_A			: out STD_LOGIC_VECTOR (13 downto 0);
 	vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 	x					: in  STD_LOGIC_VECTOR (8 downto 0);
-	y					: in  STD_LOGIC_VECTOR (7 downto 0);
+	y					: in  STD_LOGIC_VECTOR (8 downto 0);
 	collide			: out std_logic;
 	overflow			: out std_logic;
 	color				: out STD_LOGIC_VECTOR (3 downto 0));
@@ -104,7 +104,7 @@ begin
 					state <= WAITING;
 					
 				else
-					y9 := "0"&y;
+					y9 := y;
 					d9 := "0"&vram_D;
 					if d9>=240 then
 						d9 := d9-256;
@@ -116,7 +116,7 @@ begin
 					when COMPARE =>
 						if d9=208 then
 							state <= WAITING; -- stop
-						elsif 0<=delta and ((delta<8 and tall='0') or (delta<16 and tall='1')) then
+						elsif (delta(8 downto 3)="000" and tall='0') or (delta(8 downto 4)="0000" and tall='1') then
 							data_address(5 downto 2) <= delta(3 downto 0);
 							if (count>=8) then
 								overflow <= '1';
