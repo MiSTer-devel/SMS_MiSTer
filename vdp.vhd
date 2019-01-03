@@ -77,7 +77,6 @@ architecture Behavioral of vdp is
 
 	-- various counters
 	signal last_y0:			std_logic := '0';
-	signal virq_flag:			std_logic := '0';
 	signal reset_flags:		boolean := false;
 	signal collide_flag:		std_logic := '0';
 	signal overflow_flag:	std_logic := '0';
@@ -259,7 +258,7 @@ begin
 						xram_cpu_read <= '1';
 					when "101" => --Ctrl port
 						address_ff <= '0';
-						D_out(7) <= virq_flag;
+						D_out(7) <= vbl_irq;
 						D_out(6) <= overflow_flag;
 						D_out(5) <= collide_flag;
 						D_out(4 downto 0) <= (others=>'0');
@@ -320,18 +319,11 @@ begin
 			end if;
 		end if;
 	end process;
-	
+
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if vbl_irq='1' then
-					virq_flag <= '1';
-				end if;
-				if reset_flags then
-					virq_flag <= '0';
-				end if;
-
 				if spr_collide='1' then
 					collide_flag <= '1';
 				end if;
