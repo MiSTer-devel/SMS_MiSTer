@@ -16,6 +16,7 @@ port (
 	table_address	: in  STD_LOGIC_VECTOR (13 downto 8);
 	char_high_bit	: in  std_logic;
 	tall				: in  std_logic;
+	shift				: in  std_logic;
 	vram_A			: out STD_LOGIC_VECTOR (13 downto 0);
 	vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 	x					: in  STD_LOGIC_VECTOR (8 downto 0);
@@ -66,6 +67,7 @@ begin
 			ce_pix=> ce_pix,
 			x		=> x(7 downto 0),
 			spr_x	=> spr_x(i),
+			shift	=> shift,
 			spr_d0=> spr_d0(i),
 			spr_d1=> spr_d1(i),
 			spr_d2=> spr_d2(i),

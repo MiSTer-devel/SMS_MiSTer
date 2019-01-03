@@ -96,6 +96,7 @@ begin
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
+		shift				=> spr_shift,
 		x					=> x,
 		y					=> y,
 		collide			=> spr_collide,
