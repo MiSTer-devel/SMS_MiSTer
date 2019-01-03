@@ -246,7 +246,6 @@ begin
 					end if;
 					
 				elsif old_RD_n = '1' and RD_n='0' then
-					address_ff		<= '0';
 					case A(7 downto 6)&A(0) is
 					when "010" => -- VCounter
 						D_out <= y(7 downto 0);
@@ -254,10 +253,12 @@ begin
 						D_out <= latched_x;
 					when "100" => -- Data port
 						--D_out <= vram_cpu_D_out;
+						address_ff <= '0';
 						D_out <= vram_cpu_D_outl;
 						xram_cpu_A_incr <= '1';
 						xram_cpu_read <= '1';
 					when "101" => --Ctrl port
+						address_ff <= '0';
 						D_out(7) <= virq_flag;
 						D_out(6) <= overflow_flag;
 						D_out(5) <= collide_flag;
