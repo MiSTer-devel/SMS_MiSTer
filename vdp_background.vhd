@@ -12,7 +12,7 @@ port (
 	scroll_x:			in  std_logic_vector(7 downto 0);
 	disable_hscroll:	in  std_logic;
 	y:						in  std_logic_vector(7 downto 0);
-	screen_y:				in  std_logic_vector(7 downto 0);
+	screen_y:				in  std_logic_vector(8 downto 0);
 
 	vram_A:				out std_logic_vector(13 downto 0);
 	vram_D:				in  std_logic_vector(7 downto 0);
@@ -50,7 +50,7 @@ begin
 					if disable_hscroll='0' or screen_y>=16 then
 						x <= 240-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
 					else
-						x <= "11101101"; -- 237 (Outrun Europe likes this value)
+						x <= "11110001"; -- 241
 					end if;
 				else
 					x <= x + 1;
