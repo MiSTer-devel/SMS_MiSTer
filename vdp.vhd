@@ -76,8 +76,9 @@ architecture Behavioral of vdp is
 	signal spr_high_bit:		std_logic := '0';
 
 	-- various counters
-	signal last_y0:			std_logic := '0';
+	signal last_x0:			std_logic := '0';
 	signal reset_flags:		boolean := false;
+	signal irq_delay:       std_logic_vector(2 downto 0) := "111";
 	signal collide_flag:		std_logic := '0';
 	signal overflow_flag:	std_logic := '0';
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
@@ -288,7 +289,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=8 and y=192 and not (last_y0=std_logic(y(0))) then
+				if x=487 and y=192 and not (last_x0=std_logic(x(0))) then
 					vbl_irq <= '1';
 				elsif reset_flags then
 					vbl_irq <= '0';
@@ -301,8 +302,8 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=494 and not (last_y0=std_logic(y(0))) then
-					last_y0 <= std_logic(y(0));
+				last_x0 <= std_logic(x(0));
+				if x=487 and not (last_x0=std_logic(x(0))) then
 					if y<192 or y=511 then
 						if hbl_counter=0 then
 							hbl_irq <= irq_line_en;
@@ -339,9 +340,14 @@ begin
 				end if;
 
 				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then
-					IRQ_n <= '0';
+					if irq_delay = "000" then
+						IRQ_n <= '0';
+					else
+						irq_delay <= irq_delay - 1;
+					end if;
 				else
 					IRQ_n <= '1';
+					irq_delay <= "111";
 				end if;
 			end if;
 		end if;
