@@ -120,7 +120,7 @@ begin
 							state <= WAITING; -- stop
 						elsif (delta(8 downto 3)="000" and tall='0') or (delta(8 downto 4)="0000" and tall='1') then
 							data_address(5 downto 2) <= delta(3 downto 0);
-							if (count>=8) then
+							if (count>=8 and y<192) then
 								overflow <= '1';
 							end if;
 							if ((count<MAX_SPPL+1) or (count<8 and sp64='0')) then

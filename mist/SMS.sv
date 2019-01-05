@@ -190,7 +190,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr({ram_addr[21:14] & cart_sz, ram_addr[13:0]} + (romhdr ? 10'd512 : 0)),
+	.raddr(ram_addr[21:0] + (romhdr ? 10'd512 : 0)),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -227,7 +227,6 @@ wire [15:0] audioL, audioR;
 wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
 wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
 
-wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
 wire       romhdr = ioctl_addr[9]; // has 512 byte header
 wire       gg = ioctl_index[7:6] == 2'd2;
 

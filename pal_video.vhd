@@ -27,7 +27,7 @@ begin
 	begin
 		if rising_edge(clk) then
 			if ce_pix = '1' then
-				if hcount=494 then
+				if hcount=487 then
 					vcount <= vcount + 1;
 					-- VCounter: 0-242, 442-511 = 313 steps
 					if vcount = 242 then

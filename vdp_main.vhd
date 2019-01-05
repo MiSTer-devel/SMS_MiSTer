@@ -114,7 +114,9 @@ begin
 		if ((x>=48 and x<208) or (gg='0' and x<256)) and ((y>=24 and y<168) or (gg='0' and y<192)) and (mask_column0='0' or x>=8) and display_on='1' then
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
-			if (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
+			if not spr_active and not bg_active then
+				cram_A <= bg_color(4)&overscan;
+			elsif (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
 				cram_A <= "1"&spr_color;
 			else
 				cram_A <= bg_color;
