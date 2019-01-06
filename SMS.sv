@@ -149,6 +149,7 @@ parameter CONF_STR4 = {
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
+	"OD,Border,No,Yes;",
 `ifdef USE_SP64
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
@@ -393,6 +394,8 @@ video video
 	.ce_pix(ce_pix),
 	.pal(status[2]),
 	.gg(gg),
+	.border(status[13]),
+
 	.x(x),
 	.y(y),
 

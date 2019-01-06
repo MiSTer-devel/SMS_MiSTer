@@ -311,6 +311,7 @@ video video
 	.ce_pix(ce_pix),
 	.pal(status[2]),
 	.gg(gg),
+	.border(1),
 	.x(x),
 	.y(y),
 

@@ -9,6 +9,7 @@ entity video is
 		ce_pix:			in  std_logic;
 		pal:				in  std_logic;
 		gg:				in  std_logic;
+		border:        in  std_logic := '1';
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
 		hsync:			out std_logic;
@@ -49,6 +50,7 @@ begin
 		clk	 => clk,
 		ce_pix => ce_pix,
 		gg		 => gg,
+		border => border,
 		x	 	 => ntsc_x,
 		y		 => ntsc_y,
 		hsync	 => ntsc_hsync,
@@ -62,6 +64,7 @@ begin
 		clk	 => clk,
 		ce_pix => ce_pix,
 		gg		 => gg,
+		border => border,
 		x	 	 => pal_x,
 		y		 => pal_y,
 		hsync	 => pal_hsync,
