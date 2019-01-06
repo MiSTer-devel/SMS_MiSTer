@@ -60,8 +60,8 @@ begin
 	x	<= hcount;
 	y	<= vcount;
 
-	vbl_st  <= conv_std_logic_vector(215,9) when border = '1' else conv_std_logic_vector(191,9);
-	vbl_end <= conv_std_logic_vector(488,9) when border = '1' else conv_std_logic_vector(511,9);
+	vbl_st  <= conv_std_logic_vector(215,9) when border = '1' else conv_std_logic_vector(192,9);
+	vbl_end <= conv_std_logic_vector(488,9) when border = '1' else conv_std_logic_vector(000,9);
 
 	hbl_st  <= conv_std_logic_vector(269,9) when border = '1' else conv_std_logic_vector(255,9);
 	hbl_end <= conv_std_logic_vector(499,9) when border = '1' else conv_std_logic_vector(511,9);
