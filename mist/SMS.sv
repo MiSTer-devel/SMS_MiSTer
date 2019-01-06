@@ -360,9 +360,9 @@ always @(negedge clk_sys) begin
 end
 
 //////////////////   VIDEO   //////////////////
-wire  [3:0] VGA_R_O = HBlank ? 2'b00 : color[3:0];
-wire  [3:0] VGA_G_O = HBlank ? 2'b00 : color[7:4];
-wire  [3:0] VGA_B_O = HBlank ? 2'b00 : color[11:8];
+wire  [3:0] VGA_R_O = HBlank | VBlank ? 4'h0 : color[3:0];
+wire  [3:0] VGA_G_O = HBlank | VBlank ? 4'h0 : color[7:4];
+wire  [3:0] VGA_B_O = HBlank | VBlank ? 4'h0 : color[11:8];
 wire        SD_HS_O;
 wire        SD_VS_O;
 wire        HS_O;
