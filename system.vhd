@@ -335,10 +335,16 @@ begin
 						when "11" => bank2 <= D_in;
 					end case;
 				end if;
+
+				-- Korean mapper (Sangokushi 3, Dodgeball King)
+				-- should be safe to enable unconditionally, A000 is ROM area
+				if WR_n='0' and A(15 downto 0)=x"A000" then
+					bank2 <= D_in;
+				end if;
 			end if;
 		end if;
 	end process;
-	
+
 	rom_a(13 downto 0) <= A(13 downto 0);
 	process (A,bank0,bank1,bank2)
 	begin

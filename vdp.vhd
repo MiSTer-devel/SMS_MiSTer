@@ -62,6 +62,7 @@ architecture Behavioral of vdp is
 	-- control bits
 	signal display_on:		std_logic := '1';
 	signal disable_hscroll:	std_logic := '0';
+	signal disable_vscroll: std_logic := '0';
 	signal mask_column0:		std_logic := '0';
 	signal overscan:			std_logic_vector (3 downto 0) := "0000";	
 	signal irq_frame_en:		std_logic := '0';
@@ -118,7 +119,8 @@ begin
 		bg_scroll_x		=> bg_scroll_x,
 		bg_scroll_y		=> bg_scroll_y,
 		disable_hscroll=>disable_hscroll,
-				
+		disable_vscroll => disable_vscroll,
+
 		spr_address		=> spr_address,
 		spr_high_bit	=> spr_high_bit,
 		spr_shift		=> spr_shift,
@@ -168,6 +170,7 @@ begin
 	begin
 		if reset_n='0' then
 			disable_hscroll<= '0';--36
+			disable_vscroll <= '0';
 			mask_column0	<= '1';--
 			irq_line_en		<= '1';--
 			spr_shift		<= '0';--
@@ -217,6 +220,7 @@ begin
 							end if;
 							case D_in(7 downto 6)&D_in(3 downto 0) is
 							when "100000" =>
+								disable_vscroll <= xram_cpu_A(7);
 								disable_hscroll<= xram_cpu_A(6);
 								mask_column0	<= xram_cpu_A(5);
 								irq_line_en		<= xram_cpu_A(4);
