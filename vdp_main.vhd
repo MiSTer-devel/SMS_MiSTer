@@ -120,7 +120,7 @@ begin
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
 			if not spr_active and not bg_active then
-				cram_A <= "00000";
+				cram_A <= bg_color(4)&"0000";
 			elsif (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
 				cram_A <= "1"&spr_color;
 			else
