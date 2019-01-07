@@ -286,8 +286,6 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../sdram.sv
 set_global_assignment -name VHDL_FILE ../system.vhd
 set_global_assignment -name VHDL_FILE ../sprom.vhd
 set_global_assignment -name VHDL_FILE ../spram.vhd
-set_global_assignment -name VHDL_FILE ../pal_video.vhd
-set_global_assignment -name VHDL_FILE ../ntsc_video.vhd
 set_global_assignment -name VHDL_FILE ../io.vhd
 set_global_assignment -name VHDL_FILE ../dpram.vhd
 set_global_assignment -name QIP_FILE ../VM2413/OPLL.qip

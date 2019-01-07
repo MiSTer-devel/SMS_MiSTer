@@ -360,8 +360,6 @@ set_global_assignment -name QIP_FILE jt89/jt89.qip
 set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name SYSTEMVERILOG_FILE sdram.sv
 set_global_assignment -name VHDL_FILE video.vhd
-set_global_assignment -name VHDL_FILE pal_video.vhd
-set_global_assignment -name VHDL_FILE ntsc_video.vhd
 set_global_assignment -name VHDL_FILE sprom.vhd
 set_global_assignment -name VHDL_FILE spram.vhd
 set_global_assignment -name VHDL_FILE dpram.vhd

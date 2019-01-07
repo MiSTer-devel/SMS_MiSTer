@@ -310,7 +310,7 @@ video video
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
 	.pal(status[2]),
-	.gg(gg),
+	.gg(0),
 	.border(1),
 	.x(x),
 	.y(y),
