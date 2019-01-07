@@ -264,7 +264,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr(ram_addr & (ioctl_addr[9] ? cart_mask512 : cart_mask)),
+	.raddr(ioctl_addr[9] ? (ram_addr - 10'd512) & cart_mask512 : ram_addr & cart_mask),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
