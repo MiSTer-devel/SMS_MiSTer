@@ -264,7 +264,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr(ram_addr & cart_mask),
+	.raddr(ram_addr & (ioctl_addr[9] ? cart_mask512 : cart_mask)),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -305,11 +305,13 @@ always @(posedge clk_sys) begin
 end
 
 reg gg = 0;
-reg [21:0] cart_mask;
+reg [21:0] cart_mask, cart_mask512;
 always @(posedge clk_sys) begin
 	if(ioctl_wr) begin
 		cart_mask <= cart_mask | ioctl_addr[21:0];
+		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
 		if(!ioctl_addr) cart_mask <= 0;
+		if(ioctl_addr == 512) cart_mask512 <= 0;
 		gg <= ioctl_index[4:0] == 2;
 	end;
 end
