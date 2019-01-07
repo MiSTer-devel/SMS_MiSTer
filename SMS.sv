@@ -263,7 +263,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr({ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
+	.raddr(ram_addr & cart_mask),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -303,8 +303,15 @@ always @(posedge clk_sys) begin
 	if(ioctl_download || bk_loading) dbr <= 1;
 end
 
-wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
-wire gg = ioctl_index==8'd2;
+reg gg = 0;
+reg [21:0] cart_mask;
+always @(posedge clk_sys) begin
+	if(ioctl_wr) begin
+		cart_mask <= cart_mask | ioctl_addr[21:0];
+		if(!ioctl_addr) cart_mask <= 0;
+		gg <= ioctl_index[4:0] == 2;
+	end;
+end
 
 wire [12:0] ram_a;
 wire        ram_we;
