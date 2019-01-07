@@ -220,6 +220,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.buttons(buttons),
 	.status(status),
 	.forced_scandoubler(forced_scandoubler),
+	.new_vmode(pal),
 
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0),
@@ -394,12 +395,13 @@ compressor compressor
 wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
+wire pal = status[2];
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
-	.pal(status[2]),
+	.pal(pal),
 	.gg(gg),
 	.border(status[13]),
 
