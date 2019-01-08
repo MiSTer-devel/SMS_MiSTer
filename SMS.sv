@@ -136,6 +136,7 @@ parameter CONF_STR1 = {
 	"-;",
 	"FS,SMS;",
 	"FS,GG;",
+	"-;",
 };
 parameter CONF_STR2 = {
 	"AB,Save Slot,1,2,3,4;"
@@ -156,6 +157,7 @@ parameter CONF_STR4 = {
 	"OC,FM sound,Enable,Disable;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
+	"OE,Multitap,Disabled,Port1;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -180,8 +182,7 @@ pll pll
 wire reset = RESET | status[0] | buttons[1] | ioctl_download | bk_loading;
 
 //////////////////   HPS I/O   ///////////////////
-wire [15:0] joy_0;
-wire [15:0] joy_1;
+wire  [6:0] joy[4], joy_0, joy_1;
 wire  [1:0] buttons;
 wire [31:0] status;
 
@@ -206,7 +207,6 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-
 hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
@@ -216,6 +216,8 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
+	.joystick_2(joy[2]),
+	.joystick_3(joy[3]),
 
 	.buttons(buttons),
 	.status(status),
@@ -296,9 +298,6 @@ end
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 1;
 
-wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
-wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
-
 reg  dbr = 0;
 always @(posedge clk_sys) begin
 	if(ioctl_download || bk_loading) dbr <= 1;
@@ -347,6 +346,7 @@ system #(MAX_SPPL) system
 	.j1_right(joya[0]),
 	.j1_tl(joya[4]),
 	.j1_tr(joya[5]),
+	.j1_th(joya_th),
 	.j2_up(joyb[3]),
 	.j2_down(joyb[2]),
 	.j2_left(joyb[1]),
@@ -375,6 +375,33 @@ system #(MAX_SPPL) system
 	.nvram_d(nvram_d),
 	.nvram_q(nvram_q)
 );
+
+assign joy[0] = status[1] ? joy_1 : joy_0;
+assign joy[1] = status[1] ? joy_0 : joy_1;
+
+wire [6:0] joya = ~joy[jcnt];
+wire [6:0] joyb = status[14] ? 7'h7F : ~joy[1];
+
+wire      joya_th;
+reg [1:0] jcnt = 0;
+always @(posedge clk_sys) begin
+	reg old_th;
+	reg [15:0] tmr;
+
+	if(ce_cpu) begin
+		if(tmr > 57000) jcnt <= 0;
+		else if(joya_th) tmr <= tmr + 1'd1;
+
+		old_th <= joya_th;
+		if(old_th & ~joya_th) begin
+			tmr <= 0;
+			//first clock doesn't count as capacitor has not discharged yet
+			if(tmr < 57000) jcnt <= jcnt + 1'd1;
+		end
+	end
+
+	if(reset | ~status[14]) jcnt <= 0;
+end
 
 spram #(.widthad_a(13)) ram_inst
 (

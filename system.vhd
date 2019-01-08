@@ -28,12 +28,14 @@ entity system is
 		j1_right:	in	 STD_LOGIC;
 		j1_tl:		in	 STD_LOGIC;
 		j1_tr:		in	 STD_LOGIC;
+		j1_th:      out STD_LOGIC;
 		j2_up:		in	 STD_LOGIC;
 		j2_down:		in	 STD_LOGIC;
 		j2_left:		in	 STD_LOGIC;
 		j2_right:	in	 STD_LOGIC;
 		j2_tl:		in	 STD_LOGIC;
 		j2_tr:		in	 STD_LOGIC;
+		j2_th:      out STD_LOGIC;
 		pause:		in	 STD_LOGIC;
 
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
@@ -221,8 +223,11 @@ begin
 		J2_tl		=> j2_tl,
 		J2_tr		=> j2_tr,
 		Pause		=> pause,
-		RESET		=> RESET_n
+		RESET_n	=> RESET_n
 	);
+	
+	j1_th <= TH_A;
+	j2_th <= TH_B;
 
 	ram_a <= A(12 downto 0);
 	ram_we <= ram_WR;
