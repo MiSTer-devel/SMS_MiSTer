@@ -25,6 +25,7 @@ entity vdp is
 		x:					in  STD_LOGIC_VECTOR (8 downto 0);
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
+		mask_column:   out STD_LOGIC;
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -90,7 +91,9 @@ architecture Behavioral of vdp is
 	signal cram_latch:		std_logic_vector(7 downto 0);
 	
 begin
-		
+	
+	mask_column <= mask_column0;
+
 	vdp_main_inst: entity work.vdp_main
 	generic map(
 		MAX_SPPL => MAX_SPPL

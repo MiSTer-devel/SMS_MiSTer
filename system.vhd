@@ -41,6 +41,8 @@ entity system is
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
+		mask_column:out STD_LOGIC;
+
 		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
 		fm_ena:	   in  STD_LOGIC;
@@ -163,6 +165,7 @@ begin
 		x			=> x,
 		y			=> y,
 		color		=> color,
+		mask_column => mask_column,
 		reset_n  => RESET_n
 	);
 

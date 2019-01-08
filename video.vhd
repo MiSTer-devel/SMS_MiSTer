@@ -10,6 +10,7 @@ entity video is
 		pal:				in  std_logic;
 		gg:				in  std_logic;
 		border:        in  std_logic := '1';
+		mask_column:	in  std_logic := '0';
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
 		hsync:			out std_logic;
@@ -84,6 +85,7 @@ begin
 			else conv_std_logic_vector(207,9);
 
 	hbl_end <= conv_std_logic_vector(499,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(007,9) when (border xor gg) = '0' and mask_column = '1'
 			else conv_std_logic_vector(511,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(047,9);
 

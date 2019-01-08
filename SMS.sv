@@ -358,6 +358,8 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
+	.mask_column(mask_column),
+
 	.fm_ena(~status[12]),
 	.audioL(audio_l),
 	.audioR(audio_r),
@@ -424,6 +426,7 @@ compressor compressor
 wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
+wire mask_column;
 wire pal = status[2];
 
 video video
@@ -433,6 +436,7 @@ video video
 	.pal(pal),
 	.gg(gg),
 	.border(status[13]),
+	.mask_column(mask_column),
 
 	.x(x),
 	.y(y),
