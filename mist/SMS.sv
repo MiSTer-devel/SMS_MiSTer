@@ -193,7 +193,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr(ram_addr[21:0] + (romhdr ? 10'd512 : 0)),
+	.raddr((ram_addr[21:0] & cart_mask) + (romhdr ? 10'd512 : 0)),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -202,6 +202,7 @@ sdram ram
 reg  rom_wr = 0;
 wire sd_wrack;
 reg  [23:0] romwr_a;
+reg  [21:0] cart_mask;
 reg  reset;
 
 always @(posedge clk_sys) begin
@@ -213,11 +214,14 @@ always @(posedge clk_sys) begin
 	old_reset <= reset;
 
 	if(~old_reset && reset) ioctl_wait <= 0;
-	if(~old_download && ioctl_download) romwr_a <= 0;
-	else begin
+	if(~old_download && ioctl_download) begin
+		cart_mask <= 0;
+		romwr_a <= 0;
+	end else begin
 		if(ioctl_wr) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
+			cart_mask <= cart_mask | romwr_a[21:0];
 		end else if(ioctl_wait && (rom_wr == sd_wrack)) begin
 			ioctl_wait <= 0;
 			romwr_a <= romwr_a + 1'd1;
