@@ -59,7 +59,7 @@ module SMS
    output        SDRAM_CKE
 );
 
-assign LED  = ~ioctl_download;
+assign LED  = ~ioctl_download & ~bk_ena;
 
 `define USE_SP64
 
@@ -75,6 +75,8 @@ localparam SP64     = 1'b0;
 parameter CONF_STR = {
 	"SMS;;",
 	"F,BINSMSGG ,Load;",
+	"S,SAV,Mount;",
+	"T7,Write Save RAM;",
 	"O34,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
 `ifdef USE_SP64
@@ -130,6 +132,7 @@ wire [31:0] img_size;
 user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 (
 		.clk_sys(clk_sys),
+		.clk_sd(clk_sys),
 		.SPI_SS_IO(CONF_DATA0),
 		.SPI_CLK(SPI_SCK),
 		.SPI_MOSI(SPI_DI),
@@ -190,7 +193,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr(ram_addr[21:0] + (romhdr ? 10'd512 : 0)),
+	.raddr((ram_addr[21:0] & cart_mask) + (romhdr ? 10'd512 : 0)),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -199,22 +202,26 @@ sdram ram
 reg  rom_wr = 0;
 wire sd_wrack;
 reg  [23:0] romwr_a;
+reg  [21:0] cart_mask;
 reg  reset;
 
 always @(posedge clk_sys) begin
 	reg old_download, old_reset;
 
-	reset <= status[0] | buttons[1] | ioctl_download;
+	reset <= status[0] | buttons[1] | ioctl_download | bk_reset;
 
 	old_download <= ioctl_download;
 	old_reset <= reset;
 
 	if(~old_reset && reset) ioctl_wait <= 0;
-	if(~old_download && ioctl_download) romwr_a <= 0;
-	else begin
+	if(~old_download && ioctl_download) begin
+		cart_mask <= 0;
+		romwr_a <= 0;
+	end else begin
 		if(ioctl_wr) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
+			cart_mask <= cart_mask | romwr_a[21:0];
 		end else if(ioctl_wait && (rom_wr == sd_wrack)) begin
 			ioctl_wait <= 0;
 			romwr_a <= romwr_a + 1'd1;
@@ -452,69 +459,67 @@ jt12_dac2 #(16) dacr
 );
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////
-/*
-dpram #(.widthad_a(15)) nvram_inst
+// 8k auxilary RAM - 32k doesn't fit
+dpram #(.widthad_a(13)) nvram_inst
 (
 	.clock_a     (clk_sys),
-	.address_a   (nvram_a),
+	.address_a   (nvram_a[12:0]),
 	.wren_a      (nvram_we),
 	.data_a      (nvram_d),
 	.q_a         (nvram_q),
 	.clock_b     (clk_sys),
-	.address_b   ({sd_lba[5:0],sd_buff_addr}),
+	.address_b   ({sd_lba[3:0],sd_buff_addr}),
 	.wren_b      (sd_buff_wr & sd_ack),
 	.data_b      (sd_buff_dout),
 	.q_b         (sd_buff_din)
 );
 
-wire downloading = ioctl_download;
-reg bk_ena = 0;
-always @(posedge clk_sys) begin
-	reg old_downloading = 0;
-	
-	old_downloading <= downloading;
-	if(~old_downloading & downloading) bk_ena <= 0;
-	
-	//Save file always mounted in the end of downloading state.
-	if(downloading && img_mounted && img_size) bk_ena <= 1;
-end
-
-wire bk_load    = status[6];
+reg  bk_ena     = 0;
+reg  bk_load    = 0;
 wire bk_save    = status[7];
-reg  bk_loading = 0;
-reg  bk_state   = 0;
+reg  bk_reset   = 0;
 
 always @(posedge clk_sys) begin
-	reg old_load = 0, old_save = 0, old_ack;
+	reg  old_load = 0, old_save = 0, old_ack, old_mounted = 0, old_download = 0;
+	reg  bk_state = 0;
 
-	old_load <= bk_load & bk_ena;
-	old_save <= bk_save & bk_ena;
+	bk_reset <= 0;
+
+	old_download <= ioctl_download;
+	if (~old_download & ioctl_download) bk_ena <= 0;
+
+	old_mounted <= img_mounted;
+	if(~old_mounted && img_mounted && img_size) begin
+		bk_ena <= 1;
+		bk_load <= 1;
+	end
+
+	old_load <= bk_load;
+	old_save <= bk_save;
 	old_ack  <= sd_ack;
-	
+
 	if(~old_ack & sd_ack) {sd_rd, sd_wr} <= 0;
-	
+
 	if(!bk_state) begin
-		if((~old_load & bk_load) | (~old_save & bk_save)) begin
+		if(bk_ena & ((~old_load & bk_load) | (~old_save & bk_save))) begin
 			bk_state <= 1;
-			bk_loading <= bk_load;
-			sd_lba <= {status[11:10],6'd0};
+			sd_lba <= 0;
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
 		end
 	end else begin
 		if(old_ack & ~sd_ack) begin
-			if(&sd_lba[5:0]) begin
-				bk_loading <= 0;
+			if(&sd_lba[3:0]) begin
+				if (bk_load) bk_reset <= 1;
+				bk_load <= 0;
 				bk_state <= 0;
 			end else begin
 				sd_lba <= sd_lba + 1'd1;
-				sd_rd  <=  bk_loading;
-				sd_wr  <= ~bk_loading;
+				sd_rd  <=  bk_load;
+				sd_wr  <= ~bk_load;
 			end
 		end
 	end
 end
-*/
+
 endmodule
-
-

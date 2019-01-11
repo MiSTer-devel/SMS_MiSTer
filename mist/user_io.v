@@ -446,6 +446,7 @@ always @(posedge clk_sd) begin
 	reg       spi_transfer_end;
 	reg       spi_receiver_strobeD;
 	reg       spi_transfer_endD;
+    reg       sd_wrD;
 	reg [7:0] acmd;
 	reg [7:0] abyte_cnt;   // counts bytes
 
@@ -460,9 +461,12 @@ always @(posedge clk_sd) begin
 		if(~&sd_buff_addr) sd_buff_addr <= sd_buff_addr + 1'b1;
 	end
 
-	if(sd_din_strobe) begin
-		sd_din_strobe<= 0;
-		if(~&sd_buff_addr) sd_buff_addr <= sd_buff_addr + 1'b1;
+	sd_din_strobe<= 0;
+	sd_wrD <= sd_wr;
+	// fetch the first byte immediately after the write command seen
+	if (~sd_wrD & sd_wr) begin
+		sd_buff_addr <= 0;
+		sd_din_strobe <= 1;
 	end
 
 	img_mounted <= 0;
@@ -473,7 +477,7 @@ always @(posedge clk_sd) begin
 		sd_ack_conf <= 1'b0;
 		sd_dout_strobe <= 1'b0;
 		sd_din_strobe <= 1'b0;
-		sd_buff_addr<= 0;
+		sd_buff_addr <= 0;
 	end else if (spi_receiver_strobeD ^ spi_receiver_strobe) begin
 
 		if(~&abyte_cnt) 
@@ -482,9 +486,10 @@ always @(posedge clk_sd) begin
 		if(abyte_cnt == 0) begin
 			acmd <= spi_byte_in;
 
-			// fetch first byte when sectore FPGA->IO command has been seen
-			if(spi_byte_in == 8'h18)
+			if(spi_byte_in == 8'h18) begin
 				sd_din_strobe <= 1'b1;
+				if(~&sd_buff_addr) sd_buff_addr <= sd_buff_addr + 1'b1;
+			end
 
 			if((spi_byte_in == 8'h17) || (spi_byte_in == 8'h18))
 				sd_ack <= 1'b1;
@@ -500,7 +505,10 @@ always @(posedge clk_sd) begin
 				end
 
 				// send sector FPGA -> IO
-				8'h18: sd_din_strobe <= 1'b1;
+				8'h18: begin
+					sd_din_strobe <= 1'b1;
+					if(~&sd_buff_addr) sd_buff_addr <= sd_buff_addr + 1'b1;
+				end
 
 				// send SD config IO -> FPGA
 				8'h19: begin
