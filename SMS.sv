@@ -150,13 +150,10 @@ parameter CONF_STR1 = {
 	"-;",
 };
 parameter CONF_STR2 = {
-	"AB,Save Slot,1,2,3,4;"
+	"6,Load Backup RAM;"
 };
 parameter CONF_STR3 = {
-	"6,Load state;"
-};
-parameter CONF_STR4 = {
-	"7,Save state;",
+	"7,Save Backup RAM;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -218,12 +215,12 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + 2), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,bk_ena ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+	.conf_str({CONF_STR1,bk_ena ? "R" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3}),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
@@ -534,15 +531,15 @@ dpram #(.widthad_a(15)) nvram_inst
 );
 
 wire downloading = ioctl_download;
+reg old_downloading = 0;
 reg bk_ena = 0;
 always @(posedge clk_sys) begin
-	reg old_downloading = 0;
 	
 	old_downloading <= downloading;
 	if(~old_downloading & downloading) bk_ena <= 0;
 	
 	//Save file always mounted in the end of downloading state.
-	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+	if(downloading && img_mounted && !img_readonly) bk_ena <= 1;
 end
 
 wire bk_load    = status[6];
@@ -563,10 +560,17 @@ always @(posedge clk_sys) begin
 		if((~old_load & bk_load) | (~old_save & bk_save)) begin
 			bk_state <= 1;
 			bk_loading <= bk_load;
-			sd_lba <= {status[11:10],6'd0};
+			sd_lba <= 0;
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
 		end
+		if(old_downloading & ~downloading & |img_size & bk_ena) begin
+			bk_state <= 1;
+			bk_loading <= 1;
+			sd_lba <= 0;
+			sd_rd <= 1;
+			sd_wr <= 0;
+		end 
 	end else begin
 		if(old_ack & ~sd_ack) begin
 			if(&sd_lba[5:0]) begin
