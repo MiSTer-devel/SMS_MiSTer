@@ -2,7 +2,7 @@
 //  SMS replica
 // 
 //  Port to MiSTer
-//  Copyright (C) 2017,2018 Sorgelig
+//  Copyright (C) 2017-2019 Sorgelig
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -103,13 +103,20 @@ module emu
 	input         UART_RXD,
 	output        UART_TXD,
 	output        UART_DTR,
-	input         UART_DSR
+	input         UART_DSR,
+
+	// Open-drain User port.
+	// 0 - D+/RX
+	// 1 - D-/TX
+	// 2..5 - USR1..USR4
+	// Set USER_OUT to 1 to read from USER_IN.
+	input   [5:0] USER_IN,
+	output  [5:0] USER_OUT,
+
+	input         OSD_STATUS
 );
 
-//Uncomment to speed up lite build.  Needed?
-//`ifndef LITE
 `define USE_SP64
-//`endif
 
 `ifdef USE_SP64
 localparam MAX_SPPL = 63;
@@ -119,6 +126,7 @@ localparam MAX_SPPL = 7;
 localparam SP64     = 1'b0;
 `endif
 
+assign USER_OUT = '1;
 assign VGA_F1 = 0;
 
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -139,28 +147,29 @@ parameter CONF_STR1 = {
 	"-;",
 	"FS,SMS;",
 	"FS,GG;",
+	"-;",
 };
 parameter CONF_STR2 = {
-	"AB,Save Slot,1,2,3,4;"
+	"6,Load Backup RAM;"
 };
 parameter CONF_STR3 = {
-	"6,Load state;"
-};
-parameter CONF_STR4 = {
-	"7,Save state;",
+	"7,Save Backup RAM;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"O2,TV System,NTSC,PAL;",
+	"OD,Border,No,Yes;",
 `ifdef USE_SP64
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
+	"OC,FM sound,Enable,Disable;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
+	"OE,Multitap,Disabled,Port1;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
-	"V,v1.10.",`BUILD_DATE
+	"V,v",`BUILD_DATE
 };
 
 
@@ -181,8 +190,7 @@ pll pll
 wire reset = RESET | status[0] | buttons[1] | ioctl_download | bk_loading;
 
 //////////////////   HPS I/O   ///////////////////
-wire [15:0] joy_0;
-wire [15:0] joy_1;
+wire  [6:0] joy[4], joy_0, joy_1;
 wire  [1:0] buttons;
 wire [31:0] status;
 
@@ -207,20 +215,22 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + 2), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,bk_ena ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+	.conf_str({CONF_STR1,bk_ena ? "R" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3}),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
+	.joystick_2(joy[2]),
+	.joystick_3(joy[3]),
 
 	.buttons(buttons),
 	.status(status),
 	.forced_scandoubler(forced_scandoubler),
+	.new_vmode(pal),
 
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0),
@@ -264,7 +274,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr({ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
+	.raddr(ioctl_addr[9] ? (ram_addr - 10'd512) & cart_mask512 : ram_addr & cart_mask),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -293,41 +303,35 @@ always @(posedge clk_sys) begin
 	end
 end
 
-
-//	GENERIC
-//	(
-//		init_file			: string := "none";
-//		widthad_a			: natural;
-//		width_a				: natural := 8;
-//    outdata_reg_a : string := "UNREGISTERED"
-//spram #(.widthad_a(18)) ram
-//(
-////	.address(ioctl_download ? ioctl_addr : {ram_addr[21:14] & cart_sz, ram_addr[13:0]}),
-//	.address(ioctl_download ? ioctl_addr : {ram_addr[17:14] & cart_sz[3:0], ram_addr[13:0]}),
-//	.clock(clk_mem),
-//	.data(ioctl_dout),
-//	.wren(ioctl_wr),
-//	.q(ram_dout)
-//);
-
-wire [5:0] audioL;
-wire [5:0] audioR;
-
-assign AUDIO_L = {audioL, audioL, audioL[5:3]};
-assign AUDIO_R = {audioR, audioR, audioR[5:3]};
-assign AUDIO_S = 0;
+assign AUDIO_S = 1;
 assign AUDIO_MIX = 1;
-
-wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
-wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
 
 reg  dbr = 0;
 always @(posedge clk_sys) begin
 	if(ioctl_download || bk_loading) dbr <= 1;
 end
 
-wire [7:0] cart_sz = ioctl_addr[21:14]-1'd1;
-wire gg = ioctl_index==8'd2;
+reg gg = 0;
+reg [21:0] cart_mask, cart_mask512;
+always @(posedge clk_sys) begin
+	if(ioctl_wr) begin
+		cart_mask <= cart_mask | ioctl_addr[21:0];
+		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
+		if(!ioctl_addr) cart_mask <= 0;
+		if(ioctl_addr == 512) cart_mask512 <= 0;
+		gg <= ioctl_index[4:0] == 2;
+	end;
+end
+
+wire [12:0] ram_a;
+wire        ram_we;
+wire  [7:0] ram_d;
+wire  [7:0] ram_q;
+
+wire [14:0] nvram_a;
+wire        nvram_we;
+wire  [7:0] nvram_d;
+wire  [7:0] nvram_q;
 
 system #(MAX_SPPL) system
 (
@@ -350,6 +354,7 @@ system #(MAX_SPPL) system
 	.j1_right(joya[0]),
 	.j1_tl(joya[4]),
 	.j1_tr(joya[5]),
+	.j1_th(joya_th),
 	.j2_up(joyb[3]),
 	.j2_down(joyb[2]),
 	.j2_left(joyb[1]),
@@ -361,28 +366,86 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
-	.audioL(audioL),
-	.audioR(audioR),
+	.mask_column(mask_column),
+
+	.fm_ena(~status[12]),
+	.audioL(audio_l),
+	.audioR(audio_r),
 
 	.dbr(dbr),
 	.sp64(status[8] & SP64),
-	
-   .add_bk({sd_lba[5:0],sd_buff_addr}),
-	.data_bk(sd_buff_dout),
-	.wren_bk(sd_buff_wr & sd_ack),
-	.q_bk(sd_buff_din)
+
+	.ram_a(ram_a),
+	.ram_we(ram_we),
+	.ram_d(ram_d),
+	.ram_q(ram_q),
+
+	.nvram_a(nvram_a),
+	.nvram_we(nvram_we),
+	.nvram_d(nvram_d),
+	.nvram_q(nvram_q)
 );
+
+assign joy[0] = status[1] ? joy_1 : joy_0;
+assign joy[1] = status[1] ? joy_0 : joy_1;
+
+wire [6:0] joya = ~joy[jcnt];
+wire [6:0] joyb = status[14] ? 7'h7F : ~joy[1];
+
+wire      joya_th;
+reg [1:0] jcnt = 0;
+always @(posedge clk_sys) begin
+	reg old_th;
+	reg [15:0] tmr;
+
+	if(ce_cpu) begin
+		if(tmr > 57000) jcnt <= 0;
+		else if(joya_th) tmr <= tmr + 1'd1;
+
+		old_th <= joya_th;
+		if(old_th & ~joya_th) begin
+			tmr <= 0;
+			//first clock doesn't count as capacitor has not discharged yet
+			if(tmr < 57000) jcnt <= jcnt + 1'd1;
+		end
+	end
+
+	if(reset | ~status[14]) jcnt <= 0;
+end
+
+spram #(.widthad_a(13)) ram_inst
+(
+	.clock     (clk_sys),
+	.address   (ram_a),
+	.wren      (ram_we),
+	.data      (ram_d),
+	.q         (ram_q)
+);
+
+wire [15:0] audio_l, audio_r; 
+
+compressor compressor
+(
+	clk_sys,
+	audio_l[15:4], audio_r[15:4],
+	AUDIO_L,       AUDIO_R
+); 
 
 wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
+wire mask_column;
+wire pal = status[2];
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
-	.pal(status[2]),
+	.pal(pal),
 	.gg(gg),
+	.border(status[13]),
+	.mask_column(mask_column),
+
 	.x(x),
 	.y(y),
 
@@ -453,17 +516,30 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////
+dpram #(.widthad_a(15)) nvram_inst
+(
+	.clock_a     (clk_sys),
+	.address_a   (nvram_a),
+	.wren_a      (nvram_we),
+	.data_a      (nvram_d),
+	.q_a         (nvram_q),
+	.clock_b     (clk_sys),
+	.address_b   ({sd_lba[5:0],sd_buff_addr}),
+	.wren_b      (sd_buff_wr & sd_ack),
+	.data_b      (sd_buff_dout),
+	.q_b         (sd_buff_din)
+);
 
 wire downloading = ioctl_download;
+reg old_downloading = 0;
 reg bk_ena = 0;
 always @(posedge clk_sys) begin
-	reg old_downloading = 0;
 	
 	old_downloading <= downloading;
 	if(~old_downloading & downloading) bk_ena <= 0;
 	
 	//Save file always mounted in the end of downloading state.
-	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+	if(downloading && img_mounted && !img_readonly) bk_ena <= 1;
 end
 
 wire bk_load    = status[6];
@@ -484,10 +560,17 @@ always @(posedge clk_sys) begin
 		if((~old_load & bk_load) | (~old_save & bk_save)) begin
 			bk_state <= 1;
 			bk_loading <= bk_load;
-			sd_lba <= {status[11:10],6'd0};
+			sd_lba <= 0;
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
 		end
+		if(old_downloading & ~downloading & |img_size & bk_ena) begin
+			bk_state <= 1;
+			bk_loading <= 1;
+			sd_lba <= 0;
+			sd_rd <= 1;
+			sd_wr <= 0;
+		end 
 	end else begin
 		if(old_ack & ~sd_ack) begin
 			if(&sd_lba[5:0]) begin

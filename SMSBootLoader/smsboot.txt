@@ -1,0 +1,54 @@
+-------------------------------------------
+ SMS Boot Loader 0.91
+ by Omar Cornut (Bock), for SMS Power 2001
+ E-mail: omar AT miracleworld DOT net
+ Web:    http://www.smspower.org
+-------------------------------------------
+
+ 17 November 2001
+ v0.90: This is a beta release version of my SMS Boot Loader.
+ v0.91: Minor changes I can't remember!
+
+ This simple program, once run on an original Sega Master System, let
+ you choose and execute a program from one of the three available slots:
+
+  +-------------------------------------------------------------+
+  |  System                             SMS1    SMS2+   MD-PBC  |
+  +-------------------------------------------------------------+
+  |  Cartridge slot                     yes     yes     yes     |
+  |  Card slot                          yes     no      yes     |
+  |  Expansion slot                     yes     no      no      |
+  +-------------------------------------------------------------+
+
+ It has the advantage of not checking any country code or header, so
+ basically it is possible to boot up an original Japanese mycard game
+ (for SG-1000 or Mark III) on your US or European Master System 1.
+
+ You can also use it to boot Brasilian 8 megabits games which are
+ not supported by all models of Master System 1.
+
+ Last but not least, using a homemade pinout converter, it would be
+ possible the same way to boot up any SG-1000/SC-3000 or Mark III/SMS
+ cartridge.
+
+ The problem of course is to be able to run the actual SMS Boot Loader
+ on a real system. Easiest solution is to use a development cartridge,
+ but the most interesting one is to replace the machine BIOS by this
+ Boot Loader.
+
+ Things done:
+   Code run from RAM is copied at 0xC700 as with the real BIOS,
+   although this is not the same code, no known software rely on
+   values at that location.
+   Slot number is written to 0xC000 before booting.
+
+ Things to do:
+   Fix the bug when pressing button 1 on the title run cartridge
+   directly (it happens sometimes).
+   Detect data present on the three slots (and suggest one).
+   Leave VDP Registers in the same state as the original BIOS does.
+   Clear three byte variables (currently stored at 0xD00?).
+   Clean and release source code.
+
+ Enjoy!
+

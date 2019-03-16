@@ -9,6 +9,8 @@ entity video is
 		ce_pix:			in  std_logic;
 		pal:				in  std_logic;
 		gg:				in  std_logic;
+		border:        in  std_logic := '1';
+		mask_column:	in  std_logic := '0';
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
 		hsync:			out std_logic;
@@ -19,55 +21,91 @@ end video;
 
 architecture Behavioral of video is
 
-	signal ntsc_x:			std_logic_vector(8 downto 0);
-	signal ntsc_y:			std_logic_vector(8 downto 0);
-	signal ntsc_hsync:	std_logic;
-	signal ntsc_vsync:	std_logic;
-	signal ntsc_de:	   std_logic;
+	signal hcount:			std_logic_vector(8 downto 0) := (others => '0');
+	signal vcount:			std_logic_vector(8 downto 0) := (others => '0');
 
-	signal pal_x:			std_logic_vector(8 downto 0);
-	signal pal_y:			std_logic_vector(8 downto 0);
-	signal pal_hsync:		std_logic;
-	signal pal_vsync:		std_logic;
-	signal pal_hblank:   std_logic;
-	signal pal_vblank:   std_logic;
-	signal ntsc_hblank:  std_logic;
-	signal ntsc_vblank:  std_logic;
-
+	signal vbl_st,vbl_end: std_logic_vector(8 downto 0);
+	signal hbl_st,hbl_end: std_logic_vector(8 downto 0);
 begin
 
-	x <= pal_x when pal='1' else ntsc_x;
-	y <= pal_y when pal='1' else ntsc_y;
-	
-	hsync <= pal_hsync  when pal='1' else ntsc_hsync;
-	vsync <= pal_vsync  when pal='1' else ntsc_vsync;
-	hblank<= pal_hblank when pal='1' else ntsc_hblank;
-	vblank<= pal_vblank when pal='1' else ntsc_vblank;
+	process (clk)
+	begin
+		if rising_edge(clk) then
+			if ce_pix = '1' then
+				if hcount=487 then
+					vcount <= vcount + 1;
+					if pal = '1' then
+						-- VCounter: 0-242, 442-511 = 313 steps
+						if vcount = 242 then
+							vcount <= conv_std_logic_vector(442,9);
+						elsif vcount = 458 then
+							vsync <= '1';
+						elsif vcount = 461 then
+							vsync <= '0';
+						end if;
+					else
+						-- VCounter: 0-218, 469-511 = 262 steps
+						if vcount = 218 then
+							vcount <= conv_std_logic_vector(469,9);
+						elsif vcount = 471 then
+							vsync <= '1';
+						elsif vcount = 474 then
+							vsync <= '0';
+						end if;
+					end if;
+				end if;
 
-	ntsc_inst: entity work.ntsc_video
-	port map (
-		clk	 => clk,
-		ce_pix => ce_pix,
-		gg		 => gg,
-		x	 	 => ntsc_x,
-		y		 => ntsc_y,
-		hsync	 => ntsc_hsync,
-		vsync	 => ntsc_vsync,
-		hblank => ntsc_hblank,
-		vblank => ntsc_vblank
-	);
+				hcount <= hcount + 1;
+				-- HCounter: 0-295, 466-511 = 342 steps
+				if hcount = 295 then
+					hcount <= conv_std_logic_vector(466,9);
+				end if;
+				if hcount = 280 then
+					hsync <= '1';
+				elsif hcount = 474 then
+					hsync <= '0';
+				end if;
+			end if;
+		end if;
+	end process;
 
-	pal_inst: entity work.pal_video
-	port map (
-		clk	 => clk,
-		ce_pix => ce_pix,
-		gg		 => gg,
-		x	 	 => pal_x,
-		y		 => pal_y,
-		hsync	 => pal_hsync,
-		vsync	 => pal_vsync,
-		hblank => pal_hblank,
-		vblank => pal_vblank
-	);
+	x	<= hcount;
+	y	<= vcount;
+
+	vbl_st  <= conv_std_logic_vector(215,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(192,9) when (border xor gg) = '0'
+			else conv_std_logic_vector(168,9);
+			
+	vbl_end <= conv_std_logic_vector(488,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(000,9) when (border xor gg) = '0'
+			else conv_std_logic_vector(024,9);
+
+	hbl_st  <= conv_std_logic_vector(269,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(255,9) when (border xor gg) = '0'
+			else conv_std_logic_vector(207,9);
+
+	hbl_end <= conv_std_logic_vector(499,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(007,9) when (border xor gg) = '0' and mask_column = '1'
+			else conv_std_logic_vector(511,9) when (border xor gg) = '0'
+			else conv_std_logic_vector(047,9);
+
+	process (clk)
+	begin
+		if rising_edge(clk) then
+			if ce_pix = '1' then
+				if (hcount=hbl_end) then
+					hblank <= '0';
+				elsif (hcount=hbl_st) then
+					hblank<='1';
+				end if;
+				
+				if (vcount=vbl_end) then
+					vblank <= '0';
+				elsif (vcount=vbl_st) then
+					vblank <= '1';
+				end if;
+			end if;
+		end if;
+	end process;
 
 end Behavioral;

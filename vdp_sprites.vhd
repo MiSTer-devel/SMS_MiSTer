@@ -16,10 +16,11 @@ port (
 	table_address	: in  STD_LOGIC_VECTOR (13 downto 8);
 	char_high_bit	: in  std_logic;
 	tall				: in  std_logic;
+	shift				: in  std_logic;
 	vram_A			: out STD_LOGIC_VECTOR (13 downto 0);
 	vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 	x					: in  STD_LOGIC_VECTOR (8 downto 0);
-	y					: in  STD_LOGIC_VECTOR (7 downto 0);
+	y					: in  STD_LOGIC_VECTOR (8 downto 0);
 	collide			: out std_logic;
 	overflow			: out std_logic;
 	color				: out STD_LOGIC_VECTOR (3 downto 0));
@@ -66,6 +67,7 @@ begin
 			ce_pix=> ce_pix,
 			x		=> x(7 downto 0),
 			spr_x	=> spr_x(i),
+			shift	=> shift,
 			spr_d0=> spr_d0(i),
 			spr_d1=> spr_d1(i),
 			spr_d2=> spr_d2(i),
@@ -104,7 +106,7 @@ begin
 					state <= WAITING;
 					
 				else
-					y9 := "0"&y;
+					y9 := y;
 					d9 := "0"&vram_D;
 					if d9>=240 then
 						d9 := d9-256;
@@ -116,9 +118,9 @@ begin
 					when COMPARE =>
 						if d9=208 then
 							state <= WAITING; -- stop
-						elsif 0<=delta and ((delta<8 and tall='0') or (delta<16 and tall='1')) then
+						elsif (delta(8 downto 3)="000" and tall='0') or (delta(8 downto 4)="0000" and tall='1') then
 							data_address(5 downto 2) <= delta(3 downto 0);
-							if (count>=8) then
+							if (count>=8 and y<192) then
 								overflow <= '1';
 							end if;
 							if ((count<MAX_SPPL+1) or (count<8 and sp64='0')) then

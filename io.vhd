@@ -3,26 +3,28 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity io is
     Port(
-		clk:		in		STD_LOGIC;
-		WR_n:		in		STD_LOGIC;
-		RD_n:		in		STD_LOGIC;
-		A:			in		STD_LOGIC_VECTOR (7 downto 0);
-		D_in:		in		STD_LOGIC_VECTOR (7 downto 0);
-		D_out:	out	STD_LOGIC_VECTOR (7 downto 0);
-		J1_up:	in 	STD_LOGIC;
-		J1_down:	in 	STD_LOGIC;
-		J1_left:	in 	STD_LOGIC;
-		J1_right:in 	STD_LOGIC;
-		J1_tl:	in 	STD_LOGIC;
-		J1_tr:	in STD_LOGIC;
-		J2_up:	in 	STD_LOGIC;
-		J2_down:	in 	STD_LOGIC;
-		J2_left:	in 	STD_LOGIC;
-		J2_right:in 	STD_LOGIC;
-		J2_tl:	in 	STD_LOGIC;
-		J2_tr:	in STD_LOGIC;
-		Pause:	in STD_LOGIC;
-		RESET:	in 	STD_LOGIC);
+		clk:		in	 STD_LOGIC;
+		WR_n:		in	 STD_LOGIC;
+		RD_n:		in	 STD_LOGIC;
+		A:			in	 STD_LOGIC_VECTOR (7 downto 0);
+		D_in:		in	 STD_LOGIC_VECTOR (7 downto 0);
+		D_out:	out STD_LOGIC_VECTOR (7 downto 0);
+		TH_A:	   out STD_LOGIC;
+		TH_B:	   out STD_LOGIC;
+		J1_up:	in  STD_LOGIC;
+		J1_down:	in  STD_LOGIC;
+		J1_left:	in  STD_LOGIC;
+		J1_right:in  STD_LOGIC;
+		J1_tl:	in  STD_LOGIC;
+		J1_tr:	in  STD_LOGIC;
+		J2_up:	in  STD_LOGIC;
+		J2_down:	in  STD_LOGIC;
+		J2_left:	in  STD_LOGIC;
+		J2_right:in  STD_LOGIC;
+		J2_tl:	in  STD_LOGIC;
+		J2_tr:	in  STD_LOGIC;
+		Pause:	in  STD_LOGIC;
+		RESET_n:	in  STD_LOGIC);
 end io;
 
 architecture rtl of io is
@@ -31,15 +33,20 @@ architecture rtl of io is
 
 begin
 
-	process (clk)
+	process (clk, RESET_n)
 	begin
-		if rising_edge(clk) then
+		if RESET_n = '0' then
+			ctrl <= x"FF";
+		elsif rising_edge(clk) then
 			if WR_n='0' and ((A(7 downto 4)/="0000") or (A(3 downto 0)="0000")) then
 				ctrl <= D_in;
 			end if;
 		end if;
 	end process;
-	
+
+	TH_A <= ctrl(5) or ctrl(1);
+	TH_B <= ctrl(7) or ctrl(3);
+
 --	J1_tr <= ctrl(4) when ctrl(0)='0' else 'Z';
 --	J2_tr <= ctrl(6) when ctrl(2)='0' else 'Z';
 

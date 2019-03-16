@@ -20,7 +20,7 @@ entity vdp_main is
 		cram_D:				in  std_logic_vector(11 downto 0);
 			
 		x:						in  std_logic_vector(8 downto 0);
-		y:						in  std_logic_vector(7 downto 0);
+		y:						in  std_logic_vector(8 downto 0);
 			
 		color:				out std_logic_vector (11 downto 0);
 					
@@ -32,7 +32,8 @@ entity vdp_main is
 		bg_scroll_x:		in  std_logic_vector(7 downto 0);
 		bg_scroll_y:		in  std_logic_vector(7 downto 0);
 		disable_hscroll:	in  std_logic;
-			
+		disable_vscroll:    in  std_logic;
+
 		spr_address:		in  std_logic_vector (5 downto 0);
 		spr_high_bit:		in  std_logic;
 		spr_shift:			in  std_logic;	
@@ -55,14 +56,18 @@ architecture Behavioral of vdp_main is
 
 begin
 
-	process (y,bg_scroll_y)
+	process (x,y,bg_scroll_y,disable_vscroll)
 		variable sum: std_logic_vector(8 downto 0);
 	begin
-		sum := ('0'&y)+('0'&bg_scroll_y);
-		if (sum>=224) then
-			sum := sum-224;
+		if disable_vscroll = '0' or x+16 < 25*8 then
+			sum := y+('0'&bg_scroll_y);
+			if (sum>=224) then
+				sum := sum-224;
+			end if;
+			bg_y <= sum(7 downto 0);
+		else
+			bg_y <= y(7 downto 0);
 		end if;
-		bg_y <= sum(7 downto 0);
 	end process;
 	
 	line_reset <= '1' when x=512-16 else '0';
@@ -76,6 +81,7 @@ begin
 		disable_hscroll=> disable_hscroll,
 		scroll_x 		=> bg_scroll_x,
 		y					=> bg_y,
+		screen_y		=> y,
 		
 		vram_A			=> bg_vram_A,
 		vram_D			=> vram_D,		
@@ -95,6 +101,7 @@ begin
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
+		shift				=> spr_shift,
 		x					=> x,
 		y					=> y,
 		collide			=> spr_collide,
@@ -104,7 +111,7 @@ begin
 		vram_D			=> vram_D,		
 		color				=> spr_color);
 
-	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on)
+	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on, gg)
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
@@ -112,7 +119,9 @@ begin
 		if ((x>=48 and x<208) or (gg='0' and x<256)) and ((y>=24 and y<168) or (gg='0' and y<192)) and (mask_column0='0' or x>=8) and display_on='1' then
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
-			if (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
+			if not spr_active and not bg_active then
+				cram_A <= bg_color(4)&"0000";
+			elsif (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
 				cram_A <= "1"&spr_color;
 			else
 				cram_A <= bg_color;
