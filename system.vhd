@@ -343,7 +343,16 @@ begin
 						when "11" => bank2 <= D_in;
 					end case;
 				end if;
-
+				-- Codemasters
+				if WR_n='0' and A(15 downto 0)=x"0000" then
+					bank0 <= D_in;
+				end if;
+				if WR_n='0' and A(15 downto 0)=x"4000" then
+					bank1 <= D_in;
+				end if;
+				if WR_n='0' and A(15 downto 0)=x"8000" then
+					bank2 <= D_in;
+				end if;
 				-- Korean mapper (Sangokushi 3, Dodgeball King)
 				-- should be safe to enable unconditionally, A000 is ROM area
 				if WR_n='0' and A(15 downto 0)=x"A000" then
