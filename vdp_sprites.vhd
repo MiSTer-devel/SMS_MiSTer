@@ -17,6 +17,8 @@ port (
 	char_high_bit	: in  std_logic;
 	tall				: in  std_logic;
 	shift				: in  std_logic;
+	smode_M1			: in	std_logic ;
+	smode_M3			: in	std_logic ;
 	vram_A			: out STD_LOGIC_VECTOR (13 downto 0);
 	vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 	x					: in  STD_LOGIC_VECTOR (8 downto 0);
@@ -116,7 +118,7 @@ begin
 					
 					case state is
 					when COMPARE =>
-						if d9=208 then
+						if d9=208 and smode_M1='0' and smode_M3='0' then  -- hD0 stops only in 192 mode
 							state <= WAITING; -- stop
 						elsif (delta(8 downto 3)="00000" and tall='0') or (delta(8 downto 4)="0000" and tall='1') then
 							data_address(5 downto 2) <= delta(3 downto 0);

@@ -26,9 +26,11 @@ entity vdp_main is
 					
 		display_on:			in  std_logic;
 		mask_column0:		in  std_logic;
+		smode_M1:			in  std_logic;
+		smode_M3:			in  std_logic;
 		overscan:			in  std_logic_vector (3 downto 0);
 
-		bg_address:			in  std_logic_vector (2 downto 0);
+		bg_address:			in  std_logic_vector (3 downto 0);
 		bg_scroll_x:		in  std_logic_vector(7 downto 0);
 		bg_scroll_y:		in  std_logic_vector(7 downto 0);
 		disable_hscroll:	in  std_logic;
@@ -61,8 +63,11 @@ begin
 	begin
 		if disable_vscroll = '0' or x+16 < 25*8 then
 			sum := y+('0'&bg_scroll_y);
-			if (sum>=224) then
-				sum := sum-224;
+			if smode_M1='0' and smode_M3='0' then
+				if (sum>=224) then sum := sum-224;
+				end if;
+			-- else
+			--	sum(8):='0';
 			end if;
 			bg_y <= sum(7 downto 0);
 		else
@@ -81,11 +86,13 @@ begin
 		disable_hscroll=> disable_hscroll,
 		scroll_x 		=> bg_scroll_x,
 		y					=> bg_y,
-		screen_y		=> y,
+		screen_y			=> y,
 		
 		vram_A			=> bg_vram_A,
 		vram_D			=> vram_D,		
 		color				=> bg_color,
+		smode_M1			=> smode_M1,
+		smode_M3			=> smode_M3,
 		priority			=> bg_priority);
 		
 	vdp_spr_inst: entity work.vdp_sprites
@@ -106,7 +113,8 @@ begin
 		y					=> y,
 		collide			=> spr_collide,
 		overflow			=> spr_overflow,
-		
+		smode_M1			=> smode_M1,
+		smode_M3			=> smode_M3,
 		vram_A			=> spr_vram_A,
 		vram_D			=> vram_D,		
 		color				=> spr_color);
@@ -116,7 +124,11 @@ begin
 		variable bg_active	: boolean;
 	begin
 --		if x<256 and y<192 and (mask_column0='0' or x>=8) and display_on='1' then
-		if ((x>=48 and x<208) or (gg='0' and x<256)) and ((y>=24 and y<168) or (gg='0' and y<192)) and (mask_column0='0' or x>=8) and display_on='1' then
+		if ((x>=48 and x<208) or (gg='0' and x<256)) and 
+			((y>=24 and y<168) or (gg='0' and y<192) or (smode_M1='1' and y<224) or (smode_M3='1' and y<240) ) and 
+			(mask_column0='0' or x>=8) and display_on='1' then
+-- smode_M1 mod todo
+--		if ((x>=48 and x<208) or (gg='0' and x<256)) and ((y>=24 and y<168) or (gg='0' and y<240)) and (mask_column0='0' or x>=8) and display_on='1' then
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
 			if not spr_active and not bg_active then

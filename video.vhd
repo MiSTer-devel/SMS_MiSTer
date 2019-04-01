@@ -11,6 +11,9 @@ entity video is
 		gg:				in  std_logic;
 		border:        in  std_logic := '1';
 		mask_column:	in  std_logic := '0';
+		smode_M1:		in	 std_logic;
+		smode_M3:		in	 std_logic;
+		
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
 		hsync:			out std_logic;
@@ -36,21 +39,58 @@ begin
 					vcount <= vcount + 1;
 					if pal = '1' then
 						-- VCounter: 0-242, 442-511 = 313 steps
-						if vcount = 242 then
-							vcount <= conv_std_logic_vector(442,9);
-						elsif vcount = 458 then
-							vsync <= '1';
-						elsif vcount = 461 then
-							vsync <= '0';
+						if smode_M1='1' then
+							if vcount = 258 then
+								vcount <= conv_std_logic_vector(458,9);
+							elsif vcount = 485 then
+								vsync <= '1';
+							elsif vcount = 488 then
+								vsync <= '0';
+							end if;
+						elsif smode_M3='1' then
+							if vcount = 266 then
+								vcount <= conv_std_logic_vector(466,9);
+							elsif vcount = 489 then
+								vsync <= '1';
+							elsif vcount = 492 then
+								vsync <= '0';
+							end if;
+						else
+							if vcount = 242 then
+								vcount <= conv_std_logic_vector(442,9);
+							elsif vcount = 458 then
+								vsync <= '1';
+							elsif vcount = 461 then
+								vsync <= '0';
+							end if;
 						end if;
 					else
+					-- mode 240 lines is said to not work on NTSC anyway, so ...
+						if smode_M1='1' then
+							if vcount = 234 then
+								vcount <= conv_std_logic_vector(485,9);
+							elsif vcount = 488 then
+								vsync <= '1';
+							elsif vcount = 491 then
+								vsync <= '0';
+							end if;
+						elsif smode_M3='1' then -- this mode wont work anyway
+							if vcount = 242 then
+								vcount <= conv_std_logic_vector(491,9);
+							elsif vcount = 493 then
+								vsync <= '1';
+							elsif vcount = 496 then
+								vsync <= '0';
+							end if;
+						else
 						-- VCounter: 0-218, 469-511 = 262 steps
-						if vcount = 218 then
-							vcount <= conv_std_logic_vector(469,9);
-						elsif vcount = 471 then
-							vsync <= '1';
-						elsif vcount = 474 then
-							vsync <= '0';
+							if vcount = 218 then
+								vcount <= conv_std_logic_vector(469,9);
+							elsif vcount = 471 then
+								vsync <= '1';
+							elsif vcount = 474 then
+								vsync <= '0';
+							end if;
 						end if;
 					end if;
 				end if;
@@ -72,11 +112,15 @@ begin
 	x	<= hcount;
 	y	<= vcount;
 
-	vbl_st  <= conv_std_logic_vector(215,9) when border = '1' and gg = '0'
+	vbl_st  <= conv_std_logic_vector(224,9) when smode_M1='1'
+			else conv_std_logic_vector(240,9) when smode_M3='1'
+			else conv_std_logic_vector(215,9) when border = '1' and gg = '0'
 			else conv_std_logic_vector(192,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(168,9);
 			
-	vbl_end <= conv_std_logic_vector(488,9) when border = '1' and gg = '0'
+	vbl_end <= conv_std_logic_vector(000,9) when smode_M1='1'
+			else conv_std_logic_vector(000,9) when smode_M3='1'
+			else conv_std_logic_vector(488,9) when border = '1' and gg = '0'
 			else conv_std_logic_vector(000,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(024,9);
 

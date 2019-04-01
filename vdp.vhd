@@ -26,6 +26,8 @@ entity vdp is
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		mask_column:   out STD_LOGIC;
+		smode_M1: 		buffer STD_LOGIC;
+		smode_M3: 		buffer STD_LOGIC;
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -69,7 +71,7 @@ architecture Behavioral of vdp is
 	signal irq_frame_en:		std_logic := '0';
 	signal irq_line_en:		std_logic := '0';
 	signal irq_line_count:	std_logic_vector(7 downto 0) := (others=>'1');	
-	signal bg_address:		std_logic_vector (2 downto 0) := (others=>'0');
+	signal bg_address:		std_logic_vector (3 downto 0) := (others=>'0');
 	signal bg_scroll_x:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal bg_scroll_y:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal spr_address:		std_logic_vector (5 downto 0) := (others=>'0');
@@ -89,6 +91,9 @@ architecture Behavioral of vdp is
 	signal latched_x:		std_logic_vector(7 downto 0);
 
 	signal cram_latch:		std_logic_vector(7 downto 0);
+	signal mode_M1:			std_logic;
+	signal mode_M2:			std_logic;
+	signal mode_M3:			std_logic;
 	
 begin
 	
@@ -113,6 +118,8 @@ begin
 		x					=> x,
 		y					=> y,
 		color				=> color,
+		smode_M1			=> smode_M1,
+		smode_M3			=> smode_M3,
 						
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,
@@ -169,6 +176,9 @@ begin
 	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
+	smode_M1 <= mode_M1 and mode_M2 ;
+	smode_M3 <= mode_M3 and mode_M2 ;
+	
 	process (clk_sys, reset_n)
 	begin
 		if reset_n='0' then
@@ -180,7 +190,7 @@ begin
 			display_on		<= '0';--80
 			irq_frame_en	<= '0';--
 			spr_tall			<= '0';--
-			bg_address		<= "111";--FF
+			bg_address		<= "1111";--FF
 			spr_address		<= "111111";--FF
 			spr_high_bit	<= '0';--FB
 			overscan			<= "0000";--00
@@ -190,6 +200,9 @@ begin
 			reset_flags		<= true;
 			address_ff		<= '0';
 			xram_cpu_read	<= '0';
+			mode_M1			<= '0';
+			mode_M2			<= '0';
+			mode_M3			<= '0';
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
 
@@ -228,12 +241,16 @@ begin
 								mask_column0	<= xram_cpu_A(5);
 								irq_line_en		<= xram_cpu_A(4);
 								spr_shift		<= xram_cpu_A(3);
+								-- M4 is ignored since we don't implement modes 1 to 3
+								mode_M2			<= xram_cpu_A(1);
 							when "100001" =>
 								display_on		<= xram_cpu_A(6);
 								irq_frame_en	<= xram_cpu_A(5);
+								mode_M1			<= xram_cpu_A(4) and not xram_cpu_A(3);
+								mode_M3			<= xram_cpu_A(3) and not xram_cpu_A(4);
 								spr_tall			<= xram_cpu_A(1);
 							when "100010" =>
-								bg_address		<= xram_cpu_A(3 downto 1);
+								bg_address		<= xram_cpu_A(3 downto 0);
 							when "100101" =>
 								spr_address		<= xram_cpu_A(6 downto 1);
 							when "100110" =>
@@ -296,7 +313,9 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=487 and y=192 and not (last_x0=std_logic(x(0))) then
+				if x=487 and 
+					((y=224 and smode_M1='1') or (y=240 and smode_M3='1') or (y=192 and smode_M1='0' and smode_M3='0')) 
+					and not (last_x0=std_logic(x(0))) then
 					vbl_irq <= '1';
 				elsif reset_flags then
 					vbl_irq <= '0';
@@ -311,9 +330,9 @@ begin
 			if ce_vdp = '1' then
 				last_x0 <= std_logic(x(0));
 				if x=487 and not (last_x0=std_logic(x(0))) then
-					if y<192 or y=511 then
+					if y<192 or (y<240 and smode_M3='1') or (y<224 and smode_M1='1') or y=511 then
 						if hbl_counter=0 then
-							hbl_irq <= irq_line_en;
+							hbl_irq <= hbl_irq or irq_line_en; -- <=> if irq_line_en then hbl_irq<=1
 							hbl_counter <= irq_line_count;
 						else
 							hbl_counter <= hbl_counter-1;
