@@ -58,7 +58,7 @@ architecture Behavioral of vdp_main is
 
 begin
 
-	process (x,y,bg_scroll_y,disable_vscroll)
+	process (x,y,bg_scroll_y,disable_vscroll,smode_M1,smode_M3)
 		variable sum: std_logic_vector(8 downto 0);
 	begin
 		if disable_vscroll = '0' or x+16 < 25*8 then
@@ -119,7 +119,7 @@ begin
 		vram_D			=> vram_D,		
 		color				=> spr_color);
 
-	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on, gg)
+	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on, gg, smode_M1, smode_M3)
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin

@@ -26,8 +26,8 @@ entity vdp is
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		mask_column:   out STD_LOGIC;
-		smode_M1: 		buffer STD_LOGIC;
-		smode_M3: 		buffer STD_LOGIC;
+		smode_M1: 		out STD_LOGIC;
+		smode_M3: 		out STD_LOGIC;
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -94,10 +94,14 @@ architecture Behavioral of vdp is
 	signal mode_M1:			std_logic;
 	signal mode_M2:			std_logic;
 	signal mode_M3:			std_logic;
+	signal xmode_M1:			std_logic;
+	signal xmode_M3:			std_logic;
 	
 begin
 	
 	mask_column <= mask_column0;
+	xmode_M1<= mode_M1 and mode_M2 ;
+	xmode_M3<= mode_M3 and mode_M2 ;
 
 	vdp_main_inst: entity work.vdp_main
 	generic map(
@@ -118,8 +122,8 @@ begin
 		x					=> x,
 		y					=> y,
 		color				=> color,
-		smode_M1			=> smode_M1,
-		smode_M3			=> smode_M3,
+		smode_M1			=> xmode_M1,
+		smode_M3			=> xmode_M3,
 						
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,
@@ -314,7 +318,7 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
 				if x=487 and 
-					((y=224 and smode_M1='1') or (y=240 and smode_M3='1') or (y=192 and smode_M1='0' and smode_M3='0')) 
+					((y=224 and xmode_M1='1') or (y=240 and xmode_M3='1') or (y=192 and xmode_M1='0' and xmode_M3='0')) 
 					and not (last_x0=std_logic(x(0))) then
 					vbl_irq <= '1';
 				elsif reset_flags then
@@ -330,7 +334,7 @@ begin
 			if ce_vdp = '1' then
 				last_x0 <= std_logic(x(0));
 				if x=487 and not (last_x0=std_logic(x(0))) then
-					if y<192 or (y<240 and smode_M3='1') or (y<224 and smode_M1='1') or y=511 then
+					if y<192 or (y<240 and xmode_M3='1') or (y<224 and xmode_M1='1') or y=511 then
 						if hbl_counter=0 then
 							hbl_irq <= hbl_irq or irq_line_en; -- <=> if irq_line_en then hbl_irq<=1
 							hbl_counter <= irq_line_count;

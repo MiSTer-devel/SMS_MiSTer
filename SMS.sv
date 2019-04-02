@@ -134,9 +134,9 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
-assign LED_USER  = ioctl_download | bk_state;
-assign LED_DISK  = 0;
-assign LED_POWER = 0;
+assign LED_USER  = ioctl_download | bk_state | smode_M1 ;
+assign LED_DISK  = smode_M1 ? 2'b11 : 2'b10 ;
+assign LED_POWER = smode_M3 ? 2'b11 : 2'b10 ;
 
 assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
@@ -367,6 +367,8 @@ system #(MAX_SPPL) system
 	.y(y),
 	.color(color),
 	.mask_column(mask_column),
+	.smode_M1(smode_M1),
+	.smode_M3(smode_M3),
 
 	.fm_ena(~status[12]),
 	.audioL(audio_l),
@@ -473,16 +475,17 @@ always @(negedge clk_sys) begin
 		clkd <= 0;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-		ce_cpu <= 1;
 	end else if (clkd==24) begin
+		ce_cpu <= 1;  //-- changed cpu phase to please VDPTEST HCounter test;
+						  // not that I think that it does any good. Flynn.
 		ce_vdp <= 1;
 	end else if (clkd==19) begin
 		ce_vdp <= 1;
 		ce_pix <= 1;
 	end else if (clkd==14) begin
 		ce_vdp <= 1;
-		ce_cpu <= 1;
 	end else if (clkd==9) begin
+		ce_cpu <= 1;
 		ce_vdp <= 1;
 		ce_pix <= 1;
 	end else if (clkd==4) begin
