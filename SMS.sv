@@ -134,7 +134,7 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
-assign LED_USER  = ioctl_download | bk_state | smode_M1 ;
+assign LED_USER  = ioctl_download | bk_state ;
 assign LED_DISK  = smode_M1 ? 2'b11 : 2'b10 ;
 assign LED_POWER = smode_M3 ? 2'b11 : 2'b10 ;
 
