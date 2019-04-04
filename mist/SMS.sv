@@ -281,6 +281,8 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
+	.smode_M1(smode_M1),
+	.smode_M3(smode_M3),	
 	.fm_ena(~status[12]),  
 	.audioL(audioL),
     .audioR(audioR),
@@ -311,6 +313,7 @@ wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
 wire HSync, VSync, HBlank, VBlank;
+wire smode_M1, smode_M3;
 
 video video
 (
@@ -321,7 +324,9 @@ video video
 	.border(1),
 	.x(x),
 	.y(y),
-
+   .smode_M1(smode_M1),
+	.smode_M3(smode_M3),
+	
 	.hsync(HSync),
 	.vsync(VSync),
 	.hblank(HBlank),
@@ -346,24 +351,24 @@ always @(negedge clk_sys) begin
 		clkd <= 0;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-		ce_cpu_p <= 1;
 	end else if (clkd==24) begin
 		ce_vdp <= 1;
-	end else if (clkd==22) begin
-		ce_cpu_n <= 1;
+		ce_cpu_p <= 1;
 	end else if (clkd==19) begin
 		ce_vdp <= 1;
 		ce_pix <= 1;
+	end else if (clkd==17) begin
+		ce_cpu_n <= 1;
 	end else if (clkd==14) begin
 		ce_vdp <= 1;
-		ce_cpu_p <= 1;
 	end else if (clkd==9) begin
+		ce_cpu_p <= 1;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-	end else if (clkd==7) begin
-		ce_cpu_n <= 1;
 	end else if (clkd==4) begin
 		ce_vdp <= 1;
+	end else if (clkd==2) begin
+		ce_cpu_n <= 1;
 	end
 end
 
