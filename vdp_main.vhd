@@ -30,7 +30,7 @@ entity vdp_main is
 		smode_M3:			in  std_logic;
 		overscan:			in  std_logic_vector (3 downto 0);
 
-		bg_address:			in  std_logic_vector (3 downto 0);
+		bg_address:			in  std_logic_vector (2 downto 0);
 		bg_scroll_x:		in  std_logic_vector(7 downto 0);
 		bg_scroll_y:		in  std_logic_vector(7 downto 0);
 		disable_hscroll:	in  std_logic;

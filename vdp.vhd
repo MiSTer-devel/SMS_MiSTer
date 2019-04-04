@@ -71,7 +71,7 @@ architecture Behavioral of vdp is
 	signal irq_frame_en:		std_logic := '0';
 	signal irq_line_en:		std_logic := '0';
 	signal irq_line_count:	std_logic_vector(7 downto 0) := (others=>'1');	
-	signal bg_address:		std_logic_vector (3 downto 0) := (others=>'0');
+	signal bg_address:		std_logic_vector (2 downto 0) := (others=>'0');
 	signal bg_scroll_x:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal bg_scroll_y:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal spr_address:		std_logic_vector (5 downto 0) := (others=>'0');
@@ -194,7 +194,7 @@ begin
 			display_on		<= '0';--80
 			irq_frame_en	<= '0';--
 			spr_tall			<= '0';--
-			bg_address		<= "1111";--FF
+			bg_address		<= "111";--FF
 			spr_address		<= "111111";--FF
 			spr_high_bit	<= '0';--FB
 			overscan			<= "0000";--00
@@ -254,7 +254,7 @@ begin
 								mode_M3			<= xram_cpu_A(3) and not xram_cpu_A(4);
 								spr_tall			<= xram_cpu_A(1);
 							when "100010" =>
-								bg_address		<= xram_cpu_A(3 downto 0);
+								bg_address		<= xram_cpu_A(3 downto 1);
 							when "100101" =>
 								spr_address		<= xram_cpu_A(6 downto 1);
 							when "100110" =>
