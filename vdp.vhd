@@ -317,7 +317,8 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=487 and 
+--				485 instead of 487 to please VDPTEST - Flynn
+				if x=485 and
 					((y=224 and xmode_M1='1') or (y=240 and xmode_M3='1') or (y=192 and xmode_M1='0' and xmode_M3='0')) 
 					and not (last_x0=std_logic(x(0))) then
 					vbl_irq <= '1';
