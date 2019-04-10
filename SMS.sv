@@ -452,7 +452,6 @@ video video
 	.smode_M3(smode_M3),
 	.x(x),
 	.y(y),
-
 	.hsync(HSync),
 	.vsync(VSync),
 	.hblank(HBlank),
@@ -477,7 +476,6 @@ always @(negedge clk_sys) begin
 		ce_pix <= 1;
 	end else if (clkd==24) begin
 		ce_cpu <= 1;  //-- changed cpu phase to please VDPTEST HCounter test;
-						  // not that I think that it does any good. Flynn.
 		ce_vdp <= 1;
 	end else if (clkd==19) begin
 		ce_vdp <= 1;

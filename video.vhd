@@ -24,6 +24,7 @@ end video;
 
 architecture Behavioral of video is
 
+	signal zcount:			std_logic_vector(8 downto 0) ;
 	signal hcount:			std_logic_vector(8 downto 0) := (others => '0');
 	signal vcount:			std_logic_vector(8 downto 0) := (others => '0');
 
@@ -35,26 +36,24 @@ begin
 	begin
 		if rising_edge(clk) then
 			if ce_pix = '1' then
-				if hcount=487 then
+				if hcount=487	then
 					vcount <= vcount + 1;
 					if pal = '1' then
 						-- VCounter: 0-258, 458-511 = 313 steps
 						if smode_M1='1' then
 							if vcount = 258 then
 								vcount <= conv_std_logic_vector(458,9);
-						--		vsync <= '1';
 							elsif vcount = 254 then
 								vsync <= '1';
 							elsif vcount = 257 then
 								vsync <= '0';
 							end if;
 						elsif smode_M3='1' then
-						-- VCounter: 0-266, 466-511 = 313 steps
 							if vcount = 266 then
-								vcount <= conv_std_logic_vector(466,9);
-							elsif vcount = 468 then
+								vcount <= conv_std_logic_vector(482,9);
+							elsif vcount = 478 then
 								vsync <= '1';
-							elsif vcount = 471 then
+							elsif vcount = 481 then
 								vsync <= '0';
 							end if;
 						else
@@ -79,11 +78,11 @@ begin
 							end if;
 					-- NTSC mode 240 lines -- this mode is not suposed to work anyway
 						elsif smode_M3='1' then 
-							if vcount = 242 then -- needs to be > 240 to generate an IRQ
-								vcount <= conv_std_logic_vector(491,9);
-							elsif vcount = 494 then
+							if vcount = 261 then -- needs to be > 240 to generate an IRQ
+								vcount <= conv_std_logic_vector(0,9);
+							elsif vcount = 257 then
 								vsync <= '1';
-							elsif vcount = 497 then
+							elsif vcount = 260 then
 								vsync <= '0';
 							end if;
 						else

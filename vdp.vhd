@@ -84,11 +84,13 @@ architecture Behavioral of vdp is
 	signal reset_flags:		boolean := false;
 	signal irq_delay:       std_logic_vector(2 downto 0) := "111";
 	signal collide_flag:		std_logic := '0';
+	signal xspr_collide_shift: std_logic_vector(13 downto 0) := (others=>'0');
 	signal overflow_flag:	std_logic := '0';
+	signal xspr_overflow:		std_logic := '0';
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
-	signal latched_x:		std_logic_vector(7 downto 0);
+	signal latched_x:			std_logic_vector(7 downto 0);
 
 	signal cram_latch:		std_logic_vector(7 downto 0);
 	signal mode_M1:			std_logic;
@@ -121,6 +123,7 @@ begin
 				
 		x					=> x,
 		y					=> y,
+
 		color				=> color,
 		smode_M1			=> xmode_M1,
 		smode_M3			=> xmode_M3,
@@ -207,6 +210,7 @@ begin
 			mode_M1			<= '0';
 			mode_M2			<= '0';
 			mode_M3			<= '0';
+			
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
 
@@ -290,7 +294,7 @@ begin
 						D_out(7) <= vbl_irq;
 						D_out(6) <= overflow_flag;
 						D_out(5) <= collide_flag;
-						D_out(4 downto 0) <= (others=>'0');
+						D_out(4 downto 0) <= (others=>'1'); -- to fix PGA Tour Golf course map introduction
 						reset_flags <= true;
 					when others =>
 					end case;
@@ -317,7 +321,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
---				485 instead of 487 to please VDPTEST - Flynn
+--				485 instead of 487 to please VDPTEST 
 				if x=485 and
 					((y=224 and xmode_M1='1') or (y=240 and xmode_M3='1') or (y=192 and xmode_M1='0' and xmode_M3='0')) 
 					and not (last_x0=std_logic(x(0))) then
@@ -355,19 +359,34 @@ begin
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
-			if ce_vdp = '1' then
-				if spr_collide='1' then
-					collide_flag <= '1';
+		   -- using the other phase of ce_vdp permits to please VDPTEST ovr HCounter
+			-- very tight condition; 
+		   if ce_vdp = '0' then
+				if  (x<256 or x>485) then
+					if spr_overflow='1' and xspr_overflow='0' then
+						overflow_flag <= '1';
+						xspr_overflow <= '1';
+					end if ;
+				else	
+					xspr_overflow <= '0' ;
 				end if;
-				if reset_flags then
-					collide_flag <= '0';
+			end if ;
+			if ce_vdp = '1' then
+			-- to please VDPTEST, collision flag needs to be delayed by 13 pixels
+			   xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0) ;
+				if display_on='1' and (x<256 or x>488) then
+					xspr_collide_shift(0) <= spr_collide ;	
+				else
+					xspr_collide_shift(0) <= '0' ;	
+				end if;				
+				if xspr_collide_shift(13)='1' then
+					collide_flag <= '1' ;
 				end if;
 
-				if spr_overflow='1' then
-					overflow_flag <= '1';
-				end if;
 				if reset_flags then
+					collide_flag <= '0' ;
 					overflow_flag <= '0';
+					xspr_overflow <= '1';
 				end if;
 
 				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then

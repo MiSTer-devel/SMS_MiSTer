@@ -55,7 +55,10 @@ architecture Behavioral of vdp_main is
 	signal spr_color:		std_logic_vector(3 downto 0);
 	
 	signal line_reset:	std_logic;
-
+   signal xspr_collide: std_logic;
+	signal xspr_overflow: std_logic;
+ 	
+	
 begin
 
 	process (x,y,bg_scroll_y,disable_vscroll,smode_M1,smode_M3)
@@ -75,7 +78,7 @@ begin
 		end if;
 	end process;
 	
-	line_reset <= '1' when x=512-16 else '0';
+	line_reset <= '1' when x=512-26 else '0'; -- offset to please VDPTEST
 		
 	vdp_bg_inst: entity work.vdp_background
 	port map (
@@ -111,8 +114,8 @@ begin
 		shift				=> spr_shift,
 		x					=> x,
 		y					=> y,
-		collide			=> spr_collide,
-		overflow			=> spr_overflow,
+		collide			=> xspr_collide,
+		overflow			=> xspr_overflow,
 		smode_M1			=> smode_M1,
 		smode_M3			=> smode_M3,
 		vram_A			=> spr_vram_A,
@@ -123,12 +126,10 @@ begin
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
---		if x<256 and y<192 and (mask_column0='0' or x>=8) and display_on='1' then
-		if ((x>=48 and x<208) or (gg='0' and x<256)) and 
+		if ((x>=48 and x<208) or (gg='0' and x<256)) and
 			((y>=24 and y<168) or (gg='0' and y<192) or (smode_M1='1' and y<224) or (smode_M3='1' and y<240) ) and 
 			(mask_column0='0' or x>=8) and display_on='1' then
--- smode_M1 mod todo
---		if ((x>=48 and x<208) or (gg='0' and x<256)) and ((y>=24 and y<168) or (gg='0' and y<240)) and (mask_column0='0' or x>=8) and display_on='1' then
+
 			spr_active	:= not (spr_color="0000");
 			bg_active	:= not (bg_color(3 downto 0)="0000");
 			if not spr_active and not bg_active then
@@ -141,6 +142,9 @@ begin
 		else
 			cram_A <= "1"&overscan;
 		end if;
+		spr_overflow <= xspr_overflow ;
+		spr_collide <= xspr_collide ;
+		
 	end process;
 	
 	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
