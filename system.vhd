@@ -42,6 +42,8 @@ entity system is
 		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		mask_column:out STD_LOGIC;
+		smode_M1:		out STD_LOGIC;
+		smode_M3:		out STD_LOGIC;
 
 		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
@@ -165,6 +167,8 @@ begin
 		x			=> x,
 		y			=> y,
 		color		=> color,
+		smode_M1  => smode_M1,
+		smode_M3  => smode_M3,
 		mask_column => mask_column,
 		reset_n  => RESET_n
 	);
@@ -343,11 +347,17 @@ begin
 						when "11" => bank2 <= D_in;
 					end case;
 				end if;
-
+				if WR_n='0' and nvram_e='0' then
+					case A(15 downto 0) is
+				-- Codemasters
+						when x"0000" => bank0 <= D_in ;
+						when x"4000" => bank1 <= D_in ;
+						when x"8000" => bank2 <= D_in ;
 				-- Korean mapper (Sangokushi 3, Dodgeball King)
 				-- should be safe to enable unconditionally, A000 is ROM area
-				if WR_n='0' and A(15 downto 0)=x"A000" then
-					bank2 <= D_in;
+						when x"A000" => bank2 <= D_in ;
+						when others => null ;
+					end case ;
 				end if;
 			end if;
 		end if;

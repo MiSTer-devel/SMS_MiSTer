@@ -11,8 +11,10 @@ port (
 	table_address:		in  std_logic_vector(13 downto 11);
 	scroll_x:			in  std_logic_vector(7 downto 0);
 	disable_hscroll:	in  std_logic;
+	smode_M1:			in  std_logic;
+	smode_M3:			in  std_logic;
 	y:						in  std_logic_vector(7 downto 0);
-	screen_y:				in  std_logic_vector(8 downto 0);
+	screen_y:			in  std_logic_vector(8 downto 0);
 
 	vram_A:				out std_logic_vector(13 downto 0);
 	vram_D:				in  std_logic_vector(7 downto 0);
@@ -48,9 +50,9 @@ begin
 			if ce_pix = '1' then
 				if (reset='1') then
 					if disable_hscroll='0' or screen_y>=16 then
-						x <= 240-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
+						x <= 230-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
 					else
-						x <= "11110001"; -- 241
+						x <= "11100111"; -- 231
 					end if;
 				else
 					x <= x + 1;
@@ -65,8 +67,12 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				char_address(12 downto 10)	:= table_address;
-				char_address(9 downto 5)	:= y(7 downto 3);
+			   if (smode_M1='1' or smode_M3='1') then
+					char_address(12 downto 5) := table_address(13 downto 12) & ("011100" + y(7 downto 3));
+				else
+					char_address(12 downto 10)	:= table_address(13 downto 11);
+					char_address(9 downto 5)	:= y(7 downto 3);
+				end if;
 				char_address(4 downto 0)	:= x(7 downto 3) + 1;
 				data_address					:= tile_index & tile_y;
 				

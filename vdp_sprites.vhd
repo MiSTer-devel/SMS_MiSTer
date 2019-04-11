@@ -17,6 +17,8 @@ port (
 	char_high_bit	: in  std_logic;
 	tall				: in  std_logic;
 	shift				: in  std_logic;
+	smode_M1			: in	std_logic ;
+	smode_M3			: in	std_logic ;
 	vram_A			: out STD_LOGIC_VECTOR (13 downto 0);
 	vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 	x					: in  STD_LOGIC_VECTOR (8 downto 0);
@@ -68,6 +70,12 @@ begin
 			x		=> x(7 downto 0),
 			spr_x	=> spr_x(i),
 			shift	=> shift,
+			-- as we pass only 8 bits for the x address, we need to make the difference
+			-- between x=255 and x=511 in some way inside the shifters, or we'll have spurious
+			-- signals difficult to filter outside them. The compare operators are kept
+			-- outside the module to avoid to have them duplicated 64 times.
+			load  => x<256, --load range
+			x248  => x<248 or x>=504, --load range for shifted sprites
 			spr_d0=> spr_d0(i),
 			spr_d1=> spr_d1(i),
 			spr_d2=> spr_d2(i),
@@ -88,6 +96,7 @@ begin
 					(others=>'0') when others;
 
 	ce_spload <= ce_vdp when (MAX_SPPL<8 or sp64='0') else ce_sp;
+	
 	process (clk_sys)
 		variable y9 	: std_logic_vector(8 downto 0);
 		variable d9		: std_logic_vector(8 downto 0);
@@ -96,13 +105,14 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_spload='1' then
 			
-				if x=255 then
+				if x=255 then  -- 
 					count <= 0;
 					enable <= (others=>false);
 					state <= COMPARE;
 					index <= (others=>'0');
+					overflow <= '0';
 				
-				elsif x>=496 then  --match vdp_main.vhd (384)
+				elsif x=496 then  --match vdp_main.vhd (384)
 					state <= WAITING;
 					
 				else
@@ -112,15 +122,15 @@ begin
 						d9 := d9-256;
 					end if;
 					delta := y9-d9;
-					overflow <= '0';
+					--overflow <= '0';
 					
 					case state is
 					when COMPARE =>
-						if d9=208 then
+						if d9=208 and smode_M1='0' and smode_M3='0' then  -- hD0 stops only in 192 mode
 							state <= WAITING; -- stop
 						elsif (delta(8 downto 3)="00000" and tall='0') or (delta(8 downto 4)="0000" and tall='1') then
 							data_address(5 downto 2) <= delta(3 downto 0);
-							if (count>=8 and y<192) then
+							if (count>=8 and ( y<192 or (y<224 and smode_M1='1') or (y<240 and smode_M3='1') ) ) then
 								overflow <= '1';
 							end if;
 							if ((count<MAX_SPPL+1) and (count<8 or sp64='1')) then
@@ -129,7 +139,7 @@ begin
 								state <= WAITING;
 							end if;
 						else
-							if index<63 then
+							if index<MAX_SPPL then
 								index <= index+1;
 							else
 								state <= WAITING;
@@ -178,7 +188,7 @@ begin
 		variable collision 	: std_logic_vector(7 downto 0);
 	begin
 		if rising_edge(clk_sys) then
-			if ce_vdp='1' then
+			if ce_vdp='1' then 
 				color <= (others=>'0');
 				collision := (others=>'0');
 				for i in MAX_SPPL downto 8 loop
@@ -194,7 +204,7 @@ begin
 				end loop;
 				case collision is
 				when x"00" | x"01" | x"02" | x"04" | x"08" | x"10" | x"20" | x"40" | x"80" =>
-					collide <= '0';
+					collide <= '0';	
 				when others =>
 					collide <= '1';
 				end case;

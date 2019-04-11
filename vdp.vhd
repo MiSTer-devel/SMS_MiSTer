@@ -26,6 +26,8 @@ entity vdp is
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		mask_column:   out STD_LOGIC;
+		smode_M1: 		out STD_LOGIC;
+		smode_M3: 		out STD_LOGIC;
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -82,17 +84,26 @@ architecture Behavioral of vdp is
 	signal reset_flags:		boolean := false;
 	signal irq_delay:       std_logic_vector(2 downto 0) := "111";
 	signal collide_flag:		std_logic := '0';
+	signal xspr_collide_shift: std_logic_vector(13 downto 0) := (others=>'0');
 	signal overflow_flag:	std_logic := '0';
+	signal xspr_overflow:		std_logic := '0';
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
-	signal latched_x:		std_logic_vector(7 downto 0);
+	signal latched_x:			std_logic_vector(7 downto 0);
 
 	signal cram_latch:		std_logic_vector(7 downto 0);
+	signal mode_M1:			std_logic;
+	signal mode_M2:			std_logic;
+	signal mode_M3:			std_logic;
+	signal xmode_M1:			std_logic;
+	signal xmode_M3:			std_logic;
 	
 begin
 	
 	mask_column <= mask_column0;
+	xmode_M1<= mode_M1 and mode_M2 ;
+	xmode_M3<= mode_M3 and mode_M2 ;
 
 	vdp_main_inst: entity work.vdp_main
 	generic map(
@@ -112,7 +123,10 @@ begin
 				
 		x					=> x,
 		y					=> y,
+
 		color				=> color,
+		smode_M1			=> xmode_M1,
+		smode_M3			=> xmode_M3,
 						
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,
@@ -169,6 +183,9 @@ begin
 	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
+	smode_M1 <= mode_M1 and mode_M2 ;
+	smode_M3 <= mode_M3 and mode_M2 ;
+	
 	process (clk_sys, reset_n)
 	begin
 		if reset_n='0' then
@@ -190,6 +207,10 @@ begin
 			reset_flags		<= true;
 			address_ff		<= '0';
 			xram_cpu_read	<= '0';
+			mode_M1			<= '0';
+			mode_M2			<= '0';
+			mode_M3			<= '0';
+			
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
 
@@ -228,9 +249,13 @@ begin
 								mask_column0	<= xram_cpu_A(5);
 								irq_line_en		<= xram_cpu_A(4);
 								spr_shift		<= xram_cpu_A(3);
+								-- M4 is ignored since we don't implement modes 1 to 3
+								mode_M2			<= xram_cpu_A(1);
 							when "100001" =>
 								display_on		<= xram_cpu_A(6);
 								irq_frame_en	<= xram_cpu_A(5);
+								mode_M1			<= xram_cpu_A(4) and not xram_cpu_A(3);
+								mode_M3			<= xram_cpu_A(3) and not xram_cpu_A(4);
 								spr_tall			<= xram_cpu_A(1);
 							when "100010" =>
 								bg_address		<= xram_cpu_A(3 downto 1);
@@ -269,7 +294,7 @@ begin
 						D_out(7) <= vbl_irq;
 						D_out(6) <= overflow_flag;
 						D_out(5) <= collide_flag;
-						D_out(4 downto 0) <= (others=>'0');
+						D_out(4 downto 0) <= (others=>'1'); -- to fix PGA Tour Golf course map introduction
 						reset_flags <= true;
 					when others =>
 					end case;
@@ -296,7 +321,10 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
-				if x=487 and y=192 and not (last_x0=std_logic(x(0))) then
+--				485 instead of 487 to please VDPTEST 
+				if x=485 and
+					((y=224 and xmode_M1='1') or (y=240 and xmode_M3='1') or (y=192 and xmode_M1='0' and xmode_M3='0')) 
+					and not (last_x0=std_logic(x(0))) then
 					vbl_irq <= '1';
 				elsif reset_flags then
 					vbl_irq <= '0';
@@ -311,9 +339,9 @@ begin
 			if ce_vdp = '1' then
 				last_x0 <= std_logic(x(0));
 				if x=487 and not (last_x0=std_logic(x(0))) then
-					if y<192 or y=511 then
+					if y<192 or (y<240 and xmode_M3='1') or (y<224 and xmode_M1='1') or y=511 then
 						if hbl_counter=0 then
-							hbl_irq <= irq_line_en;
+							hbl_irq <= hbl_irq or irq_line_en; -- <=> if irq_line_en then hbl_irq<=1
 							hbl_counter <= irq_line_count;
 						else
 							hbl_counter <= hbl_counter-1;
@@ -331,19 +359,34 @@ begin
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
-			if ce_vdp = '1' then
-				if spr_collide='1' then
-					collide_flag <= '1';
+		   -- using the other phase of ce_vdp permits to please VDPTEST ovr HCounter
+			-- very tight condition; 
+		   if ce_vdp = '0' then
+				if  (x<256 or x>485) then
+					if spr_overflow='1' and xspr_overflow='0' then
+						overflow_flag <= '1';
+						xspr_overflow <= '1';
+					end if ;
+				else	
+					xspr_overflow <= '0' ;
 				end if;
-				if reset_flags then
-					collide_flag <= '0';
+			end if ;
+			if ce_vdp = '1' then
+			-- to please VDPTEST, collision flag needs to be delayed by 13 pixels
+			   xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0) ;
+				if display_on='1' and (x<256 or x>488) then
+					xspr_collide_shift(0) <= spr_collide ;	
+				else
+					xspr_collide_shift(0) <= '0' ;	
+				end if;				
+				if xspr_collide_shift(13)='1' then
+					collide_flag <= '1' ;
 				end if;
 
-				if spr_overflow='1' then
-					overflow_flag <= '1';
-				end if;
 				if reset_flags then
+					collide_flag <= '0' ;
 					overflow_flag <= '0';
+					xspr_overflow <= '1';
 				end if;
 
 				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then

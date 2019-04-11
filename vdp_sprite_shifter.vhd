@@ -9,7 +9,9 @@ Port(
 	ce_pix: in  STD_LOGIC;
 	x		: in  std_logic_vector (7 downto 0);
 	spr_x	: in  std_logic_vector (7 downto 0);
-	shift   : in std_logic;
+	shift : in  std_logic;
+	load  : in  boolean;
+	x248  : in  boolean; -- idem load but for shifted sprites
 	spr_d0: in  std_logic_vector (7 downto 0);
 	spr_d1: in  std_logic_vector (7 downto 0);
 	spr_d2: in  std_logic_vector (7 downto 0);
@@ -32,7 +34,7 @@ begin
 	process (clk_sys)	begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				if (spr_x=x and shift='0') or (spr_x=x+8 and shift='1') then
+				if (spr_x=x and shift='0' and load) or (spr_x=x+8 and shift='1' and x248) then
 					shift0 <= spr_d0;
 					shift1 <= spr_d1;
 					shift2 <= spr_d2;
