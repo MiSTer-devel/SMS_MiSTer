@@ -307,7 +307,11 @@ begin
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
 				D_out <= "11111"&det_D;
 			elsif (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
-				D_out <= io_D_out;
+			   if (gg='1') and (A(2 downto 0) = "101") then
+					D_out <= "00000000"; -- gg serial port ? let's fake this reg
+				else
+					D_out <= io_D_out;
+				end if;
 			else
 				D_out <= vdp_D_out;
 			end if;
