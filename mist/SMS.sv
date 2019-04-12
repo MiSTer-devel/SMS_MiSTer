@@ -84,6 +84,7 @@ parameter CONF_STR = {
 `endif
 	"OC,FM sound,Enable,Disable;",
 	"O1,Swap joysticks,No,Yes;",
+	"O5,SMS BIOS,Enable,Disable;",
 	"T0,Reset;",
 	"V,v1.0.",`BUILD_DATE
 };
@@ -257,6 +258,7 @@ system #(MAX_SPPL) system
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
 	.gg(gg),
+	.bios_en(~status[5]),
 
 	.RESET_n(~reset),
 

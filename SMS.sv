@@ -341,6 +341,7 @@ system #(MAX_SPPL) system
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
 	.gg(gg),
+	.bios_en(1),
 
 	.RESET_n(~reset),
 
