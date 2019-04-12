@@ -98,10 +98,10 @@ pll pll
 (
 	.inclk0(CLOCK_27[0]),
 	.c0(clk_sys),
-	.c1(SDRAM_CLK),
 	.locked(locked)
 );
 
+assign SDRAM_CLK = clk_sys;
 
 //////////////////   MiST I/O   ///////////////////
 wire [15:0] joy_0;
