@@ -50,9 +50,11 @@ begin
 			if ce_pix = '1' then
 				if (reset='1') then
 					if disable_hscroll='0' or screen_y>=16 then
-						x <= 230-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
+						x <= 233-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
+	--					x <= 230-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
 					else
-						x <= "11100111"; -- 231
+						x <= "11101010"; -- 234
+	--					x <= "11100111"; -- 231
 					end if;
 				else
 					x <= x + 1;
