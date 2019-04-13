@@ -338,7 +338,7 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
 				last_x0 <= std_logic(x(0));
-				if x=487 and not (last_x0=std_logic(x(0))) then
+				if x=486 and not (last_x0=std_logic(x(0))) then 
 					if y<192 or (y<240 and xmode_M3='1') or (y<224 and xmode_M1='1') or y=511 then
 						if hbl_counter=0 then
 							hbl_irq <= hbl_irq or irq_line_en; -- <=> if irq_line_en then hbl_irq<=1
@@ -386,7 +386,7 @@ begin
 				if reset_flags then
 					collide_flag <= '0' ;
 					overflow_flag <= '0';
-					xspr_overflow <= '1';
+					xspr_overflow <= '1'; -- Spr over many lines
 				end if;
 
 				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then
