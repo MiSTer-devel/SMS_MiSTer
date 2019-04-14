@@ -15,6 +15,7 @@ entity system is
 		ce_pix:		in	 STD_LOGIC;
 		ce_sp:		in	 STD_LOGIC;
 		gg:			in	 STD_LOGIC;
+		bios_en:	in	 STD_LOGIC;
 
 		RESET_n:		in	 STD_LOGIC;
 		
@@ -93,7 +94,7 @@ architecture Behavioral of system is
 	
 	signal boot_rom_D_out:	std_logic_vector(7 downto 0);
 	
-	signal bootloader:		std_logic := '0';
+	signal bootloader_n:	std_logic := '0';
 	signal irom_D_out:		std_logic_vector(7 downto 0);
 	signal irom_RD_n:			std_logic := '1';
 
@@ -278,14 +279,14 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if RESET_n='0' then 
-				bootloader <= gg;
-			elsif ctl_WR_n='0' and bootloader='0' then
-				bootloader <= '1';
+				bootloader_n <= gg or not bios_en;
+			elsif ctl_WR_n='0' and bootloader_n='0' then
+				bootloader_n <= '1';
 			end if;
 		end if;
 	end process;
 	
-	irom_D_out <=	boot_rom_D_out when bootloader='0' and A(15 downto 14)="00" else rom_do;
+	irom_D_out <=	boot_rom_D_out when bootloader_n='0' and A(15 downto 14)="00" else rom_do;
 	
 	process (clk_sys)
 	begin
