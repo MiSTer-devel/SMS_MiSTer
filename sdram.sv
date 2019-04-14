@@ -43,7 +43,7 @@ module sdram
 	input      [24:0] raddr,      // 25 bit byte address
 	input             rd,         // cpu/chipset requests read
 	output reg        rd_rdy = 0,
-	output reg  [7:0] dout,			// data output to chipset/cpu
+	output      [7:0] dout,			// data output to chipset/cpu
 
 	input      [24:0] waddr,      // 25 bit byte address
 	input       [7:0] din,			// data input from chipset/cpu
@@ -74,8 +74,11 @@ reg  [3:0] q;
 reg [22:0] a;
 reg  [1:0] bank;
 reg  [7:0] data;
+reg [15:0] sd_dat;
 reg        wr;
 reg        ram_req=0;
+
+assign dout = a[0] ? sd_dat[15:8] : sd_dat[7:0];
 
 // access manager
 always @(posedge clk) begin
@@ -181,7 +184,7 @@ always @(posedge clk) begin
 	end
 
 	if (q == STATE_READY) begin
-		if (~wr & ram_req) dout <= a[0] ? SDRAM_DQ[15:8] : SDRAM_DQ[7:0];
+		if (~wr & ram_req) sd_dat <= SDRAM_DQ;
 	end
 end
 

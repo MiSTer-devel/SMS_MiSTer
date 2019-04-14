@@ -89,8 +89,8 @@ interrupt_end:
 
 ; SDSC HEADER DATA ------------------------------------------------------------
 sdsc_author:            .db     "wsoltys", 0
-sdsc_program_name:      .db     "MiST Boot Loader", 0
-sdsc_unused_but_stored: .db     "v0.91", 0
+sdsc_program_name:      .db     "MiST/MiSTer Boot Loader", 0
+sdsc_unused_but_stored: .db     "v0.92", 0
 ;------------------------------------------------------------------------------
 
 ; VDP Library -----------------------------------------------------------------
@@ -122,24 +122,24 @@ start:
         ld      c, GFX_SEGA_SIZE_Y
         ld      d, GFX_SEGA_TILE
         ld      e, 0
-        ld      hl, VRAM_BG_MAP + (10*2+(2)*32)
+        ld      hl, VRAM_BG_MAP + (11*2+(20)*32)
         call    vdp_bg_putimage
 
 	; Draw Master System logo to map
-        ld      b, GFX_MASTERSYSTEM_SIZE_X
-        ld      c, GFX_MASTERSYSTEM_SIZE_Y
-        ld      d, GFX_MASTERSYSTEM_TILE
-        ld      e, 0
-        ld      hl, VRAM_BG_MAP + (4*2+(12)*32)
-        call    vdp_bg_putimage
+    ;    ld      b, GFX_MASTERSYSTEM_SIZE_X
+    ;    ld      c, GFX_MASTERSYSTEM_SIZE_Y
+    ;    ld      d, GFX_MASTERSYSTEM_TILE
+    ;    ld      e, 0
+    ;    ld      hl, VRAM_BG_MAP + (4*2+(12)*32)
+    ;    call    vdp_bg_putimage
 
 	; Draw Boot Loader logo to map
-        ld      b, GFX_BOOTLOADER_SIZE_X
-        ld      c, GFX_BOOTLOADER_SIZE_Y
-        ld      d, GFX_BOOTLOADER_TILE
-        ld      e, 0
-        ld      hl, VRAM_BG_MAP + (1*2+(22)*32)
-        call    vdp_bg_putimage
+    ;    ld      b, GFX_BOOTLOADER_SIZE_X
+    ;    ld      c, GFX_BOOTLOADER_SIZE_Y
+    ;    ld      d, GFX_BOOTLOADER_TILE
+    ;    ld      e, 0
+    ;    ld      hl, VRAM_BG_MAP + (1*2+(22)*32)
+    ;    call    vdp_bg_putimage
 
 	; Draw SMS Power copyright to map
     ;    ld      b, GFX_SMSPOWER_SIZE_X
@@ -147,7 +147,7 @@ start:
     ;    ld      d, GFX_SMSPOWER_TILE - 256
     ;    ld      e, 1
     ;    ld      hl, VRAM_BG_MAP + (9*2+(42)*32)
-        call    vdp_bg_putimage
+    ;    call    vdp_bg_putimage
 
 	; Reset horizontal scrolling
         ld      de, $8800
