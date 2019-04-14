@@ -78,7 +78,7 @@ begin
 		end if;
 	end process;
 	
-	line_reset <= '1' when x=512-26 else '0'; -- offset to please VDPTEST
+	line_reset <= '1' when x=512-24 else '0'; -- offset should be 25 to please VDPTEST
 		
 	vdp_bg_inst: entity work.vdp_background
 	port map (
