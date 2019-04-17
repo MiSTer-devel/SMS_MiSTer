@@ -388,7 +388,7 @@ begin
 				if reset_flags then
 					collide_flag <= '0' ;
 					overflow_flag <= '0';
-					line_overflow <= '1'; -- Spr over many linesl_irq='1' and irq_line_en=   
+					line_overflow <= '1'; -- Spr over many lines   
 				end if;
 
 				if ((vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1'))
