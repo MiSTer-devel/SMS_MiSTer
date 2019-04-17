@@ -83,10 +83,11 @@ architecture Behavioral of vdp is
 	signal last_x0:			std_logic := '0';
 	signal reset_flags:		boolean := false;
 	signal irq_delay:       std_logic_vector(2 downto 0) := "111";
-	signal collide_flag:		std_logic := '0';
-	signal xspr_collide_shift: std_logic_vector(13 downto 0) := (others=>'0');
-	signal overflow_flag:	std_logic := '0';
-	signal xspr_overflow:		std_logic := '0';
+	signal collide_flag:		std_logic := '0'; -- signal collide to cpu via reg
+	signal collide_buf:		std_logic := '0'; -- collide pending
+	signal xspr_collide_shift: std_logic_vector(13 downto 0) := (others=>'0'); -- collide delay
+	signal overflow_flag:	std_logic := '0'; -- signal overflow to cpu via reg
+	signal line_overflow:	std_logic := '0'; -- overflow alread occured on this line
 	signal hbl_counter:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal vbl_irq:			std_logic;
 	signal hbl_irq:			std_logic;
@@ -322,8 +323,9 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
 --				485 instead of 487 to please VDPTEST 
-				if x=485 and
-					((y=224 and xmode_M1='1') or (y=240 and xmode_M3='1') or (y=192 and xmode_M1='0' and xmode_M3='0')) 
+				if	x=485 and ((y=224 and xmode_M1='1') 
+					  or (y=240 and xmode_M3='1') 
+					  or (y=192 and xmode_M1='0' and xmode_M3='0')) 
 					and not (last_x0=std_logic(x(0))) then
 					vbl_irq <= '1';
 				elsif reset_flags then
@@ -338,7 +340,7 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_vdp = '1' then
 				last_x0 <= std_logic(x(0));
-				if x=486 and not (last_x0=std_logic(x(0))) then 
+				if x=486 and not (last_x0=std_logic(x(0))) then
 					if y<192 or (y<240 and xmode_M3='1') or (y<224 and xmode_M1='1') or y=511 then
 						if hbl_counter=0 then
 							hbl_irq <= hbl_irq or irq_line_en; -- <=> if irq_line_en then hbl_irq<=1
@@ -362,34 +364,35 @@ begin
 		   -- using the other phase of ce_vdp permits to please VDPTEST ovr HCounter
 			-- very tight condition; 
 		   if ce_vdp = '0' then
-				if  (x<256 or x>485) then
-					if spr_overflow='1' and xspr_overflow='0' then
+				if  (x<256 or x>485) and (y<234 or y>=496) then
+					if spr_overflow='1' and line_overflow='0' then
 						overflow_flag <= '1';
-						xspr_overflow <= '1';
+						line_overflow <= '1';
 					end if ;
 				else	
-					xspr_overflow <= '0' ;
+					line_overflow <= '0' ;
 				end if;
 			end if ;
+			
 			if ce_vdp = '1' then
-			-- to please VDPTEST, collision flag needs to be delayed by 13 pixels
-			   xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0) ;
-				if display_on='1' and (x<256 or x>488) then
-					xspr_collide_shift(0) <= spr_collide ;	
-				else
-					xspr_collide_shift(0) <= '0' ;	
-				end if;				
-				if xspr_collide_shift(13)='1' then
+				xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0) ;
+				xspr_collide_shift(0) <= spr_collide ;
+				
+				if xspr_collide_shift(13)='1'  and 
+					display_on='1' and
+					(y<234 or (xmode_M1='0' and xmode_M3='0' and y>=496)) 
+				then
 					collide_flag <= '1' ;
 				end if;
 
 				if reset_flags then
 					collide_flag <= '0' ;
 					overflow_flag <= '0';
-					xspr_overflow <= '1'; -- Spr over many lines
+					line_overflow <= '1'; -- Spr over many linesl_irq='1' and irq_line_en=   
 				end if;
 
-				if (vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1') then
+				if ((vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1'))
+					and not reset_flags then
 					if irq_delay = "000" then
 						IRQ_n <= '0';
 					else
@@ -399,6 +402,7 @@ begin
 					IRQ_n <= '1';
 					irq_delay <= "111";
 				end if;
+
 			end if;
 		end if;
 	end process;

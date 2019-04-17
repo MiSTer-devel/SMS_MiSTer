@@ -24,7 +24,6 @@ end video;
 
 architecture Behavioral of video is
 
-	signal zcount:			std_logic_vector(8 downto 0) ;
 	signal hcount:			std_logic_vector(8 downto 0) := (others => '0');
 	signal vcount:			std_logic_vector(8 downto 0) := (others => '0');
 
@@ -42,10 +41,10 @@ begin
 						-- VCounter: 0-258, 458-511 = 313 steps
 						if smode_M1='1' then
 							if vcount = 258 then
-								vcount <= conv_std_logic_vector(458,9);
-							elsif vcount = 254 then
+								vcount <= conv_std_logic_vector(458,9); 
+							elsif vcount = 461 then
 								vsync <= '1';
-							elsif vcount = 257 then
+							elsif vcount = 464 then
 								vsync <= '0';
 							end if;
 						elsif smode_M3='1' then
