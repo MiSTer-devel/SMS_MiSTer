@@ -49,12 +49,15 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
 				if (reset='1') then
+		--
+		-- if you want to fix the last HScroll test of VDPTest, you'll need to 
+		-- change the values below 233=232+1 by half a pixel and make the
+		-- same change in vdp_main around line 79 (line_reset)
+		--
 					if disable_hscroll='0' or screen_y>=16 then
 						x <= 232-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
-	--					x <= 230-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
 					else
 						x <= "11101001"; -- 233
-	--					x <= "11100111"; -- 231
 					end if;
 				else
 					x <= x + 1;
