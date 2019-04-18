@@ -76,6 +76,7 @@ begin
 		end if;
 	end process;
 	
+	-- see vdp_background comment around line 53
 	line_reset <= '1' when x=512-24 else '0'; -- offset should be 25 to please VDPTEST
 		
 	vdp_bg_inst: entity work.vdp_background
@@ -126,8 +127,12 @@ begin
 	begin
 		if ((x>=48 and x<208) or (gg='0' and x<256)) and
 			(mask_column0='0' or x>=8) and display_on='1' then
-			if ((y>=24 and y<168) or (gg='0' and y<192) or (smode_M1='1' and y<224) or (smode_M3='1' and y<240) ) then
-
+			if (((y>=24 and y<168) and smode_M1='0')
+				or ((y>=40 and y<184) and smode_M1='1')
+				or (gg='0' and y<192) 
+				or (smode_M1='1' and y<224 and gg='0') 
+				or (smode_M3='1' and y<240 and gg='0') ) then
+				
 				spr_active	:= not (spr_color="0000");
 				bg_active	:= not (bg_color(3 downto 0)="0000");
 				if not spr_active and not bg_active then

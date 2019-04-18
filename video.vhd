@@ -114,13 +114,15 @@ begin
 	x	<= hcount;
 	y	<= vcount;
 
-	vbl_st  <=  conv_std_logic_vector(224,9) when smode_M1 = '1'
+	vbl_st  <= conv_std_logic_vector(184,9) when (smode_M1='1' and gg='1' and border='0')
+			else conv_std_logic_vector(224,9) when smode_M1 = '1'
 			else conv_std_logic_vector(240,9) when smode_M3 = '1'
 			else conv_std_logic_vector(215,9) when border = '1' and gg = '0'
 			else conv_std_logic_vector(192,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(168,9);
 			
-	vbl_end <= conv_std_logic_vector(000,9) when smode_M1 = '1' or smode_M3 = '1' 
+	vbl_end <= conv_std_logic_vector(40,9)  when (smode_M1='1' and gg='1' and border='0')
+			else conv_std_logic_vector(000,9) when smode_M1 = '1' or smode_M3 = '1' 
 			else conv_std_logic_vector(488,9) when border = '1' and gg = '0'
 			else conv_std_logic_vector(000,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(024,9);
