@@ -40,6 +40,7 @@ entity vdp_main is
 		spr_high_bit:		in  std_logic;
 		spr_shift:			in  std_logic;	
 		spr_tall:			in  std_logic;
+		spr_wide:			in  std_logic;
 		spr_collide:		out std_logic;
 		spr_overflow:		out std_logic);	
 end vdp_main;
@@ -110,6 +111,7 @@ begin
 		table_address	=> spr_address,
 		char_high_bit	=> spr_high_bit,
 		tall				=> spr_tall,
+		wide				=> spr_wide,
 		shift				=> spr_shift,
 		x					=> x,
 		y					=> y,

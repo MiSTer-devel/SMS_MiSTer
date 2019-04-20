@@ -12,6 +12,7 @@ Port(
 	shift : in  std_logic;
 	load  : in  boolean;
 	x248  : in  boolean; -- idem load but for shifted sprites
+	wide_n: in  boolean; -- if sprites are wide reg1 bit 0
 	spr_d0: in  std_logic_vector (7 downto 0);
 	spr_d1: in  std_logic_vector (7 downto 0);
 	spr_d2: in  std_logic_vector (7 downto 0);
@@ -22,8 +23,7 @@ Port(
 end vpd_sprite_shifter;
 
 architecture Behavioral of vpd_sprite_shifter is
-
-	signal count	: integer range 0 to 8;
+   signal wideclock : boolean := false ;
 	signal shift0	: std_logic_vector (7 downto 0) := (others=>'0');
 	signal shift1	: std_logic_vector (7 downto 0) := (others=>'0');
 	signal shift2	: std_logic_vector (7 downto 0) := (others=>'0');
@@ -39,11 +39,15 @@ begin
 					shift1 <= spr_d1;
 					shift2 <= spr_d2;
 					shift3 <= spr_d3;
+					wideclock <= false ;
 				else
-					shift0 <= shift0(6 downto 0)&"0";
-					shift1 <= shift1(6 downto 0)&"0";
-					shift2 <= shift2(6 downto 0)&"0";
-					shift3 <= shift3(6 downto 0)&"0";
+					if (wide_n or wideclock) then
+						shift0 <= shift0(6 downto 0)&"0";
+						shift1 <= shift1(6 downto 0)&"0";
+						shift2 <= shift2(6 downto 0)&"0";
+						shift3 <= shift3(6 downto 0)&"0";
+					end if ;
+					wideclock <= not wideclock ;
 				end if;
 			end if;
 		end if;
