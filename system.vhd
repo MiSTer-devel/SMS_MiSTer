@@ -45,6 +45,7 @@ entity system is
 		mask_column:out STD_LOGIC;
 		smode_M1:		out STD_LOGIC;
 		smode_M3:		out STD_LOGIC;
+		pal:				in STD_LOGIC;
 
 		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
@@ -122,6 +123,7 @@ architecture Behavioral of system is
 	signal nvram_ex:        std_logic := '0';
 	signal nvram_p:         std_logic := '0';
 	signal nvram_D_out:     std_logic_vector(7 downto 0);
+
 begin
 
 	z80_inst: entity work.T80s
@@ -231,6 +233,8 @@ begin
 		J2_tl		=> j2_tl,
 		J2_tr		=> j2_tr,
 		Pause		=> pause,
+		pal		=> pal,
+		gg			=> gg,
 		RESET_n	=> RESET_n
 	);
 	
@@ -259,14 +263,14 @@ begin
 		address	=> A(13 downto 0),
 		q			=> boot_rom_D_out
 	);
-
+		
 	-- glue logic
 	bal_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)="00000110" and gg='1' else '1';
 	vdp_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="10" else '1';
 	vdp_RD_n <= RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="01" or A(7 downto 6)="10") else '1';
 	psg_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="01" else '1';
 	ctl_WR_n <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='0' else '1';
-	io_WR_n  <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and A(0)='1' else '1';
+	io_WR_n  <=	WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="00" and (A(0)='1' or (gg='1' and A(5 downto 3)="000")) else '1';
 	io_RD_n  <=	RD_n when IORQ_n='0' and M1_n='1' and (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 1)/="11")) else '1';
 	fm_WR_n  <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 1)="1111000" else '1';
 	det_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)=x"F2" else '1';
@@ -308,11 +312,7 @@ begin
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
 				D_out <= "11111"&det_D;
 			elsif (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
-			   if (gg='1') and (A(2 downto 0) = "101") then
-					D_out <= "00111000"; -- gg serial port ? let's fake this reg
-				else
-					D_out <= io_D_out;
-				end if;
+				D_out <= io_D_out;
 			else
 				D_out <= vdp_D_out;
 			end if;
