@@ -16,6 +16,7 @@ port (
 	table_address	: in  STD_LOGIC_VECTOR (13 downto 8);
 	char_high_bit	: in  std_logic;
 	tall				: in  std_logic;
+	wide 				: in  std_logic;
 	shift				: in  std_logic;
 	smode_M1			: in	std_logic ;
 	smode_M3			: in	std_logic ;
@@ -76,6 +77,7 @@ begin
 			-- outside the module to avoid to have them duplicated 64 times.
 			load  => x<256, --load range
 			x248  => x<248 or x>=504, --load range for shifted sprites
+			wide_n	=> wide='0',
 			spr_d0=> spr_d0(i),
 			spr_d1=> spr_d1(i),
 			spr_d2=> spr_d2(i),
@@ -128,8 +130,12 @@ begin
 					when COMPARE =>
 						if d9=208 and smode_M1='0' and smode_M3='0' then  -- hD0 stops only in 192 mode
 							state <= WAITING; -- stop
-						elsif (delta(8 downto 3)="00000" and tall='0') or (delta(8 downto 4)="0000" and tall='1') then
-							data_address(5 downto 2) <= delta(3 downto 0);
+						elsif (delta(8 downto 3)="00000" and tall='0') or (delta(8 downto 4)="0000" and (tall='1' or wide='1')) then
+							if (wide='1') then
+								data_address(4 downto 2) <= delta(3 downto 1);
+							else
+								data_address(5 downto 2) <= delta(3 downto 0);
+							end if;
 							if (count>=8 and ( y<192 or (y<224 and smode_M1='1') or (y<240 and smode_M3='1') ) ) then
 								overflow <= '1';
 							end if;
@@ -149,7 +155,7 @@ begin
 					when LOAD_N =>
 						data_address(13) <= char_high_bit;
 						data_address(12 downto 6) <= vram_d(7 downto 1);
-						if tall='0' then
+						if tall='0' or wide='1' then
 							data_address(5) <= vram_d(0);
 						end if;
 						state <= LOAD_X;

@@ -309,7 +309,7 @@ begin
 				D_out <= "11111"&det_D;
 			elsif (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
 			   if (gg='1') and (A(2 downto 0) = "101") then
-					D_out <= "00000000"; -- gg serial port ? let's fake this reg
+					D_out <= "00111000"; -- gg serial port ? let's fake this reg
 				else
 					D_out <= io_D_out;
 				end if;
