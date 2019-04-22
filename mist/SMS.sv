@@ -258,6 +258,7 @@ system #(MAX_SPPL) system
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
+	.pal(pal),
 	.gg(gg),
 	.region(status[10]),
 	.bios_en(~status[5]),
