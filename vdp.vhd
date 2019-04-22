@@ -82,7 +82,7 @@ architecture Behavioral of vdp is
 
 	-- various counters
 	signal last_x0:			std_logic := '0';
-	signal reset_flags:		boolean := false;
+	signal reset_flags:		boolean ;
 	signal irq_delay:       std_logic_vector(2 downto 0) := "111";
 	signal collide_flag:		std_logic := '0'; -- signal collide to cpu via reg
 	signal collide_buf:		std_logic := '0'; -- collide pending
@@ -190,6 +190,7 @@ begin
 	smode_M3 <= mode_M3 and mode_M2 ;
 	
 	process (clk_sys, reset_n)
+	variable reset_set: boolean ;
 	begin
 		if reset_n='0' then
 			disable_hscroll<= '0';--36
@@ -217,7 +218,8 @@ begin
 			
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
-
+			reset_set := false ;
+			
 			if ce_vdp = '1' then
 				old_WR_n <= WR_n;
 				old_RD_n <= RD_n;
@@ -301,9 +303,9 @@ begin
 						D_out(5) <= collide_flag;
 						D_out(4 downto 0) <= (others=>'1'); -- to fix PGA Tour Golf course map introduction
 						reset_flags <= true;
+						reset_set := true ;
 					when others =>
-					end case;
-					
+					end case;					
 				elsif xram_cpu_A_incr='1' then
 					xram_cpu_A <= xram_cpu_A + 1;
 					xram_cpu_A_incr <= '0';
@@ -311,12 +313,11 @@ begin
 						vram_cpu_D_outl <= vram_cpu_D_out;
 					end if;
 					xram_cpu_read <= '0';
-
 				elsif xram_cpu_read='1' then
 					xram_cpu_A_incr <= '1';
-
-				else
-					reset_flags <= false;
+				end if;
+				if (not reset_set) then
+					reset_flags <= false ;
 				end if;
 			end if;
 		end if;
