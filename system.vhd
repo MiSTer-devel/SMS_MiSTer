@@ -46,6 +46,7 @@ entity system is
 		smode_M1:		out STD_LOGIC;
 		smode_M3:		out STD_LOGIC;
 		pal:				in STD_LOGIC;
+		region:			in	STD_LOGIC;
 
 		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
@@ -238,6 +239,7 @@ begin
 		Pause		=> pause,
 		pal		=> pal,
 		gg			=> gg,
+		region	=> region,
 		RESET_n	=> RESET_n
 	);
 	

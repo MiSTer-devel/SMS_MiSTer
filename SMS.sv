@@ -135,8 +135,8 @@ assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
 assign LED_USER  = ioctl_download | bk_state ;
-assign LED_DISK  = 0 ; // smode_M1 ? 2'b11 : 2'b10 ;
-assign LED_POWER = 0 ; // smode_M3 ? 2'b11 : 2'b10 ;
+assign LED_DISK  = 0; // smode_M1 ? 2'b11 : 2'b10 ;
+assign LED_POWER = 0; // smode_M3 ? 2'b11 : 2'b10 ;
 
 assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
@@ -163,6 +163,7 @@ parameter CONF_STR3 = {
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
 	"OC,FM sound,Enable,Disable;",
+	"OA,Region,US/UE,Japan;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"OE,Multitap,Disabled,Port1;",
@@ -370,6 +371,8 @@ system #(MAX_SPPL) system
 	.mask_column(mask_column),
 	.smode_M1(smode_M1),
 	.smode_M3(smode_M3),
+	.pal(pal),
+	.region(status[10]),
 
 	.fm_ena(~status[12]),
 	.audioL(audio_l),
