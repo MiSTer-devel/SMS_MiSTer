@@ -83,6 +83,7 @@ parameter CONF_STR = {
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
 	"OC,FM sound,Enable,Disable;",
+	"OA,Region,US/UE,Japan;",
 	"O1,Swap joysticks,No,Yes;",
 	"O5,SMS BIOS,Enable,Disable;",
 	"T0,Reset;",
@@ -258,6 +259,7 @@ system #(MAX_SPPL) system
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
 	.gg(gg),
+	.region(status[10]),
 	.bios_en(~status[5]),
 
 	.RESET_n(~reset),
@@ -287,7 +289,7 @@ system #(MAX_SPPL) system
 	.smode_M3(smode_M3),	
 	.fm_ena(~status[12]),  
 	.audioL(audioL),
-    .audioR(audioR),
+   .audioR(audioR),
 
 	.sp64(status[8] & SP64),
 
