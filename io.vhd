@@ -26,6 +26,7 @@ entity io is
 		Pause:	in  STD_LOGIC;
 		pal:		in	 STD_LOGIC;
 		gg:		in  STD_LOGIC;
+		region:	in	 STD_LOGIC;
 		RESET_n:	in  STD_LOGIC);
 end io;
 
@@ -82,9 +83,13 @@ begin
 					case A(2 downto 0) is
 						when "000" =>
 							D_out(7) <= Pause;
-							D_out(6) <= '1'; -- 1=Export (USA/Europe)/0=Japan
-							D_out(5) <= not pal ;
-							D_out(4 downto 0) <= "11111";
+							if (region='0') then
+								D_out(6) <= '1'; -- 1=Export (USA/Europe)/0=Japan
+								D_out(5) <= not pal ;
+								D_out(4 downto 0) <= "11111";
+							else
+								D_out(6 downto 0) <= "0000000";
+							end if;
 						when "001" => D_out <= gg_pdr(7)&(gg_ddr(6 downto 0) or gg_pdr(6 downto 0)) ;
 						when "010" => D_out <= gg_ddr ;
 						when "011" => D_out <= gg_txd ;
@@ -97,7 +102,7 @@ begin
 					D_out(7) <= J2_down;
 					D_out(6) <= J2_up;
 					-- 5=j1_tr
-					if ctrl(0)='0' then
+					if ctrl(0)='0' and region='0' then
 						D_out(5) <= ctrl(4);
 					else
 						D_out(5) <= J1_tr;
@@ -109,13 +114,13 @@ begin
 					D_out(0) <= J1_up;
 				else
 					-- 7=j2_th
-					if ctrl(3)='0' then
+					if ctrl(3)='0' and region='0' then
 						D_out(7) <= ctrl(7);
 					else
 						D_out(7) <= '1';
 					end if;
 					-- 6=j1_th
-					if ctrl(1)='0' then
+					if ctrl(1)='0' and region='0' then
 						D_out(6) <= ctrl(5);
 					else
 						D_out(6) <= '1'; 
