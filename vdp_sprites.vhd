@@ -70,13 +70,12 @@ begin
 			ce_pix=> ce_pix,
 			x		=> x(7 downto 0),
 			spr_x	=> spr_x(i),
-			shift	=> shift,
 			-- as we pass only 8 bits for the x address, we need to make the difference
 			-- between x=255 and x=511 in some way inside the shifters, or we'll have spurious
 			-- signals difficult to filter outside them. The compare operators are kept
 			-- outside the module to avoid to have them duplicated 64 times.
-			load  => x<256, --load range
-			x248  => x<248 or x>=504, --load range for shifted sprites
+			load  => shift='0' and x<256, --load range
+			x248  => shift='1' and (x<248 or x>=504), --load range for shifted sprites
 			wide_n	=> wide='0',
 			spr_d0=> spr_d0(i),
 			spr_d1=> spr_d1(i),
@@ -107,7 +106,9 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_spload='1' then
 			
-				if x=255 then  -- 
+				if x=257 then  -- we need step 256 to display the very last sprite pixel
+									-- and one more pixel because the test here is made sync'ed
+									-- by ce_spload which could be very early regarding ce_vdp
 					count <= 0;
 					enable <= (others=>false);
 					state <= COMPARE;

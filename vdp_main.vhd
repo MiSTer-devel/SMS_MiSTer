@@ -127,7 +127,7 @@ begin
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
-		if ((x>=48 and x<208) or (gg='0' and x<256)) and
+		if ((x>48 and x<=208) or (gg='0' and x<=256)) and
 			(mask_column0='0' or x>=8) and display_on='1' then
 			if (((y>=24 and y<168) and smode_M1='0')
 				or ((y>=40 and y<184) and smode_M1='1')

@@ -55,9 +55,11 @@ begin
 		-- same change in vdp_main around line 79 (line_reset)
 		--
 					if disable_hscroll='0' or screen_y>=16 then
-						x <= 232-scroll_x+1; -- temporary workaround of 1pix roll - needs better fix!
+													-- if you mess with this check Sangokushi3 scroll during
+													-- the presentation + scroll of the top line during fight
+						x <= 232-scroll_x;   -- temporary workaround of 1pix roll - needs better fix!
 					else
-						x <= "11101001"; -- 233
+						x <= "11101000"; -- 256-24=232
 					end if;
 				else
 					x <= x + 1;
@@ -141,10 +143,10 @@ begin
 					color(4)	<= palette;
 					priority	<= priority_latch;
 				when others =>
-					shift0(7 downto 1) <= shift0(6 downto 0);
-					shift1(7 downto 1) <= shift1(6 downto 0);
-					shift2(7 downto 1) <= shift2(6 downto 0);
-					shift3(7 downto 1) <= shift3(6 downto 0);
+					shift0(7 downto 1) <= shift0(6 downto 0) ;
+					shift1(7 downto 1) <= shift1(6 downto 0) ;
+					shift2(7 downto 1) <= shift2(6 downto 0) ;
+					shift3(7 downto 1) <= shift3(6 downto 0) ;
 				end case;
 			end if;
 		end if;

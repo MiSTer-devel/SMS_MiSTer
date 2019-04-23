@@ -381,8 +381,11 @@ begin
 			
 			if ce_vdp = '1' then
 				xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0) ;
-				xspr_collide_shift(0) <= spr_collide ;
-				
+				if (x<=256) then
+					xspr_collide_shift(0) <= spr_collide ;
+				else
+					xspr_collide_shift(0) <= '0' ;
+				end if;
 				if xspr_collide_shift(13)='1'  and 
 					display_on='1' and
 					(y<234 or (xmode_M1='0' and xmode_M3='0' and y>=496)) 

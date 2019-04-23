@@ -127,14 +127,14 @@ begin
 			else conv_std_logic_vector(000,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(024,9);
 
-	hbl_st  <= conv_std_logic_vector(269,9) when border = '1' and gg = '0'
-			else conv_std_logic_vector(255,9) when (border xor gg) = '0'
-			else conv_std_logic_vector(207,9);
+	hbl_st  <= conv_std_logic_vector(270,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(256,9) when (border xor gg) = '0'
+			else conv_std_logic_vector(208,9);
 
-	hbl_end <= conv_std_logic_vector(499,9) when border = '1' and gg = '0'
-			else conv_std_logic_vector(007,9) when (border xor gg) = '0' and mask_column = '1'
-			else conv_std_logic_vector(511,9) when (border xor gg) = '0'
-			else conv_std_logic_vector(047,9);
+	hbl_end <= conv_std_logic_vector(500,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(008,9) when (border xor gg) = '0' and mask_column = '1'
+			else conv_std_logic_vector(000,9) when (border xor gg) = '0'
+			else conv_std_logic_vector(048,9);
 
 	process (clk)
 	begin
