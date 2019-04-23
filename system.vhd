@@ -125,7 +125,6 @@ architecture Behavioral of system is
 	signal nvram_p:         std_logic := '0';
 	signal nvram_D_out:     std_logic_vector(7 downto 0);
 	
-	signal lock_mapper_A:	std_logic := '0';
 	signal lock_mapper_B:	std_logic := '0';
 
 begin
@@ -344,33 +343,32 @@ begin
 			nvram_e  <= '0';
 			nvram_ex <= '0';
 			nvram_p  <= '0';
-			lock_mapper_A <= '0' ;
 			lock_mapper_B <= '0' ;
 		else
 			if rising_edge(clk_sys) then
 				if WR_n='0' and A(15 downto 2)="11111111111111" then
-					if lock_mapper_B='0' then
-						lock_mapper_A <= '1' ;
-						case A(1 downto 0) is
-							when "00" => 
-								nvram_ex <= D_in(4);
-								nvram_e  <= D_in(3);
-								nvram_p  <= D_in(2);
-							when "01" => bank0 <= D_in;
-							when "10" => bank1 <= D_in;
-							when "11" => bank2 <= D_in;
-						end case;
-					end if;
+					case A(1 downto 0) is
+						when "00" => 
+							nvram_ex <= D_in(4);
+							nvram_e  <= D_in(3);
+							nvram_p  <= D_in(2);
+						when "01" => bank0 <= D_in;
+						when "10" => bank1 <= D_in;
+						when "11" => bank2 <= D_in;
+					end case;
 				end if;
-				if WR_n='0' and lock_mapper_A='0' then
+				if WR_n='0' and nvram_e='0' then
 					case A(15 downto 0) is
 				-- Codemasters
-						when x"0000" => bank0 <= D_in ;  lock_mapper_B <= '1' ;
+				-- do not accept writing in adr $0000 (canary) unless we are sure that Codemasters mapper is in use
+						when x"0000" => if (lock_mapper_B='1') then 
+												bank0 <= D_in ;  
+											end if;
 						when x"4000" => bank1 <= D_in ;  lock_mapper_B <= '1' ;
 						when x"8000" => bank2 <= D_in ;  lock_mapper_B <= '1' ;
 				-- Korean mapper (Sangokushi 3, Dodgeball King)
 				-- should be safe to enable unconditionally, A000 is ROM area
-						when x"A000" => bank2 <= D_in ;  lock_mapper_B <= '1' ;
+						when x"A000" => bank2 <= D_in ;
 						when others => null ;
 					end case ;
 				end if;
