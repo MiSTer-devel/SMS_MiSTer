@@ -36,6 +36,10 @@
         di
         im      1
         ld      sp,     $DFF0
+	in	a,($c0) ; special Mist(er) : during bootload, bit7 is game-gear indicator
+	bit	7,a
+	jr	nz,gamegear_loc
+smsstart:
         jp      start
 ;------------------------------------------------------------------------------
 
@@ -47,6 +51,8 @@ vdp_write_de:
                 ld      a, d
                 out     (VDP_ADDR), a
                 ret
+;
+;
 .ORGA   $0018
 vdp_write_addr_de:
                 ld      a, e
@@ -81,6 +87,7 @@ interrupt_end:
         ei
         ret
 ;------------------------------------------------------------------------------
+gamegear_loc:	jp	gamegear
 
 ; NMI -------------------------------------------------------------------------
 .ORGA   $0066
@@ -177,21 +184,51 @@ start:
         ld      hl, pal_table_fg
         call    vdp_set_pal
 
-    wait_for_rom:
-	ld	a, $3e
-	ld	($c700),a
-	ld	a, $b8
-	ld	($c701),a ; ld a,$b8
-	ld	a, $d3
-	ld	($c702),a
-	ld	a, $3e    ; out 3e,(a)
-	ld	($c703),a
-	ld	a, $c3
-	ld	($c704),a
-	ld	a, 00
-	ld	($c705),a
-	ld	($c706),a; jp 0
+wait_for_rom:
+
+	ld 	hl,modelSMS
+	ld	de,$c700
+	ld	bc,modelSMS_end-modelSMS
+	ldir
+	ld	ix,$0000
+	ld	iy,$0000
+	ld	hl,$0293
+	ld	sp,$dff0
+	ld	($c000),a
 	jp	$c700
+;
+gamegear:
+	call	vdp_clear	; raz vram
+	ld	hl,$c000
+	xor	a
+	ld	(hl),a
+	ld	bc,$1FFF
+	ld	de,$c001
+	ldir			; raz memory
+	ld 	hl,modelGG
+	ld	de,$c800
+	ld	bc,modelGG_end-modelGG
+	ldir
+	ld	ix,$0000
+	ld	iy,$0000
+	ld	hl,$00fa
+	ld	sp,$dfee
+	ld	a,$a8
+	ld	($c000),a
+	jp     $c800
+;
+;	
+modelSMS:
+	ld 	a,$ab
+	out	($3e),a
+	jp	$0000
+modelSMS_end:
+modelGG:
+	ld	a,$a8
+	out	($3e),a
+	jp	$0000
+modelGG_end:
+	.db	0
 
 ;------------------------------------------------------------------------------
 
@@ -214,9 +251,9 @@ boot_end:
 .ORGA   $7FF0
 
 	.DB	"TMR SEGA"	; Trademark
-    .DW     $0120           ; Year
+	.DW     $0120           ; Year
 	.DW	$0000		; Checksum not correct
 	.DW	$0000		; Part Num not correct
-    .DB     $01             ; Version
-    .DB     $4C             ; Master System, 32k
-
+	.DB     $01             ; Version
+	.DB     $4C             ; Master System, 32k
+;
