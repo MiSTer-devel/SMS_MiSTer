@@ -287,7 +287,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if RESET_n='0' then 
-				bootloader_n <= gg or not bios_en;
+				bootloader_n <= not bios_en;
 			elsif ctl_WR_n='0' and bootloader_n='0' then
 				bootloader_n <= '1';
 			end if;
@@ -316,7 +316,13 @@ begin
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
 				D_out <= "11111"&det_D;
 			elsif (A(7 downto 6)="11" or (gg='1' and A(7 downto 3)="00000" and A(2 downto 0)/="111")) then
-				D_out <= io_D_out;
+				D_out(6 downto 0) <= io_D_out(6 downto 0);
+				-- during bootload, we trick the io ports so bit 7 indicates gg or sms game
+				if (bootloader_n='0') then
+					D_out(7) <= gg;
+				else
+					D_out(7) <= io_D_out(7);
+				end if;
 			else
 				D_out <= vdp_D_out;
 			end if;

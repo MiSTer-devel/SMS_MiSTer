@@ -167,6 +167,7 @@ parameter CONF_STR3 = {
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"OE,Multitap,Disabled,Port1;",
+	"OB,BIOS,Enable,Disable;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -342,7 +343,7 @@ system #(MAX_SPPL) system
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
 	.gg(gg),
-	.bios_en(1),
+	.bios_en(~status[11]),
 
 	.RESET_n(~reset),
 
