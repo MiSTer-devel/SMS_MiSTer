@@ -85,7 +85,7 @@ parameter CONF_STR = {
 	"OC,FM sound,Enable,Disable;",
 	"OA,Region,US/UE,Japan;",
 	"O1,Swap joysticks,No,Yes;",
-	"O5,SMS BIOS,Enable,Disable;",
+	"O5,BIOS,Enable,Disable;",
 	"T0,Reset;",
 	"V,v1.0.",`BUILD_DATE
 };
