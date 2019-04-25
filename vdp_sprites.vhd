@@ -162,7 +162,7 @@ begin
 						state <= LOAD_X;
 						
 					when LOAD_X =>
-						spr_x(count)	<= vram_d;
+						spr_x(count)	<= vram_d-1;
 						state <= LOAD_0;
 						
 					when LOAD_0 =>
@@ -195,7 +195,7 @@ begin
 		variable collision 	: std_logic_vector(7 downto 0);
 	begin
 		if rising_edge(clk_sys) then
-			if ce_vdp='1' then 
+			if ce_pix='1' then  -- ce_vdp?? 
 				color <= (others=>'0');
 				collision := (others=>'0');
 				for i in MAX_SPPL downto 8 loop
