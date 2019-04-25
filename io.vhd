@@ -47,7 +47,7 @@ begin
 			ctrl <= x"FF";
 			gg_ddr <= x"FF";
 			gg_txd <= x"00" ;
-			gg_rxd <=x"FF";
+			gg_rxd <= x"FF";
 			gg_pdr <= x"00";
 			-- gg_sctrl <= "00111" ;
 		elsif rising_edge(clk) then
@@ -56,7 +56,7 @@ begin
 					when "001" => gg_pdr <= D_in ;
 					when "010" => gg_ddr <= D_in ;
 					when "011" => gg_txd <= D_in ;
-					when "100" => gg_rxd <= D_in ;
+					-- when "100" => gg_rxd <= D_in ;
 					-- when "101" => gg_sctrl <= D_in(7 downto 3) ; --sio.sctrl = data & 0xF8;
 					when others => null ;
 				end case;
@@ -90,8 +90,9 @@ begin
 							else
 								D_out(6 downto 0) <= "0000000";
 							end if;
-						when "001" => D_out <= gg_pdr(7)&(gg_ddr(6 downto 0) or gg_pdr(6 downto 0)) ;
-						when "010" => D_out <= gg_ddr ;
+						-- when "001" => D_out <= gg_pdr(7)&(gg_ddr(6 downto 0) or gg_pdr(6 downto 0)) ;
+						when "001" => D_out <= gg_pdr(7)&(not gg_ddr(6 downto 0) and gg_pdr(6 downto 0)) ;
+						when "010" => D_out <= gg_ddr ; -- bit7 controls NMI ?
 						when "011" => D_out <= gg_txd ;
 						when "100" => D_out <= gg_rxd ;
 						when "101" => D_out <= "00111000"; -- gg_sctrl & "000" ;
