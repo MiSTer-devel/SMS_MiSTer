@@ -14,6 +14,6 @@
 * The aspect ratio doesn't do much in PAL mode, that's normal
 * The Region parameter toggle some hardware features that are specific to the different console models.
   Some localized games need these modification to work properly
-* Each game cartridge come with a specific mapper, which description is not included in the .gg ou .sms file.
-  The core has a special logic to automatically determine which mapper needs to be used, but some game make
+* Each game cartridge comes with a specific mapper, which description is not included in the .gg ou .sms file.
+  The core has a special logic to automatically determine which mapper needs to be used, but some games make
   a good effort to make this logic fail. This parameter permits to force the usage of the most used sega mapper. 
