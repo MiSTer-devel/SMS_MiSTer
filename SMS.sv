@@ -168,6 +168,7 @@ parameter CONF_STR3 = {
 	"O1,Swap joysticks,No,Yes;",
 	"OE,Multitap,Disabled,Port1;",
 	"OB,BIOS,Enable,Disable;",
+	"OF,Lock mappers,No,Yes;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -374,6 +375,7 @@ system #(MAX_SPPL) system
 	.smode_M3(smode_M3),
 	.pal(pal),
 	.region(status[10]),
+	.mapper_lock(status[15]),
 
 	.fm_ena(~status[12]),
 	.audioL(audio_l),
