@@ -287,6 +287,7 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
+	.mask_column(mask_column),
 	.smode_M1(smode_M1),
 	.smode_M3(smode_M3),	
 	.mapper_lock(status[15]),
@@ -319,16 +320,19 @@ spram #(.widthad_a(13)) ram_inst
 wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
+wire mask_column;
 wire HSync, VSync, HBlank, VBlank;
 wire smode_M1, smode_M3;
+wire pal = status[2];
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
-	.pal(status[2]),
+	.pal(pal),
 	.gg(0),
 	.border(1),
+	.mask_column(mask_column),
 	.x(x),
 	.y(y),
    .smode_M1(smode_M1),
