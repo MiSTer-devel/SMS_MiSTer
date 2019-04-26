@@ -86,6 +86,7 @@ parameter CONF_STR = {
 	"OA,Region,US/UE,Japan;",
 	"O1,Swap joysticks,No,Yes;",
 	"O5,BIOS,Enable,Disable;",
+	"OF,Lock mappers,No,Yes;",
 	"T0,Reset;",
 	"V,v1.0.",`BUILD_DATE
 };
@@ -288,6 +289,7 @@ system #(MAX_SPPL) system
 	.color(color),
 	.smode_M1(smode_M1),
 	.smode_M3(smode_M3),	
+	.mapper_lock(status[15]),
 	.fm_ena(~status[12]),  
 	.audioL(audioL),
    .audioR(audioR),
