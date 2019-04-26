@@ -47,6 +47,7 @@ entity system is
 		smode_M3:		out STD_LOGIC;
 		pal:				in STD_LOGIC;
 		region:			in	STD_LOGIC;
+		mapper_lock:	in STD_LOGIC;
 
 		audioL:		out STD_LOGIC_VECTOR(15 downto 0);
 		audioR:		out STD_LOGIC_VECTOR(15 downto 0);
@@ -360,18 +361,23 @@ begin
 							nvram_p  <= D_in(2);
 						when "01" => bank0 <= D_in;
 						when "10" => bank1 <= D_in;
-						when "11" => bank2 <= D_in;
+						when "11" => bank2 <= D_in ; 
 					end case;
 				end if;
-				if WR_n='0' and nvram_e='0' then
+				if WR_n='0' and nvram_e='0' and mapper_lock='0' then
 					case A(15 downto 0) is
 				-- Codemasters
 				-- do not accept writing in adr $0000 (canary) unless we are sure that Codemasters mapper is in use
-						when x"0000" => if (lock_mapper_B='1') then 
-												bank0 <= D_in ;  
-											end if;
-						when x"4000" => bank1 <= D_in ;  lock_mapper_B <= '1' ;
-						when x"8000" => bank2 <= D_in ;  lock_mapper_B <= '1' ;
+						when x"0000" => 
+							if (lock_mapper_B='1') then 
+								bank0 <= D_in ;  
+							end if;
+						when x"4000" => 
+							bank1 <= D_in ;  
+							lock_mapper_B <= '1' ;
+						when x"8000" => 
+							bank2 <= D_in ; 
+							lock_mapper_B <= '1' ;
 				-- Korean mapper (Sangokushi 3, Dodgeball King)
 				-- should be safe to enable unconditionally, A000 is ROM area
 						when x"A000" => bank2 <= D_in ;

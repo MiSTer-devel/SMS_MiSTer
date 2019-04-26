@@ -52,16 +52,19 @@ begin
 			-- gg_sctrl <= "00111" ;
 		elsif rising_edge(clk) then
 			if gg='1' and A(7 downto 3) = "00000" then
-				case A(2 downto 0) is
-					when "001" => gg_pdr <= D_in ;
-					when "010" => gg_ddr <= D_in ;
-					when "011" => gg_txd <= D_in ;
-					-- when "100" => gg_rxd <= D_in ;
-					-- when "101" => gg_sctrl <= D_in(7 downto 3) ; --sio.sctrl = data & 0xF8;
-					when others => null ;
-				end case;
+				if WR_n='0' then
+					case A(2 downto 0) is
+						when "001" => gg_pdr <= D_in ;
+						when "010" => gg_ddr <= D_in ;
+						when "011" => gg_txd <= D_in ;
+						-- when "100" => gg_rxd <= D_in ;
+						-- when "101" => gg_sctrl <= D_in(7 downto 3) ; --sio.sctrl = data & 0xF8;
+						when others => null ;
+					end case;
+				end if;
 			elsif A(0)='1' then
-				if WR_n='0' and ((A(7 downto 4)/="0000") or (A(3 downto 0)="0000")) then
+--				if WR_n='0' and ((A(7 downto 4)/="0000") or (A(3 downto 0)="0000")) then
+				if WR_n='0' then
 					ctrl <= D_in;
 				end if ;
 			end if;
