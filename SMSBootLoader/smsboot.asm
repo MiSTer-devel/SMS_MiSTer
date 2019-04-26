@@ -194,6 +194,7 @@ wait_for_rom:
 	ld	iy,$0000
 	ld	hl,$0293
 	ld	sp,$dff0
+	ld	a,$ab
 	ld	($c000),a
 	jp	$c700
 ;
