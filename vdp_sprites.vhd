@@ -146,7 +146,7 @@ begin
 								state <= WAITING;
 							end if;
 						else
-							if index<MAX_SPPL then
+							if index<63 then
 								index <= index+1;
 							else
 								state <= WAITING;

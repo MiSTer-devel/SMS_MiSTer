@@ -168,7 +168,7 @@ parameter CONF_STR3 = {
 	"O1,Swap joysticks,No,Yes;",
 	"OE,Multitap,Disabled,Port1;",
 	"OB,BIOS,Enable,Disable;",
-	"OF,Lock mappers,No,Yes;",
+	"OF,Disable mappers,No,Yes;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
