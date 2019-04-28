@@ -153,7 +153,6 @@ begin
 	end process;
 	
 	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
-
 	color <= cram_D;
 
 end Behavioral;

@@ -40,7 +40,7 @@ architecture Behavioral of vdp_sprites is
 	constant LOAD_2:	integer := 6;
 	constant LOAD_3:	integer := 7;
 
-	signal state:		integer	:= WAITING;
+	signal state:		integer range 0 to 15 := WAITING;
 	signal count:		integer range 0 to 64;
 	signal index:		std_logic_vector(5 downto 0);
 	signal data_address: std_logic_vector(13 downto 2);
@@ -58,7 +58,7 @@ architecture Behavioral of vdp_sprites is
 
 	type tcolor is array (0 to MAX_SPPL) of std_logic_vector(3 downto 0);
 	signal spr_color:	tcolor;
-	signal active:		std_logic_vector(MAX_SPPL downto 0);
+	signal spr_active:	std_logic_vector(0 to MAX_SPPL);
 	
 begin
 	shifters:
@@ -82,7 +82,7 @@ begin
 			spr_d2=> spr_d2(i),
 			spr_d3=> spr_d3(i),
 			color => spr_color(i),
-			active=> active(i)
+			active=> spr_active(i)
 		);
 	end generate;
 
@@ -131,9 +131,12 @@ begin
 					when COMPARE =>
 						if d9=208 and smode_M1='0' and smode_M3='0' then  -- hD0 stops only in 192 mode
 							state <= WAITING; -- stop
-						elsif (delta(8 downto 3)="00000" and tall='0') or (delta(8 downto 4)="0000" and (tall='1' or wide='1')) then
+					--	elsif delta(8 downto 4)="00000" and (delta(3)='0' or tall='1' or wide='1') then
+						elsif delta(8 downto 5)="0000" and 
+								(delta(4)='0' or (tall='1' and wide='1')) and
+								(delta(3)='0' or tall='1' or wide='1') then
 							if (wide='1') then
-								data_address(4 downto 2) <= delta(3 downto 1);
+								data_address(5 downto 2) <= delta(4 downto 1);
 							else
 								data_address(5 downto 2) <= delta(3 downto 0);
 							end if;
@@ -156,7 +159,8 @@ begin
 					when LOAD_N =>
 						data_address(13) <= char_high_bit;
 						data_address(12 downto 6) <= vram_d(7 downto 1);
-						if tall='0' or wide='1' then
+						if tall='0' -- or wide='1' 
+						then
 							data_address(5) <= vram_d(0);
 						end if;
 						state <= LOAD_X;
@@ -199,12 +203,12 @@ begin
 				color <= (others=>'0');
 				collision := (others=>'0');
 				for i in MAX_SPPL downto 8 loop
-					if enable(i) and active(i)='1' and not (spr_color(i)="0000") then
+					if enable(i) and spr_active(i)='1' then -- and not (spr_color(i)="0000") then
 						color <= spr_color(i);
 					end if;
 				end loop;
 				for i in 7 downto 0 loop
-					if enable(i) and active(i)='1' and not (spr_color(i)="0000") then
+					if enable(i) and spr_active(i)='1' then -- and not (spr_color(i)="0000") then
 						collision(i) := '1';
 						color <= spr_color(i);
 					end if;
