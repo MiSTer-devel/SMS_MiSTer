@@ -81,6 +81,7 @@ architecture Behavioral of system is
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
 	signal D_out:				std_logic_vector(7 downto 0);
+	signal last_read_addr:  std_logic_vector(15 downto 0);
 	
 	signal vdp_RD_n:			std_logic;
 	signal vdp_WR_n:			std_logic;
@@ -124,9 +125,12 @@ architecture Behavioral of system is
 	signal nvram_e:         std_logic := '0';
 	signal nvram_ex:        std_logic := '0';
 	signal nvram_p:         std_logic := '0';
+	signal nvram_cme:       std_logic := '0'; -- cpdemasters ram extension
 	signal nvram_D_out:     std_logic_vector(7 downto 0);
 	
 	signal lock_mapper_B:	std_logic := '0';
+	signal mapper_codies:	std_logic := '0'; -- Ernie Els Golf mapper
+	signal mapper_codies_lock:	std_logic := '0'; 
 
 begin
 
@@ -281,7 +285,9 @@ begin
 	det_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)=x"F2" else '1';
 					
 	ram_WR   <= not WR_n when MREQ_n='0' and A(15 downto 14)="11" else '0';
-	nvram_WR <= not WR_n when MREQ_n='0' and ((A(15 downto 14)="10" and nvram_e = '1') or (A(15 downto 14)="11" and nvram_ex = '1')) else '0';
+	nvram_WR <= not WR_n when MREQ_n='0' and ((A(15 downto 14)="10" and nvram_e = '1') 
+						or (A(15 downto 14)="11" and nvram_ex = '1') 
+						or (A(15 downto 13)="101" and nvram_cme = '1')) else '0';
 	rom_RD   <= not RD_n when MREQ_n='0' and A(15 downto 14)/="11" else '0';
 
 	process (clk_sys)
@@ -311,7 +317,7 @@ begin
 		end if;
 	end process;
 	
-	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,gg,det_D,fm_ena)
+	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
@@ -332,6 +338,8 @@ begin
 				D_out <= nvram_D_out;
 			elsif A(15 downto 14)="11" and nvram_ex = '0' then
 				D_out <= ram_D_out;
+			elsif A(15 downto 13)="101" and nvram_cme  = '1' then
+				D_out <= nvram_D_out;
 			elsif A(15 downto 14)="10" and nvram_e  = '1' then
 				D_out <= nvram_D_out;
 			else
@@ -350,10 +358,17 @@ begin
 			nvram_e  <= '0';
 			nvram_ex <= '0';
 			nvram_p  <= '0';
+			nvram_cme <= '0';
 			lock_mapper_B <= '0' ;
+			mapper_codies <= '0' ;
+			mapper_codies_lock <= '0' ;
 		else
 			if rising_edge(clk_sys) then
+				if WR_n='1' and MREQ_n='0' then
+					last_read_addr <= A; -- gyurco anti-ldir patch
+				end if;
 				if WR_n='0' and A(15 downto 2)="11111111111111" then
+					mapper_codies <= '0' ;
 					case A(1 downto 0) is
 						when "00" => 
 							nvram_ex <= D_in(4);
@@ -371,16 +386,35 @@ begin
 						when x"0000" => 
 							if (lock_mapper_B='1') then 
 								bank0 <= D_in ;  
+								-- we need a strong criteria to set mapper_codies, hopefully only Ernie Els Golf
+								-- will have written a zero in $4000 before coming here
+								if D_in /= "00000000" and mapper_codies_lock = '0' then
+									if bank1 = "00000001" then
+										mapper_codies <= '1' ;
+									end if;
+									mapper_codies_lock <= '1' ;
+								end if;
 							end if;
 						when x"4000" => 
-							bank1 <= D_in ;  
-							lock_mapper_B <= '1' ;
+							if last_read_addr /= x"4000" then -- gyurco anti-ldir patch
+								bank1(6 downto 0) <= D_in(6 downto 0) ;
+								bank1(7) <= '0' ;
+								-- mapper_codies <= mapper_codies or D_in(7) ;
+								nvram_cme <= D_in(7) ;
+								lock_mapper_B <= '1' ;
+							end if ;
 						when x"8000" => 
-							bank2 <= D_in ; 
-							lock_mapper_B <= '1' ;
-				-- Korean mapper (Sangokushi 3, Dodgeball King)
-				-- should be safe to enable unconditionally, A000 is ROM area
-						when x"A000" => bank2 <= D_in ;
+							if last_read_addr /= x"8000" then -- gyurco anti-ldir patch
+								bank2 <= D_in ; 
+								lock_mapper_B <= '1' ;
+							end if;
+					-- Korean mapper (Sangokushi 3, Dodgeball King)
+						when x"A000" => 
+							if last_read_addr /= x"A000" then -- gyurco anti-ldir patch
+								if mapper_codies='0' then
+									bank2 <= D_in ;
+								end if ;
+							end if ;
 						when others => null ;
 					end case ;
 				end if;
@@ -394,7 +428,7 @@ begin
 		case A(15 downto 14) is
 		when "00" =>
 			-- first kilobyte is always from bank 0
-			if A(13 downto 10)="0000" then
+			if A(13 downto 10)="0000" and mapper_codies='0' then
 				rom_a(21 downto 14) <= (others=>'0');
 			else
 				rom_a(21 downto 14) <= bank0;
