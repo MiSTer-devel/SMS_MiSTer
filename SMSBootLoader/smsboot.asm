@@ -186,6 +186,16 @@ start:
 
 wait_for_rom:
 
+	; Setup palette for mode2 default
+        ld      a, 0
+        ld      b, 16
+        ld      hl, pal_table_mode2
+        call    vdp_set_pal
+        ld      a, 16
+        ld      b, 16
+        ld      hl, pal_table_mode2
+        call    vdp_set_pal
+	;
 	ld 	hl,modelSMS
 	ld	de,$c700
 	ld	bc,modelSMS_end-modelSMS

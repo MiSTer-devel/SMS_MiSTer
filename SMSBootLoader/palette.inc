@@ -45,4 +45,21 @@ pal_table_fg:
 .db             %00000000 ; 14: <UNUSED>
 .db             %00000000 ; 15: <UNUSED>
 ;----------------------------------------------------------------------------
+pal_table_mode2:
+.db             %00000000 ;  0: Transparent=Black
+.db             %00000000 ;  1: Black
+.db             %00001100 ;  2: Medium green
+.db             %00011101 ;  3: Light green
+.db             %00010000 ;  4: Dark blue
+.db             %00110000 ;  5: light blue
+.db             %00000001 ;  6: Dark Red
+.db             %00111100 ;  7: Cyan
+.db             %00000011 ;  8: Medium Red
+.db             %00010111 ;  9: light red
+.db             %00001010 ; 10: dark yellow
+.db             %00001111 ; 11: light yellow
+.db             %00001000 ; 12: dark green
+.db             %00110011 ; 13: magenta
+.db             %00101010 ; 14: grey
+.db             %00111111 ; 15: white
 
