@@ -28,16 +28,19 @@ entity vdp_main is
 		mask_column0:		in  std_logic;
 		smode_M1:			in  std_logic;
 		smode_M3:			in  std_logic;
+		smode_M4:			in  std_logic;
 		overscan:			in  std_logic_vector (3 downto 0);
 
-		bg_address:			in  std_logic_vector (2 downto 0);
+		bg_address:			in  std_logic_vector (3 downto 0);
+		m2mg_address:		in  std_logic_vector (2 downto 0);
+		m2ct_address:		in  std_logic_vector (7 downto 0);
 		bg_scroll_x:		in  std_logic_vector(7 downto 0);
 		bg_scroll_y:		in  std_logic_vector(7 downto 0);
 		disable_hscroll:	in  std_logic;
 		disable_vscroll:    in  std_logic;
 
-		spr_address:		in  std_logic_vector (5 downto 0);
-		spr_high_bit:		in  std_logic;
+		spr_address:		in  std_logic_vector (6 downto 0);
+		spr_high_bits:		in  std_logic_vector(2 downto 0);
 		spr_shift:			in  std_logic;	
 		spr_tall:			in  std_logic;
 		spr_wide:			in  std_logic;
@@ -85,6 +88,8 @@ begin
 		clk_sys			=> clk_sys,
 		ce_pix			=> ce_pix,
 		table_address	=> bg_address,
+		pt_address		=> m2mg_address,
+		ct_address		=> m2ct_address,
 		reset				=> line_reset,
 		disable_hscroll=> disable_hscroll,
 		scroll_x 		=> bg_scroll_x,
@@ -96,6 +101,8 @@ begin
 		color				=> bg_color,
 		smode_M1			=> smode_M1,
 		smode_M3			=> smode_M3,
+		smode_M4			=> smode_M4,
+		
 		priority			=> bg_priority);
 		
 	vdp_spr_inst: entity work.vdp_sprites
@@ -109,7 +116,7 @@ begin
 		ce_sp				=> ce_sp,
 		sp64				=> sp64,
 		table_address	=> spr_address,
-		char_high_bit	=> spr_high_bit,
+		char_high_bits	=> spr_high_bits,
 		tall				=> spr_tall,
 		wide				=> spr_wide,
 		shift				=> spr_shift,
@@ -119,6 +126,7 @@ begin
 		overflow			=> spr_overflow,
 		smode_M1			=> smode_M1,
 		smode_M3			=> smode_M3,
+		smode_M4			=> smode_M4,
 		vram_A			=> spr_vram_A,
 		vram_D			=> vram_D,		
 		color				=> spr_color);
@@ -142,7 +150,15 @@ begin
 				elsif (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
 					cram_A <= "1"&spr_color;
 				else
-					cram_A <= bg_color;
+				   if smode_M4='1' then
+						cram_A <= bg_color;
+					else
+						if bg_color(3 downto 0)="0000" then
+							cram_A <= '1'&overscan;	
+						else
+							cram_A <= bg_color ;
+						end if;
+					end if;
 				end if;
 			else
 				cram_A <= "1"&overscan;
@@ -153,6 +169,6 @@ begin
 	end process;
 	
 	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
-	color <= cram_D;
-
+	color <= cram_D ;
+	
 end Behavioral;

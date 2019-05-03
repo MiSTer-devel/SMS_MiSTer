@@ -27,7 +27,9 @@ entity vdp is
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		mask_column:   out STD_LOGIC;
 		smode_M1: 		out STD_LOGIC;
+		smode_M2: 		out STD_LOGIC;
 		smode_M3: 		out STD_LOGIC;
+		smode_M4: 		out STD_LOGIC;
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -71,14 +73,16 @@ architecture Behavioral of vdp is
 	signal irq_frame_en:		std_logic := '0';
 	signal irq_line_en:		std_logic := '0';
 	signal irq_line_count:	std_logic_vector(7 downto 0) := (others=>'1');	
-	signal bg_address:		std_logic_vector (2 downto 0) := (others=>'0');
+	signal bg_address:		std_logic_vector (3 downto 0) := (others=>'0');
+	signal m2mg_address:		std_logic_vector (2 downto 0) := (others=>'0');
+	signal m2ct_address:		std_logic_vector (7 downto 0) := (others=>'1');
 	signal bg_scroll_x:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal bg_scroll_y:		std_logic_vector(7 downto 0) := (others=>'0');
-	signal spr_address:		std_logic_vector (5 downto 0) := (others=>'0');
+	signal spr_address:		std_logic_vector (6 downto 0) := (others=>'0');
 	signal spr_shift:			std_logic := '0';
 	signal spr_tall:			std_logic := '0';
 	signal spr_wide:			std_logic := '0';
-	signal spr_high_bit:		std_logic := '0';
+	signal spr_high_bits:	std_logic_vector(2 downto 0) := "000";
 
 	-- various counters
 	signal last_x0:			std_logic := '0';
@@ -98,14 +102,17 @@ architecture Behavioral of vdp is
 	signal mode_M1:			std_logic;
 	signal mode_M2:			std_logic;
 	signal mode_M3:			std_logic;
+	signal mode_M4:			std_logic;
 	signal xmode_M1:			std_logic;
 	signal xmode_M3:			std_logic;
+	signal xmode_M4:			std_logic;
 	
 begin
 	
 	mask_column <= mask_column0;
 	xmode_M1<= mode_M1 and mode_M2 ;
 	xmode_M3<= mode_M3 and mode_M2 ;
+	xmode_M4<= mode_M4;
 
 	vdp_main_inst: entity work.vdp_main
 	generic map(
@@ -129,19 +136,22 @@ begin
 		color				=> color,
 		smode_M1			=> xmode_M1,
 		smode_M3			=> xmode_M3,
+		smode_M4			=> xmode_M4,
 						
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,
 		overscan			=> overscan,
 
 		bg_address		=> bg_address,
+		m2mg_address	=> m2mg_address,
+		m2ct_address	=> m2ct_address,
 		bg_scroll_x		=> bg_scroll_x,
 		bg_scroll_y		=> bg_scroll_y,
 		disable_hscroll=>disable_hscroll,
 		disable_vscroll => disable_vscroll,
 
 		spr_address		=> spr_address,
-		spr_high_bit	=> spr_high_bit,
+		spr_high_bits	=> spr_high_bits,
 		spr_shift		=> spr_shift,
 		spr_tall			=> spr_tall,
 		spr_wide			=> spr_wide,
@@ -186,8 +196,10 @@ begin
 	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
-	smode_M1 <= mode_M1 and mode_M2 ;
-	smode_M3 <= mode_M3 and mode_M2 ;
+	smode_M1 <= mode_M1 ;--and mode_M2 ;
+	smode_M2 <= mode_M2;
+	smode_M3 <= mode_M3 ; --and mode_M2 ;
+	smode_M4 <= mode_M4;
 	
 	process (clk_sys, reset_n)
 	variable reset_set: boolean ;
@@ -202,9 +214,9 @@ begin
 			irq_frame_en	<= '0';--
 			spr_tall			<= '0';--
 			spr_wide			<= '0';--
-			bg_address		<= "111";--FF
-			spr_address		<= "111111";--FF
-			spr_high_bit	<= '0';--FB
+			bg_address		<= "1110";--FF
+			spr_address		<= "1111111";--FF
+			spr_high_bits	<= "000";--FB
 			overscan			<= "0000";--00
 			bg_scroll_x		<= (others => '0');--00
 			bg_scroll_y		<= (others => '0');--00
@@ -215,6 +227,7 @@ begin
 			mode_M1			<= '0';
 			mode_M2			<= '0';
 			mode_M3			<= '0';
+			mode_M4			<= '1';
 			
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
@@ -255,21 +268,25 @@ begin
 								mask_column0	<= xram_cpu_A(5);
 								irq_line_en		<= xram_cpu_A(4);
 								spr_shift		<= xram_cpu_A(3);
-								-- M4 is ignored since we don't implement modes 1 to 3
+								mode_M4			<= xram_cpu_A(2);
 								mode_M2			<= xram_cpu_A(1);
 							when "100001" =>
 								display_on		<= xram_cpu_A(6);
 								irq_frame_en	<= xram_cpu_A(5);
-								mode_M1			<= xram_cpu_A(4) and not xram_cpu_A(3);
-								mode_M3			<= xram_cpu_A(3) and not xram_cpu_A(4);
+								mode_M1			<= xram_cpu_A(4) ; -- and not xram_cpu_A(3);
+								mode_M3			<= xram_cpu_A(3) ; -- and not xram_cpu_A(4);
 								spr_tall			<= xram_cpu_A(1);
 								spr_wide			<= xram_cpu_A(0);
 							when "100010" =>
-								bg_address		<= xram_cpu_A(3 downto 1);
+								bg_address		<= xram_cpu_A(3 downto 0);
+							when "100011" =>
+								m2ct_address	<= xram_cpu_A(7 downto 0);
+							when "100100" =>
+								m2mg_address	<= xram_cpu_A(2 downto 0);
 							when "100101" =>
-								spr_address		<= xram_cpu_A(6 downto 1);
+								spr_address		<= xram_cpu_A(6 downto 0);
 							when "100110" =>
-								spr_high_bit	<= xram_cpu_A(2);
+								spr_high_bits	<= xram_cpu_A(2 downto 0);
 							when "100111" =>
 								overscan			<= xram_cpu_A(3 downto 0);
 							when "101000" =>

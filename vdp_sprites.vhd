@@ -13,13 +13,14 @@ port (
 	ce_pix			: in  STD_LOGIC;
 	ce_sp				: in  STD_LOGIC;
 	sp64				: in  std_logic;
-	table_address	: in  STD_LOGIC_VECTOR (13 downto 8);
-	char_high_bit	: in  std_logic;
+	table_address	: in  STD_LOGIC_VECTOR (13 downto 7);
+	char_high_bits	: in  std_logic_vector (2 downto 0);
 	tall				: in  std_logic;
 	wide 				: in  std_logic;
 	shift				: in  std_logic;
 	smode_M1			: in	std_logic ;
 	smode_M3			: in	std_logic ;
+	smode_M4			: in	std_logic ;
 	vram_A			: out STD_LOGIC_VECTOR (13 downto 0);
 	vram_D			: in  STD_LOGIC_VECTOR (7 downto 0);
 	x					: in  STD_LOGIC_VECTOR (8 downto 0);
@@ -31,20 +32,21 @@ end vdp_sprites;
 
 architecture Behavioral of vdp_sprites is
 
-	constant WAITING:	integer := 0;
-	constant COMPARE:	integer := 1;
-	constant LOAD_N:	integer := 2;
-	constant LOAD_X:	integer := 3;
-	constant LOAD_0:	integer := 4;
-	constant LOAD_1:	integer := 5;
-	constant LOAD_2:	integer := 6;
-	constant LOAD_3:	integer := 7;
+	constant WAITING:	std_logic_vector := "000";
+	constant COMPARE:	std_logic_vector := "001";
+	constant LOAD_N:	std_logic_vector := "010";
+	constant LOAD_X:	std_logic_vector := "011";
+	constant LOAD_0:	std_logic_vector := "100";
+	constant LOAD_1:	std_logic_vector := "101";
+	constant LOAD_2:	std_logic_vector := "110";
+	constant LOAD_3:	std_logic_vector := "111";
 
-	signal state:		integer range 0 to 15 := WAITING;
+	signal state:		std_logic_vector(2 downto 0) := WAITING;
 	signal count:		integer range 0 to 64;
 	signal index:		std_logic_vector(5 downto 0);
-	signal data_address: std_logic_vector(13 downto 2);
+	signal data_address: std_logic_vector(13 downto 0);
 	signal ce_spload:	std_logic;
+	signal m2_flags:  std_logic_vector(7 downto 0);
 
 	type tenable	is array (0 to MAX_SPPL) of boolean;
 	type tx			is array (0 to MAX_SPPL) of std_logic_vector(7 downto 0);
@@ -76,6 +78,7 @@ begin
 			-- outside the module to avoid to have them duplicated 64 times.
 			load  => shift='0' and x<256, --load range
 			x248  => shift='1' and (x<248 or x>=504), --load range for shifted sprites
+			m4 => smode_M4='1',
 			wide_n	=> wide='0',
 			spr_d0=> spr_d0(i),
 			spr_d1=> spr_d1(i),
@@ -86,14 +89,22 @@ begin
 		);
 	end generate;
 
-	with state select
-	vram_a <=	table_address&"00"&index		when COMPARE,
-					table_address&"1"&index&"1"	when LOAD_N,
-					table_address&"1"&index&"0"	when LOAD_X,
-					data_address&"00"					when LOAD_0,
-					data_address&"01"					when LOAD_1,
-					data_address&"10"					when LOAD_2,
-					data_address&"11"					when LOAD_3,
+	with smode_M4 & state select
+	vram_a <=	table_address&index(4 downto 0)&"00"	when '0' & COMPARE,
+					table_address&index(4 downto 0)&"10"	when '0' & LOAD_N,
+					table_address&index(4 downto 0)&"01"	when '0' & LOAD_X,
+					table_address&index(4 downto 0)&"11"	when '0' & LOAD_0,
+					data_address									when '0' & LOAD_1,
+					data_address									when '0' & LOAD_2,
+					
+					table_address(13 downto 8)&"00"&index		when '1' & COMPARE,
+					table_address(13 downto 8)&"1"&index&"1"	when '1' & LOAD_N,
+					table_address(13 downto 8)&"1"&index&"0"	when '1' & LOAD_X,
+					data_address(13 downto 2)&"00"				when '1' & LOAD_0,
+					data_address(13 downto 2)&"01"				when '1' & LOAD_1,
+					data_address(13 downto 2)&"10"				when '1' & LOAD_2,
+					data_address(13 downto 2)&"11"				when '1' & LOAD_3,
+					
 					(others=>'0') when others;
 
 	ce_spload <= ce_vdp when (MAX_SPPL<8 or sp64='0') else ce_sp;
@@ -127,8 +138,8 @@ begin
 					delta := y9-d9;
 					--overflow <= '0';
 					
-					case state is
-					when COMPARE =>
+					case smode_M4 & state is
+					when '1' & COMPARE =>
 						if d9=208 and smode_M1='0' and smode_M3='0' then  -- hD0 stops only in 192 mode
 							state <= WAITING; -- stop
 					--	elsif delta(8 downto 4)="00000" and (delta(3)='0' or tall='1' or wide='1') then
@@ -156,8 +167,8 @@ begin
 							end if;
 						end if;
 						
-					when LOAD_N =>
-						data_address(13) <= char_high_bit;
+					when '1' & LOAD_N =>
+						data_address(13) <= char_high_bits(2);
 						data_address(12 downto 6) <= vram_d(7 downto 1);
 						if tall='0' -- or wide='1' 
 						then
@@ -165,29 +176,89 @@ begin
 						end if;
 						state <= LOAD_X;
 						
-					when LOAD_X =>
+					when '1' & LOAD_X =>
 						spr_x(count)	<= vram_d-1;
 						state <= LOAD_0;
 						
-					when LOAD_0 =>
+					when '1' & LOAD_0 =>
 						spr_d0(count)	<= vram_d;
 						state	<= LOAD_1;
 						
-					when LOAD_1 =>
+					when '1' & LOAD_1 =>
 						spr_d1(count)	<= vram_d;
 						state	<= LOAD_2;
 						
-					when LOAD_2 =>
+					when '1' & LOAD_2 =>
 						spr_d2(count)	<= vram_d;
 						state	<= LOAD_3;
 						
-					when LOAD_3 =>
+					when '1' & LOAD_3 =>
 						spr_d3(count)	<= vram_d;
 						enable(count)	<= true;
 						state	<= COMPARE;
 						index	<= index+1;
 						count	<= count+1;
 						
+					-- mode 2  -----------
+	
+					when '0' & COMPARE =>
+						if d9=208 then
+							state <= WAITING ;
+						elsif delta(8 downto 4)="00000" and (delta(3)='0' or tall='1') then 
+							data_address(13 downto 11) <= char_high_bits;
+							data_address(2 downto 0) <= delta(2 downto 0);
+							if (count<4) then
+								state <= LOAD_N;
+							else
+								state <= WAITING;
+							end if;
+						else
+							if index<63 then
+								index <= index+1;
+							else
+								state <= WAITING;
+							end if;
+						end if;
+						
+					when '0' & LOAD_N =>
+						data_address(13) <= char_high_bits(2);
+						data_address(10 downto 3) <= vram_d ;
+						state <= LOAD_0;
+
+					when '0' & LOAD_0 =>
+						if (delta(3)='1') then
+							data_address <= data_address+8 ;
+						end if;
+						m2_flags	<= vram_d;
+						state <= LOAD_X;
+
+					when '0' & LOAD_X =>
+						if m2_flags(7)='0' then
+							spr_x(count)	<= vram_d;
+						else
+							spr_x(count)	<= vram_d-32;
+						end if;
+						state <= LOAD_1;
+						
+					when '0' & LOAD_1 =>
+						-- in m2 mode, spr_d0 & 1 contains 16-bit shift data
+						-- and color goes to spr_d3
+						spr_d0(count) <= vram_d;
+						spr_d1(count) <= (others => '0');
+						spr_d2(count) <= (others => '0');
+						spr_d3(count) <= "0000" & m2_flags(3 downto 0) ;
+						data_address <= data_address+16 ;
+						state	<= LOAD_2 ;
+						
+					when '0' & LOAD_2 =>
+						if tall='1' then
+							spr_d1(count) <= vram_d ;
+						end if;
+						enable(count)	<= true;
+						state	<= COMPARE;
+						index	<= index+1;
+						count	<= count+1;
+							
 					when others =>
 					end case;
 				end if;

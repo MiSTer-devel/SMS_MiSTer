@@ -134,9 +134,9 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
-assign LED_USER  = ioctl_download | bk_state ;
-assign LED_DISK  = 0; // smode_M1 ? 2'b11 : 2'b10 ;
-assign LED_POWER = 0; // smode_M3 ? 2'b11 : 2'b10 ;
+assign LED_USER  = smode_M1 ? 2'b11 : 2'b10 ; //ioctl_download | bk_state ;
+assign LED_DISK  = smode_M2 ? 2'b11 : 2'b10 ;
+assign LED_POWER = smode_M3 ? 2'b11 : 2'b10 ;
 
 assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
@@ -372,6 +372,7 @@ system #(MAX_SPPL) system
 	.color(color),
 	.mask_column(mask_column),
 	.smode_M1(smode_M1),
+	.smode_M2(smode_M2),
 	.smode_M3(smode_M3),
 	.pal(pal),
 	.region(status[10]),
@@ -444,7 +445,7 @@ wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
 wire mask_column;
-wire smode_M1, smode_M3;
+wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
 
 video video
