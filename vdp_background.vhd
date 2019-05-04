@@ -149,19 +149,12 @@ begin
 						flip_x <= '0' ;
 						palette <='0' ;
 						priority_latch <= '0' ;
-						if (vram_D(7 downto 4)="0000" or vram_D(3 downto 0)="0000") then
-							data0 <= (others=> '0') ;
-							data1 <= (others=> '0') ;
-							data2 <= (others=> '0') ;
-							data3 <= (others=> '0') ;
-						else
-							for i in 0 to 7 loop
-								data0(i) <= (not datac(i) and vram_D(0)) or (datac(i) and vram_D(4)) ; 
-								data1(i) <= (not datac(i) and vram_D(1)) or (datac(i) and vram_D(5)) ; 
-								data2(i) <= (not datac(i) and vram_D(2)) or (datac(i) and vram_D(6)) ; 
-								data3(i) <= (not datac(i) and vram_D(3)) or (datac(i) and vram_D(7)) ; 
-							end loop;
-						end if;
+						for i in 0 to 7 loop
+							data0(i) <= (not datac(i) and vram_D(0)) or (datac(i) and vram_D(4)) ; 
+							data1(i) <= (not datac(i) and vram_D(1)) or (datac(i) and vram_D(5)) ; 
+							data2(i) <= (not datac(i) and vram_D(2)) or (datac(i) and vram_D(6)) ; 
+							data3(i) <= (not datac(i) and vram_D(3)) or (datac(i) and vram_D(7)) ; 
+						end loop;
 					when others =>
 					end case;
 				end if;

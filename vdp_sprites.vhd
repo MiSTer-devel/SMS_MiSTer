@@ -206,14 +206,14 @@ begin
 							state <= WAITING ;
 						elsif delta(8 downto 4)="00000" and (delta(3)='0' or tall='1') then 
 							data_address(13 downto 11) <= char_high_bits;
-							data_address(2 downto 0) <= delta(2 downto 0);
+							data_address(3 downto 0) <= delta(3 downto 0);
 							if (count<4) then
 								state <= LOAD_N;
 							else
 								state <= WAITING;
 							end if;
 						else
-							if index<63 then
+							if index<31 then
 								index <= index+1;
 							else
 								state <= WAITING;
@@ -221,14 +221,17 @@ begin
 						end if;
 						
 					when '0' & LOAD_N =>
-						data_address(13) <= char_high_bits(2);
-						data_address(10 downto 3) <= vram_d ;
+						if tall='1' then
+							data_address(10 downto 4) <= vram_d(7 downto 1); -- quadrant C
+						else
+							data_address(10 downto 3) <= vram_d; -- quadrant A
+						end if;
 						state <= LOAD_0;
 
 					when '0' & LOAD_0 =>
-						if (delta(3)='1') then
-							data_address <= data_address+8 ;
-						end if;
+						--if (delta(3)='1') then
+						--	data_address <= data_address+8 ;
+						--end if;
 						m2_flags	<= vram_d;
 						state <= LOAD_X;
 
@@ -247,7 +250,7 @@ begin
 						spr_d1(count) <= (others => '0');
 						spr_d2(count) <= (others => '0');
 						spr_d3(count) <= "0000" & m2_flags(3 downto 0) ;
-						data_address <= data_address+16 ;
+						data_address(10 downto 4) <= data_address(10 downto 4)+1 ; -- quadrants B & D
 						state	<= LOAD_2 ;
 						
 					when '0' & LOAD_2 =>
