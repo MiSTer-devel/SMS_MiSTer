@@ -54,7 +54,7 @@ architecture Behavioral of vdp_main is
 	signal bg_vram_A:		std_logic_vector(13 downto 0);
 	signal bg_color:		std_logic_vector(4 downto 0);
 	signal bg_priority:	std_logic;
-	
+	signal out_color: 	std_logic_vector(3 downto 0) ;	
 	signal spr_vram_A:	std_logic_vector(13 downto 0);
 	signal spr_color:		std_logic_vector(3 downto 0);
 	
@@ -146,29 +146,45 @@ begin
 				spr_active	:= not (spr_color="0000");
 				bg_active	:= not (bg_color(3 downto 0)="0000");
 				if not spr_active and not bg_active then
+					out_color <= overscan ;
 					cram_A <= bg_color(4)&"0000";
 				elsif (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
+					out_color <= spr_color ;
 					cram_A <= "1"&spr_color;
 				else
-				   if smode_M4='1' then
-						cram_A <= bg_color;
+					cram_A <= bg_color;
+					if bg_color(3 downto 0)="0000" then
+						out_color <= overscan ;
 					else
-						if bg_color(3 downto 0)="0000" then
-							cram_A <= '1'&overscan;	
-						else
-							cram_A <= bg_color ;
-						end if;
+						out_color <= bg_color(3 downto 0) ;
 					end if;
 				end if;
 			else
 				cram_A <= "1"&overscan;
+				out_color <= overscan ;
 			end if ;
 		else
 			cram_A <= "1"&overscan;
+			out_color <= overscan ;
 		end if;		
 	end process;
 	
 	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
-	color <= cram_D ;
-	
+	color <= cram_D when smode_M4='1' else 
+			"000000000000" when out_color="0000" else 
+			"000000000000" when out_color="0001" else 
+			"010010100010" when out_color="0010" else 
+			"011111100110" when out_color="0011" else 
+			"111101010101" when out_color="0100" else 
+			"111101111000" when out_color="0101" else 
+			"010101011101" when out_color="0110" else 
+			"111111110100" when out_color="0111" else 
+			"010101011111" when out_color="1000" else 
+			"100010001111" when out_color="1001" else 
+			"010111011101" when out_color="1010" else 
+			"100011011110" when out_color="1011" else 
+			"010010110010" when out_color="1100" else 
+			"101001101011" when out_color="1101" else 
+			"101110111011" when out_color="1110" else 
+			"111111111111" when out_color="1111";
 end Behavioral;

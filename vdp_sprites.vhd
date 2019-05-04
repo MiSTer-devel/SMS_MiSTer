@@ -207,7 +207,7 @@ begin
 						elsif delta(8 downto 4)="00000" and (delta(3)='0' or tall='1') then 
 							data_address(13 downto 11) <= char_high_bits;
 							data_address(3 downto 0) <= delta(3 downto 0);
-							if (count<4) then
+							if ((count<32) and (count<4 or sp64='1')) then
 								state <= LOAD_N;
 							else
 								state <= WAITING;

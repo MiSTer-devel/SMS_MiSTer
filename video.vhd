@@ -13,6 +13,7 @@ entity video is
 		mask_column:	in  std_logic := '0';
 		smode_M1:		in	 std_logic;
 		smode_M3:		in	 std_logic;
+		smode_M4:		in	 std_logic;
 		
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
