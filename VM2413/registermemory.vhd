@@ -52,6 +52,8 @@ architecture rtl of registermemory is
     --  ƒ`ƒƒƒlƒ‹î•ñ•Û—p 1read/1write ‚Ì SRAM
     type regs_array_type is array (0 to 8) of std_logic_vector( 23 downto 0 );
     signal regs_array : regs_array_type;
+    attribute ramstyle : string;
+    attribute ramstyle of regs_array : signal is "logic";
 
 begin
     process( reset, clk )
