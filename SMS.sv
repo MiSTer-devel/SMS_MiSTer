@@ -145,7 +145,7 @@ assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 parameter CONF_STR1 = {
 	"SMS;;",
 	"-;",
-	"FS,SMS;",
+	"FS,SMSSG;",
 	"FS,GG;",
 	"-;",
 };
