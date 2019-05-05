@@ -176,7 +176,7 @@ begin
 			"010010100010" when out_color="0010" else 
 			"011111100110" when out_color="0011" else 
 			"111101010101" when out_color="0100" else 
-			"111101111000" when out_color="0101" else 
+			"111110001000" when out_color="0101" else 
 			"010101011101" when out_color="0110" else 
 			"111111110100" when out_color="0111" else 
 			"010101011111" when out_color="1000" else 

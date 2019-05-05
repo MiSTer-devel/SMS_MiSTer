@@ -77,7 +77,8 @@ begin
 			-- signals difficult to filter outside them. The compare operators are kept
 			-- outside the module to avoid to have them duplicated 64 times.
 			load  => shift='0' and x<256, --load range
-			x248  => shift='1' and (x<248 or x>=504), --load range for shifted sprites
+			x248  => shift='1' and (x<248 or x>=504) and smode_M4='1', --load range for shifted sprites
+			x224  => smode_M4='0' and (x<224 or x>=480), -- load range for shifted mode2 spr
 			m4 => smode_M4='1',
 			wide_n	=> wide='0',
 			spr_d0=> spr_d0(i),
@@ -237,9 +238,9 @@ begin
 
 					when '0' & LOAD_X =>
 						if m2_flags(7)='0' then
-							spr_x(count)	<= vram_d;
+							spr_x(count)	<= vram_d-1;
 						else
-							spr_x(count)	<= vram_d-32;
+							spr_x(count)	<= vram_d-33;
 						end if;
 						state <= LOAD_1;
 						
@@ -249,7 +250,7 @@ begin
 						spr_d0(count) <= vram_d;
 						spr_d1(count) <= (others => '0');
 						spr_d2(count) <= (others => '0');
-						spr_d3(count) <= "0000" & m2_flags(3 downto 0) ;
+						spr_d3(count) <= m2_flags;
 						data_address(10 downto 4) <= data_address(10 downto 4)+1 ; -- quadrants B & D
 						state	<= LOAD_2 ;
 						

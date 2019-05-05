@@ -11,6 +11,7 @@ Port(
 	spr_x	: in  std_logic_vector (7 downto 0);
 	load  : in  boolean;
 	x248  : in  boolean; -- idem load but for shifted sprites
+	x224  : in  boolean; -- idem load but for shifted mode2 sprites
 	m4		: in  boolean; -- 1 if mode4
 	wide_n: in  boolean; -- if sprites are wide reg1 bit 0
 	spr_d0: in  std_logic_vector (7 downto 0);
@@ -34,7 +35,9 @@ begin
 	process (clk_sys)	begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				if (spr_x=x and load) or (spr_x=x+8 and x248) then
+				if (spr_x=x and ((load and (m4 or spr_d3(7)='0')) or 
+									 (x224 and spr_d3(7)='1'))) or 
+					(spr_x=x+8 and x248) then
 					shift0 <= spr_d0;
 					shift1 <= spr_d1;
 					shift2 <= spr_d2;
