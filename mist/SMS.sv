@@ -74,7 +74,7 @@ localparam SP64     = 1'b0;
 `include "build_id.v"
 parameter CONF_STR = {
 	"SMS;;",
-	"F,BINSMSGG ,Load;",
+	"F,BINSMSGG SG ,Load;",
 	"S,SAV,Mount;",
 	"T7,Write Save RAM;",
 	"O34,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
@@ -289,6 +289,7 @@ system #(MAX_SPPL) system
 	.color(color),
 	.mask_column(mask_column),
 	.smode_M1(smode_M1),
+	.smode_M2(smode_M2),	
 	.smode_M3(smode_M3),	
 	.mapper_lock(status[15]),
 	.fm_ena(~status[12]),  
@@ -322,7 +323,7 @@ wire [8:0] y;
 wire [11:0] color;
 wire mask_column;
 wire HSync, VSync, HBlank, VBlank;
-wire smode_M1, smode_M3;
+wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
 
 video video
