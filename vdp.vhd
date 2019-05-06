@@ -196,9 +196,9 @@ begin
 	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) else '0';
 	vram_cpu_WE <= data_write when not to_cram else '0';
 
-	smode_M1 <= mode_M1 ;--and mode_M2 ;
+	smode_M1 <= mode_M1 and mode_M2 ;
 	smode_M2 <= mode_M2;
-	smode_M3 <= mode_M3 ; --and mode_M2 ;
+	smode_M3 <= mode_M3 and mode_M2 ;
 	smode_M4 <= mode_M4;
 	
 	process (clk_sys, reset_n)
