@@ -145,7 +145,7 @@ assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 parameter CONF_STR1 = {
 	"SMS;;",
 	"-;",
-	"FS,SMS;",
+	"FS,SMSSG;",
 	"FS,GG;",
 	"-;",
 	"FC,GG,Game Genie Code;",
@@ -172,7 +172,7 @@ parameter CONF_STR3 = {
 	"O1,Swap joysticks,No,Yes;",
 	"OE,Multitap,Disabled,Port1;",
 	"OB,BIOS,Enable,Disable;",
-	"OF,Disable mappers,No,Yes;",
+	"OF,Disable mapper,No,Yes;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -428,6 +428,7 @@ system #(MAX_SPPL) system
 	.color(color),
 	.mask_column(mask_column),
 	.smode_M1(smode_M1),
+	.smode_M2(smode_M2),
 	.smode_M3(smode_M3),
 	.pal(pal),
 	.region(status[10]),
@@ -500,7 +501,7 @@ wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
 wire mask_column;
-wire smode_M1, smode_M3;
+wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
 
 video video

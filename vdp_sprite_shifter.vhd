@@ -11,6 +11,8 @@ Port(
 	spr_x	: in  std_logic_vector (7 downto 0);
 	load  : in  boolean;
 	x248  : in  boolean; -- idem load but for shifted sprites
+	x224  : in  boolean; -- idem load but for shifted mode2 sprites
+	m4		: in  boolean; -- 1 if mode4
 	wide_n: in  boolean; -- if sprites are wide reg1 bit 0
 	spr_d0: in  std_logic_vector (7 downto 0);
 	spr_d1: in  std_logic_vector (7 downto 0);
@@ -33,7 +35,9 @@ begin
 	process (clk_sys)	begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				if (spr_x=x and load) or (spr_x=x+8 and x248) then
+				if (spr_x=x and ((load and (m4 or spr_d3(7)='0')) or 
+									 (x224 and spr_d3(7)='1'))) or 
+					(spr_x=x+8 and x248) then
 					shift0 <= spr_d0;
 					shift1 <= spr_d1;
 					shift2 <= spr_d2;
@@ -41,19 +45,31 @@ begin
 					wideclock <= false ;
 				else
 					if (wide_n or wideclock) then
-						shift0 <= shift0(6 downto 0)&"0";
+						shift0(7 downto 1) <= shift0(6 downto 0);
+						if m4 then
+							shift0(0) <= '0';
+							shift3 <= shift3(6 downto 0)&"0";
+						else -- mode 2 we use a 16-bit shift, shift2 is ignored and shift3 retains color 
+							shift0(0) <= shift1(7) ;
+						end if ;
 						shift1 <= shift1(6 downto 0)&"0";
 						shift2 <= shift2(6 downto 0)&"0";
-						shift3 <= shift3(6 downto 0)&"0";
 					end if ;
 					wideclock <= not wideclock ;
 				end if;
 			end if;
 		end if;
+		if m4 then
+			color <= shift3(7)&shift2(7)&shift1(7)&shift0(7);
+			active <= shift3(7) or shift2(7) or shift1(7) or shift0(7);
+		else
+			if shift0(7)='1' then
+				color <= shift3(3 downto 0);
+			else
+				color <= "0000";
+			end if;
+			active <= shift0(7) ;
+		end if;
 	end process;
-	
-	color <= shift3(7)&shift2(7)&shift1(7)&shift0(7);
-	active <= shift3(7) or shift2(7) or shift1(7) or shift0(7);
-	
 end Behavioral;
 

@@ -48,6 +48,7 @@ entity system is
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		mask_column:out STD_LOGIC;
 		smode_M1:		out STD_LOGIC;
+		smode_M2:		out STD_LOGIC;
 		smode_M3:		out STD_LOGIC;
 		pal:				in STD_LOGIC;
 		region:			in	STD_LOGIC;
@@ -109,6 +110,7 @@ architecture Behavioral of system is
 	signal bank0:				std_logic_vector(7 downto 0) := "00000000";
 	signal bank1:				std_logic_vector(7 downto 0) := "00000001";
 	signal bank2:				std_logic_vector(7 downto 0) := "00000010";
+	signal bank3:				std_logic_vector(7 downto 0) := "00000011";
   
 	signal PSG_outL:			std_logic_vector(10 downto 0);
 	signal PSG_outR:			std_logic_vector(10 downto 0);
@@ -135,6 +137,10 @@ architecture Behavioral of system is
 	signal lock_mapper_B:	std_logic := '0';
 	signal mapper_codies:	std_logic := '0'; -- Ernie Els Golf mapper
 	signal mapper_codies_lock:	std_logic := '0'; 
+	
+	signal mapper_msx_check0 : std_logic := '0' ;
+	signal mapper_msx_check1 : std_logic := '0' ;
+	signal mapper_msx :		 std_logic := '0' ;
 
 	signal GENIE		: boolean;
 	signal GENIE_DO	: std_logic_vector(7 downto 0);
@@ -222,6 +228,7 @@ begin
 		y			=> y,
 		color		=> color,
 		smode_M1  => smode_M1,
+		smode_M2  => smode_M2,
 		smode_M3  => smode_M3,
 		mask_column => mask_column,
 		reset_n  => RESET_n
@@ -360,7 +367,8 @@ begin
 		end if;
 	end process;
 	
-	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena)
+	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
+					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
@@ -391,6 +399,31 @@ begin
 		end if;
 	end process;
 
+	  -- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
+   process (RESET_n, MREQ_n)
+	begin
+		if RESET_n='0' then
+			mapper_msx_check0 <= '0' ;
+			mapper_msx_check1 <= '0' ;
+			mapper_msx <= '0' ;
+	   else
+			if rising_edge(MREQ_n) and bootloader_n='1' then
+				if mapper_msx_check0 = '0' and A="0000" then
+					if D_out = x"41" then
+						mapper_msx_check1 <= '1' ;
+					end if;
+					mapper_msx_check0 <= '1';				
+				end if ;
+				if mapper_msx_check1 = '1' and A="0001" then
+					if D_out = x"42" then
+						mapper_msx <= '1' ;
+					end if;
+					mapper_msx_check1<='0' ;
+				end if ;
+			end if;
+		end if;
+	end process;
+	
 	-- external ram control
 	process (RESET_n,clk_sys)
 	begin
@@ -398,6 +431,7 @@ begin
 			bank0 <= "00000000";
 			bank1 <= "00000001";
 			bank2 <= "00000010";
+			bank3 <= "00000011";
 			nvram_e  <= '0';
 			nvram_ex <= '0';
 			nvram_p  <= '0';
@@ -410,80 +444,107 @@ begin
 				if WR_n='1' and MREQ_n='0' then
 					last_read_addr <= A; -- gyurco anti-ldir patch
 				end if;
-				if WR_n='0' and A(15 downto 2)="11111111111111" then
-					mapper_codies <= '0' ;
-					case A(1 downto 0) is
-						when "00" => 
-							nvram_ex <= D_in(4);
-							nvram_e  <= D_in(3);
-							nvram_p  <= D_in(2);
-						when "01" => bank0 <= D_in;
-						when "10" => bank1 <= D_in;
-						when "11" => bank2 <= D_in ; 
-					end case;
-				end if;
-				if WR_n='0' and nvram_e='0' and mapper_lock='0' then
-					case A(15 downto 0) is
+				if mapper_msx = '1' then
+					if WR_n='0' and A(15 downto 2)="00000000000000" then
+						case A(1 downto 0) is
+							when "00" => bank2 <= D_in;
+							when "01" => bank3 <= D_in;
+							when "10" => bank0 <= D_in;
+							when "11" => bank1 <= D_in ; 
+						end case;
+					end if ;
+				else
+					if WR_n='0' and A(15 downto 2)="11111111111111" then
+						mapper_codies <= '0' ;
+						case A(1 downto 0) is
+							when "00" => 
+								nvram_ex <= D_in(4);
+								nvram_e  <= D_in(3);
+								nvram_p  <= D_in(2);
+							when "01" => bank0 <= D_in;
+							when "10" => bank1 <= D_in;
+							when "11" => bank2 <= D_in ; 
+						end case;
+					end if;
+					if WR_n='0' and nvram_e='0' and mapper_lock='0' then
+						case A(15 downto 0) is
 				-- Codemasters
 				-- do not accept writing in adr $0000 (canary) unless we are sure that Codemasters mapper is in use
-						when x"0000" => 
-							if (lock_mapper_B='1') then 
-								bank0 <= D_in ;  
+							when x"0000" => 
+								if (lock_mapper_B='1') then 
+									bank0 <= D_in ;  
 								-- we need a strong criteria to set mapper_codies, hopefully only Ernie Els Golf
 								-- will have written a zero in $4000 before coming here
-								if D_in /= "00000000" and mapper_codies_lock = '0' then
-									if bank1 = "00000001" then
-										mapper_codies <= '1' ;
+									if D_in /= "00000000" and mapper_codies_lock = '0' then
+										if bank1 = "00000001" then
+											mapper_codies <= '1' ;
+										end if;
+										mapper_codies_lock <= '1' ;
 									end if;
-									mapper_codies_lock <= '1' ;
 								end if;
-							end if;
-						when x"4000" => 
-							if last_read_addr /= x"4000" then -- gyurco anti-ldir patch
-								bank1(6 downto 0) <= D_in(6 downto 0) ;
-								bank1(7) <= '0' ;
+							when x"4000" => 
+								if last_read_addr /= x"4000" then -- gyurco anti-ldir patch
+									bank1(6 downto 0) <= D_in(6 downto 0) ;
+									bank1(7) <= '0' ;
 								-- mapper_codies <= mapper_codies or D_in(7) ;
-								nvram_cme <= D_in(7) ;
-								lock_mapper_B <= '1' ;
-							end if ;
-						when x"8000" => 
-							if last_read_addr /= x"8000" then -- gyurco anti-ldir patch
-								bank2 <= D_in ; 
-								lock_mapper_B <= '1' ;
-							end if;
-					-- Korean mapper (Sangokushi 3, Dodgeball King)
-						when x"A000" => 
-							if last_read_addr /= x"A000" then -- gyurco anti-ldir patch
-								if mapper_codies='0' then
-									bank2 <= D_in ;
+									nvram_cme <= D_in(7) ;
+									lock_mapper_B <= '1' ;
 								end if ;
-							end if ;
-						when others => null ;
-					end case ;
+							when x"8000" => 
+								if last_read_addr /= x"8000" then -- gyurco anti-ldir patch
+									bank2 <= D_in ; 
+									lock_mapper_B <= '1' ;
+								end if;
+					-- Korean mapper (Sangokushi 3, Dodgeball King)
+							when x"A000" => 
+								if last_read_addr /= x"A000" then -- gyurco anti-ldir patch
+									if mapper_codies='0' then
+										bank2 <= D_in ;
+									end if ;
+								end if ;
+							when others => null ;
+						end case ;
+					end if;
 				end if;
 			end if;
 		end if;
 	end process;
 
-	rom_a(13 downto 0) <= A(13 downto 0);
-	process (A,bank0,bank1,bank2)
+	rom_a(12 downto 0) <= A(12 downto 0);
+	process (A,bank0,bank1,bank2,bank3,mapper_msx)
 	begin
-		case A(15 downto 14) is
-		when "00" =>
-			-- first kilobyte is always from bank 0
-			if A(13 downto 10)="0000" and mapper_codies='0' then
-				rom_a(21 downto 14) <= (others=>'0');
-			else
-				rom_a(21 downto 14) <= bank0;
-			end if;
+		if mapper_msx = '1' then
+			case A(15 downto 13) is
+			when "010" =>	
+				rom_a(21 downto 13) <= '0' & bank0;
+			when "011" =>
+				rom_a(21 downto 13) <= '0' & bank1;
+			when "100" =>
+				rom_a(21 downto 13) <= '0' & bank2;
+			when "101" =>
+				rom_a(21 downto 13) <= '0' & bank3;
+			when others =>
+				rom_a(21 downto 13) <= "000000" & A(15 downto 13);
+			end case;
+		else
+			rom_a(13) <= A(13);
+			case A(15 downto 14) is
+			when "00" =>
+				-- first kilobyte is always from bank 0
+				if A(13 downto 10)="0000" and mapper_codies='0' then
+					rom_a(21 downto 14) <= (others=>'0');
+				else
+					rom_a(21 downto 14) <= bank0;
+				end if;
 
-		when "01" =>
-			rom_a(21 downto 14) <= bank1;
+			when "01" =>
+				rom_a(21 downto 14) <= bank1;
 			
-		when others =>
-			rom_a(21 downto 14) <= bank2;
+			when others =>
+				rom_a(21 downto 14) <= bank2;
 
-		end case;
+			end case;
+		end if;
 	end process;
 
 end Behavioral;

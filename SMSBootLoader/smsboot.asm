@@ -185,7 +185,7 @@ start:
         call    vdp_set_pal
 
 wait_for_rom:
-
+;
 	ld 	hl,modelSMS
 	ld	de,$c700
 	ld	bc,modelSMS_end-modelSMS
