@@ -458,7 +458,6 @@ video video
 	.mask_column(mask_column),
    .smode_M1(smode_M1),
 	.smode_M3(smode_M3),
-	.smode_M4(smode_M4),
 	.x(x),
 	.y(y),
 	.hsync(HSync),

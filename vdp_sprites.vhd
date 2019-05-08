@@ -78,7 +78,7 @@ begin
 			-- outside the module to avoid to have them duplicated 64 times.
 			load  => shift='0' and x<256, --load range
 			x248  => shift='1' and (x<248 or x>=504) and smode_M4='1', --load range for shifted sprites
-			x224  => smode_M4='0' and (x<224 or x>=480), -- load range for shifted mode2 spr
+			x224  => smode_M4='0' and (x<223 or x>=480), -- load range for shifted mode2 spr
 			m4 => smode_M4='1',
 			wide_n	=> wide='0',
 			spr_d0=> spr_d0(i),
@@ -205,9 +205,15 @@ begin
 					when '0' & COMPARE =>
 						if d9=208 then
 							state <= WAITING ;
-						elsif delta(8 downto 4)="00000" and (delta(3)='0' or tall='1') then 
+						elsif delta(8 downto 5)="0000" and 
+								(delta(4)='0' or (tall='1' and wide='1')) and
+								(delta(3)='0' or tall='1' or wide='1') then
 							data_address(13 downto 11) <= char_high_bits;
-							data_address(3 downto 0) <= delta(3 downto 0);
+							if (wide='1') then
+								data_address(3 downto 0) <= delta(4 downto 1);
+							else
+								data_address(3 downto 0) <= delta(3 downto 0);
+							end if;	
 							if ((count<32) and (count<4 or sp64='1')) then
 								state <= LOAD_N;
 							else
