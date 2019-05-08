@@ -17,7 +17,11 @@ entity system is
 		gg:			in	 STD_LOGIC;
 		bios_en:	in	 STD_LOGIC;
 
+		GG_EN		: in std_logic; -- Game Genie not game gear
+		GG_CODE		: in std_logic_vector(128 downto 0); -- game genie code
+
 		RESET_n:		in	 STD_LOGIC;
+		RST_COLD	: in std_logic;
 		
 		rom_rd:  	out STD_LOGIC;
 		rom_a:		out STD_LOGIC_VECTOR(21 downto 0);
@@ -132,7 +136,46 @@ architecture Behavioral of system is
 	signal mapper_codies:	std_logic := '0'; -- Ernie Els Golf mapper
 	signal mapper_codies_lock:	std_logic := '0'; 
 
+	signal GENIE		: boolean;
+	signal GENIE_DO	: std_logic_vector(7 downto 0);
+	signal GENIE_DI   : std_logic_vector(7 downto 0);
+
+	component CODES is
+		generic(
+			ADDR_WIDTH  : in integer := 16;
+			DATA_WIDTH  : in integer := 8
+		);
+		port(
+			clk         : in  std_logic;
+			cold_reset  : in  std_logic;
+			enable      : in  std_logic;
+			addr_in     : in  std_logic_vector(15 downto 0);
+			data_in     : in  std_logic_vector(7 downto 0);
+			code        : in  std_logic_vector(128 downto 0);
+			genie_ovr   : out boolean;
+			genie_data  : out std_logic_vector(7 downto 0)
+		);
+	end component;
 begin
+
+	-- Game Genie
+	GAMEGENIE : component CODES
+	generic map(
+		ADDR_WIDTH => 16,
+		DATA_WIDTH => 8
+	)
+	port map(
+		clk => clk_sys,
+		cold_reset => RST_COLD,
+		enable => not GG_EN,
+		addr_in => A,
+		data_in => D_out,
+		code => GG_CODE,
+		genie_ovr => GENIE,
+		genie_data => GENIE_DO
+	);
+	
+	GENIE_DI <= GENIE_DO when GENIE else D_out;
 
 	z80_inst: entity work.T80s
 	generic map(
@@ -151,7 +194,7 @@ begin
 		RD_n		=> RD_n,
 		WR_n		=> WR_n,
 		A			=> A,
-		DI			=> D_out,
+		DI			=> GENIE_DI,
 		DO			=> D_in
 	);
 
