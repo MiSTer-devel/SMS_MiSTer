@@ -19,10 +19,11 @@ entity system is
 
 		GG_EN		: in std_logic; -- Game Genie not game gear
 		GG_CODE		: in std_logic_vector(128 downto 0); -- game genie code
+		GG_RESET	: in std_logic;
+		GG_AVAIL	: out std_logic;
 
 		RESET_n:		in	 STD_LOGIC;
-		RST_COLD	: in std_logic;
-		
+
 		rom_rd:  	out STD_LOGIC;
 		rom_a:		out STD_LOGIC_VECTOR(21 downto 0);
 		rom_do:		in	 STD_LOGIC_VECTOR(7 downto 0);
@@ -153,11 +154,12 @@ architecture Behavioral of system is
 		);
 		port(
 			clk         : in  std_logic;
-			cold_reset  : in  std_logic;
+			reset       : in  std_logic;
 			enable      : in  std_logic;
 			addr_in     : in  std_logic_vector(15 downto 0);
 			data_in     : in  std_logic_vector(7 downto 0);
 			code        : in  std_logic_vector(128 downto 0);
+			available   : out std_logic;
 			genie_ovr   : out boolean;
 			genie_data  : out std_logic_vector(7 downto 0)
 		);
@@ -172,11 +174,12 @@ begin
 	)
 	port map(
 		clk => clk_sys,
-		cold_reset => RST_COLD,
+		reset => GG_RESET,
 		enable => not GG_EN,
 		addr_in => A,
 		data_in => D_out,
 		code => GG_CODE,
+		available => GG_AVAIL,
 		genie_ovr => GENIE,
 		genie_data => GENIE_DO
 	);
