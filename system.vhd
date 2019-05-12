@@ -83,6 +83,7 @@ architecture Behavioral of system is
 	signal IRQ_n:				std_logic;
 	signal IORQ_n:				std_logic;
 	signal M1_n:				std_logic;
+	signal old_MREQ_n:			std_logic;
 	signal MREQ_n:				std_logic;
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
@@ -402,27 +403,30 @@ begin
 		end if;
 	end process;
 
-	  -- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
-   process (RESET_n, MREQ_n)
+	-- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
+	process (RESET_n, clk_sys)
 	begin
 		if RESET_n='0' then
 			mapper_msx_check0 <= '0' ;
 			mapper_msx_check1 <= '0' ;
 			mapper_msx <= '0' ;
-	   else
-			if rising_edge(MREQ_n) and bootloader_n='1' then
-				if mapper_msx_check0 = '0' and A="0000" then
-					if D_out = x"41" then
-						mapper_msx_check1 <= '1' ;
-					end if;
-					mapper_msx_check0 <= '1';				
-				end if ;
-				if mapper_msx_check1 = '1' and A="0001" then
-					if D_out = x"42" then
-						mapper_msx <= '1' ;
-					end if;
-					mapper_msx_check1<='0' ;
-				end if ;
+		else
+			if rising_edge(clk_sys) then
+				old_MREQ_n <= MREQ_n;
+				if bootloader_n='1' and MREQ_n='1' and old_MREQ_n='0' then
+					if mapper_msx_check0 = '0' and A="0000" then
+						if D_out = x"41" then
+							mapper_msx_check1 <= '1';
+						end if;
+						mapper_msx_check0 <= '1';
+					end if ;
+					if mapper_msx_check1 = '1' and A="0001" then
+						if D_out = x"42" then
+							mapper_msx <= '1';
+						end if;
+						mapper_msx_check1<='0';
+					end if ;
+				end if;
 			end if;
 		end if;
 	end process;
