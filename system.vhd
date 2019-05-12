@@ -371,7 +371,7 @@ begin
 	end process;
 	
 	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
-					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena)
+					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena,bootloader_n)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
@@ -514,7 +514,7 @@ begin
 	end process;
 
 	rom_a(12 downto 0) <= A(12 downto 0);
-	process (A,bank0,bank1,bank2,bank3,mapper_msx)
+	process (A,bank0,bank1,bank2,bank3,mapper_msx,mapper_codies)
 	begin
 		if mapper_msx = '1' then
 			case A(15 downto 13) is
