@@ -59,6 +59,9 @@ begin
 				end if;
 			end if;
 		end if;
+	end process;
+
+	process (m4,shift0,shift1,shift2,shift3) begin
 		if m4 then
 			color <= shift3(7)&shift2(7)&shift1(7)&shift0(7);
 			active <= shift3(7) or shift2(7) or shift1(7) or shift0(7);

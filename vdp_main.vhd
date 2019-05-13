@@ -186,5 +186,5 @@ begin
 			"010010110010" when out_color="1100" else 
 			"101001101011" when out_color="1101" else 
 			"101110111011" when out_color="1110" else 
-			"111111111111" when out_color="1111";
+			"111111111111";
 end Behavioral;

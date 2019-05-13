@@ -148,14 +148,16 @@ parameter CONF_STR1 = {
 	"FS,SMSSG;",
 	"FS,GG;",
 	"-;",
-	"FC,GG,Game Genie Code;",
-	"OO,Game Genie,ON,OFF;",
-	"-;",
+	"C,Cheats;",
 };
 parameter CONF_STR2 = {
-	"6,Load Backup RAM;"
+	"O,Cheats enabled,ON,OFF;",
+	"-;",
 };
 parameter CONF_STR3 = {
+	"6,Load Backup RAM;"
+};
+parameter CONF_STR4 = {
 	"7,Save Backup RAM;",
 	"ON,Autosave,OFF,ON;",
 	"-;",
@@ -222,12 +224,12 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + 2), .WIDE(0)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,bk_ena ? "R" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3}),
+	.conf_str({CONF_STR1,gg_avail ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
@@ -268,7 +270,7 @@ wire [21:0] ram_addr;
 wire  [7:0] ram_dout;
 wire        ram_rd;
 
-wire code_index = ioctl_index == 3;
+wire code_index = &ioctl_index;
 wire code_download = ioctl_download & code_index;
 wire cart_download = ioctl_download & ~code_index;
 
@@ -318,6 +320,7 @@ assign AUDIO_S = 1;
 assign AUDIO_MIX = 1;
 
 reg [128:0] gg_code;
+wire gg_avail;
 
 // Code layout:
 // {clock bit, code flags,     32'b address, 32'b compare, 32'b replace}
@@ -399,10 +402,11 @@ system #(MAX_SPPL) system
 	.bios_en(~status[11]),
 
 	.RESET_n(~reset),
-	.RST_COLD(cart_download),
 
+	.GG_RESET(ioctl_download && ioctl_wr && !ioctl_addr),
 	.GG_EN(status[24]),
 	.GG_CODE(gg_code),
+	.GG_AVAIL(gg_avail),
 
 	.rom_rd(ram_rd),
 	.rom_a(ram_addr),

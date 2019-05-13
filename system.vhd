@@ -19,10 +19,11 @@ entity system is
 
 		GG_EN		: in std_logic; -- Game Genie not game gear
 		GG_CODE		: in std_logic_vector(128 downto 0); -- game genie code
+		GG_RESET	: in std_logic;
+		GG_AVAIL	: out std_logic;
 
 		RESET_n:		in	 STD_LOGIC;
-		RST_COLD	: in std_logic;
-		
+
 		rom_rd:  	out STD_LOGIC;
 		rom_a:		out STD_LOGIC_VECTOR(21 downto 0);
 		rom_do:		in	 STD_LOGIC_VECTOR(7 downto 0);
@@ -82,6 +83,7 @@ architecture Behavioral of system is
 	signal IRQ_n:				std_logic;
 	signal IORQ_n:				std_logic;
 	signal M1_n:				std_logic;
+	signal old_MREQ_n:			std_logic;
 	signal MREQ_n:				std_logic;
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
@@ -153,11 +155,12 @@ architecture Behavioral of system is
 		);
 		port(
 			clk         : in  std_logic;
-			cold_reset  : in  std_logic;
+			reset       : in  std_logic;
 			enable      : in  std_logic;
 			addr_in     : in  std_logic_vector(15 downto 0);
 			data_in     : in  std_logic_vector(7 downto 0);
 			code        : in  std_logic_vector(128 downto 0);
+			available   : out std_logic;
 			genie_ovr   : out boolean;
 			genie_data  : out std_logic_vector(7 downto 0)
 		);
@@ -172,11 +175,12 @@ begin
 	)
 	port map(
 		clk => clk_sys,
-		cold_reset => RST_COLD,
+		reset => GG_RESET,
 		enable => not GG_EN,
 		addr_in => A,
 		data_in => D_out,
 		code => GG_CODE,
+		available => GG_AVAIL,
 		genie_ovr => GENIE,
 		genie_data => GENIE_DO
 	);
@@ -368,7 +372,7 @@ begin
 	end process;
 	
 	process (IORQ_n,A,vdp_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
-					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena)
+					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena,bootloader_n)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' then
@@ -399,27 +403,30 @@ begin
 		end if;
 	end process;
 
-	  -- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
-   process (RESET_n, MREQ_n)
+	-- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
+	process (RESET_n, clk_sys)
 	begin
 		if RESET_n='0' then
 			mapper_msx_check0 <= '0' ;
 			mapper_msx_check1 <= '0' ;
 			mapper_msx <= '0' ;
-	   else
-			if rising_edge(MREQ_n) and bootloader_n='1' then
-				if mapper_msx_check0 = '0' and A="0000" then
-					if D_out = x"41" then
-						mapper_msx_check1 <= '1' ;
-					end if;
-					mapper_msx_check0 <= '1';				
-				end if ;
-				if mapper_msx_check1 = '1' and A="0001" then
-					if D_out = x"42" then
-						mapper_msx <= '1' ;
-					end if;
-					mapper_msx_check1<='0' ;
-				end if ;
+		else
+			if rising_edge(clk_sys) then
+				old_MREQ_n <= MREQ_n;
+				if bootloader_n='1' and MREQ_n='1' and old_MREQ_n='0' then
+					if mapper_msx_check0 = '0' and A="0000" then
+						if D_out = x"41" then
+							mapper_msx_check1 <= '1';
+						end if;
+						mapper_msx_check0 <= '1';
+					end if ;
+					if mapper_msx_check1 = '1' and A="0001" then
+						if D_out = x"42" then
+							mapper_msx <= '1';
+						end if;
+						mapper_msx_check1<='0';
+					end if ;
+				end if;
 			end if;
 		end if;
 	end process;
@@ -511,7 +518,7 @@ begin
 	end process;
 
 	rom_a(12 downto 0) <= A(12 downto 0);
-	process (A,bank0,bank1,bank2,bank3,mapper_msx)
+	process (A,bank0,bank1,bank2,bank3,mapper_msx,mapper_codies)
 	begin
 		if mapper_msx = '1' then
 			case A(15 downto 13) is
