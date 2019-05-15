@@ -135,8 +135,8 @@ assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
 assign LED_USER  = cart_download | bk_state | (status[23] & bk_pending);
-assign LED_DISK  = 0; // smode_M1 ? 2'b11 : 2'b10 ;
-assign LED_POWER = 0; // smode_M3 ? 2'b11 : 2'b10 ;
+assign LED_DISK  = 0 ;
+assign LED_POWER = 0 ;
 
 assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
@@ -287,7 +287,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr(cart_sz[9] ? (ram_addr - 10'd512) & cart_mask512 : ram_addr & cart_mask),
+	.raddr(cart_sz512 ? (ram_addr + 10'd512) & cart_mask512 : ram_addr & cart_mask),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -364,7 +364,7 @@ end
 
 reg gg = 0;
 reg [21:0] cart_mask, cart_mask512;
-reg [24:0] cart_sz;
+reg cart_sz512;
 
 always @(posedge clk_sys) begin
 	reg old_download;
@@ -375,9 +375,10 @@ always @(posedge clk_sys) begin
 		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
 		if(!ioctl_addr) cart_mask <= 0;
 		if(ioctl_addr == 512) cart_mask512 <= 0;
-		if (old_download & ~cart_download)
-			cart_sz <= ioctl_index;
-		gg <= ioctl_index[4:0] == 2;
+		gg <= ioctl_index[4:0] == 2;	
+	end;
+	if (old_download & ~cart_download) begin
+		cart_sz512 <= ioctl_addr[9];
 	end;
 end
 
