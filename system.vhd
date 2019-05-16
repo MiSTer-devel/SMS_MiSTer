@@ -12,9 +12,10 @@ entity system is
 		clk_sys:		in	 STD_LOGIC;
 		ce_cpu:		in	 STD_LOGIC;
 		ce_vdp:		in	 STD_LOGIC;
-		ce_pix:		in	 STD_LOGIC;
+		ce_pix:		in	 STD_LOGIC; 
 		ce_sp:		in	 STD_LOGIC;
 		gg:			in	 STD_LOGIC;
+		-- sg:			in	 STD_LOGIC;		-- sg1000
 		bios_en:	in	 STD_LOGIC;
 
 		GG_EN		: in std_logic; -- Game Genie not game gear
@@ -83,7 +84,6 @@ architecture Behavioral of system is
 	signal IRQ_n:				std_logic;
 	signal IORQ_n:				std_logic;
 	signal M1_n:				std_logic;
-	signal old_MREQ_n:			std_logic;
 	signal MREQ_n:				std_logic;
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
@@ -140,9 +140,11 @@ architecture Behavioral of system is
 	signal mapper_codies:	std_logic := '0'; -- Ernie Els Golf mapper
 	signal mapper_codies_lock:	std_logic := '0'; 
 	
-	signal mapper_msx_check0 : std_logic := '0' ;
-	signal mapper_msx_check1 : std_logic := '0' ;
-	signal mapper_msx :		 std_logic := '0' ;
+	signal mapper_msx_check0 : boolean := false ;
+	signal mapper_msx_check1 : boolean := false ;
+	signal mapper_msx_lock0 :  boolean := false ;
+	signal mapper_msx_lock :   boolean := false ;
+	signal mapper_msx :		   std_logic := '0' ;
 
 	signal GENIE		: boolean;
 	signal GENIE_DO	: std_logic_vector(7 downto 0);
@@ -222,6 +224,7 @@ begin
 		TH_A		=> TH_A,
 		TH_B		=> TH_B,
 		gg			=> gg,
+		-- Bsg			=> sg,		-- sg1000
 		RD_n		=> vdp_RD_n,
 		WR_n		=> vdp_WR_n,
 		IRQ_n		=> IRQ_n,
@@ -407,25 +410,31 @@ begin
 	process (RESET_n, clk_sys)
 	begin
 		if RESET_n='0' then
-			mapper_msx_check0 <= '0' ;
-			mapper_msx_check1 <= '0' ;
+			mapper_msx_check0 <= false ;
+			mapper_msx_check1 <= false ;
+			mapper_msx_lock0 <= false ;
+			mapper_msx_lock <= false ;
 			mapper_msx <= '0' ;
 		else
 			if rising_edge(clk_sys) then
-				old_MREQ_n <= MREQ_n;
-				if bootloader_n='1' and MREQ_n='1' and old_MREQ_n='0' then
-					if mapper_msx_check0 = '0' and A="0000" then
-						if D_out = x"41" then
-							mapper_msx_check1 <= '1';
+				if bootloader_n='1' and not mapper_msx_lock then 
+					if MREQ_n='0' then 
+					-- in this state, A is stable but not D_out
+						if A="0000" then
+							mapper_msx_check0 <= (D_out=x"41") ;
+						elsif A="0001" then
+							mapper_msx_check1 <= (D_out=x"42") ;
+							mapper_msx_lock0 <= true ;
 						end if;
-						mapper_msx_check0 <= '1';
-					end if ;
-					if mapper_msx_check1 = '1' and A="0001" then
-						if D_out = x"42" then
-							mapper_msx <= '1';
+					else
+					-- this state is similar to old_MREQ_n
+					-- now we can lock values depending on D_out
+						if mapper_msx_check0 and mapper_msx_check1 then
+							mapper_msx <= '1'; -- if 4142 lock msx mapper on
 						end if;
-						mapper_msx_check1<='0';
-					end if ;
+						-- be paranoid : give only 1 chance to the mapper to lock on
+						mapper_msx_lock <= mapper_msx_lock0 ; 
+					end if;
 				end if;
 			end if;
 		end if;
