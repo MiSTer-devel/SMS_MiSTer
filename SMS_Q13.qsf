@@ -365,6 +365,7 @@ set_global_assignment -name QIP_FILE VM2413/OPLL.qip
 set_global_assignment -name QIP_FILE jt89/jt89.qip
 set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name SYSTEMVERILOG_FILE sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE cheatcodes.sv
 set_global_assignment -name VHDL_FILE video.vhd
 set_global_assignment -name VHDL_FILE sprom.vhd
 set_global_assignment -name VHDL_FILE spram.vhd

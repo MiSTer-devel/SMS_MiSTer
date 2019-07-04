@@ -74,7 +74,7 @@ localparam SP64     = 1'b0;
 `include "build_id.v"
 parameter CONF_STR = {
 	"SMS;;",
-	"F,BINSMSGG ,Load;",
+	"F,BINSMSGG SG ,Load;",
 	"S,SAV,Mount;",
 	"T7,Write Save RAM;",
 	"O34,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
@@ -83,7 +83,10 @@ parameter CONF_STR = {
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
 	"OC,FM sound,Enable,Disable;",
+	"OA,Region,US/UE,Japan;",
 	"O1,Swap joysticks,No,Yes;",
+	"O5,BIOS,Enable,Disable;",
+	"OF,Lock mappers,No,Yes;",
 	"T0,Reset;",
 	"V,v1.0.",`BUILD_DATE
 };
@@ -98,10 +101,10 @@ pll pll
 (
 	.inclk0(CLOCK_27[0]),
 	.c0(clk_sys),
-	.c1(SDRAM_CLK),
 	.locked(locked)
 );
 
+assign SDRAM_CLK = clk_sys;
 
 //////////////////   MiST I/O   ///////////////////
 wire [15:0] joy_0;
@@ -256,7 +259,10 @@ system #(MAX_SPPL) system
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
+	.pal(pal),
 	.gg(gg),
+	.region(status[10]),
+	.bios_en(~status[5]),
 
 	.RESET_n(~reset),
 
@@ -281,9 +287,14 @@ system #(MAX_SPPL) system
 	.x(x),
 	.y(y),
 	.color(color),
+	.mask_column(mask_column),
+	.smode_M1(smode_M1),
+	.smode_M2(smode_M2),	
+	.smode_M3(smode_M3),	
+	.mapper_lock(status[15]),
 	.fm_ena(~status[12]),  
 	.audioL(audioL),
-    .audioR(audioR),
+   .audioR(audioR),
 
 	.sp64(status[8] & SP64),
 
@@ -310,18 +321,24 @@ spram #(.widthad_a(13)) ram_inst
 wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
+wire mask_column;
 wire HSync, VSync, HBlank, VBlank;
+wire smode_M1, smode_M2, smode_M3;
+wire pal = status[2];
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
-	.pal(status[2]),
+	.pal(pal),
 	.gg(0),
 	.border(1),
+	.mask_column(mask_column),
 	.x(x),
 	.y(y),
-
+   .smode_M1(smode_M1),
+	.smode_M3(smode_M3),
+	
 	.hsync(HSync),
 	.vsync(VSync),
 	.hblank(HBlank),
@@ -346,24 +363,24 @@ always @(negedge clk_sys) begin
 		clkd <= 0;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-		ce_cpu_p <= 1;
 	end else if (clkd==24) begin
 		ce_vdp <= 1;
-	end else if (clkd==22) begin
-		ce_cpu_n <= 1;
+		ce_cpu_p <= 1;
 	end else if (clkd==19) begin
 		ce_vdp <= 1;
 		ce_pix <= 1;
+	end else if (clkd==17) begin
+		ce_cpu_n <= 1;
 	end else if (clkd==14) begin
 		ce_vdp <= 1;
-		ce_cpu_p <= 1;
 	end else if (clkd==9) begin
+		ce_cpu_p <= 1;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-	end else if (clkd==7) begin
-		ce_cpu_n <= 1;
 	end else if (clkd==4) begin
 		ce_vdp <= 1;
+	end else if (clkd==2) begin
+		ce_cpu_n <= 1;
 	end
 end
 

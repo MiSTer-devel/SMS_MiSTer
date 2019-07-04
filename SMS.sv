@@ -134,9 +134,9 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
-assign LED_USER  = ioctl_download | bk_state;
-assign LED_DISK  = 0;
-assign LED_POWER = 0;
+assign LED_USER  = cart_download | bk_state | (status[23] & bk_pending);
+assign LED_DISK  = 0 ;
+assign LED_POWER = 0 ;
 
 assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
@@ -145,15 +145,21 @@ assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 parameter CONF_STR1 = {
 	"SMS;;",
 	"-;",
-	"FS,SMS;",
+	"FS,SMSSG;",
 	"FS,GG;",
 	"-;",
+	"C,Cheats;",
 };
 parameter CONF_STR2 = {
-	"6,Load Backup RAM;"
+	"O,Cheats enabled,ON,OFF;",
+	"-;",
 };
 parameter CONF_STR3 = {
+	"6,Load Backup RAM;"
+};
+parameter CONF_STR4 = {
 	"7,Save Backup RAM;",
+	"ON,Autosave,OFF,ON;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -163,9 +169,12 @@ parameter CONF_STR3 = {
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
 	"OC,FM sound,Enable,Disable;",
+	"OA,Region,US/UE,Japan;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
 	"OE,Multitap,Disabled,Port1;",
+	"OB,BIOS,Enable,Disable;",
+	"OF,Disable mapper,No,Yes;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -187,7 +196,7 @@ pll pll
 	.locked(locked)
 );
 
-wire reset = RESET | status[0] | buttons[1] | ioctl_download | bk_loading;
+wire reset = RESET | status[0] | buttons[1] | cart_download | bk_loading;
 
 //////////////////   HPS I/O   ///////////////////
 wire  [6:0] joy[4], joy_0, joy_1;
@@ -215,12 +224,12 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + 2), .WIDE(0)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,bk_ena ? "R" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3}),
+	.conf_str({CONF_STR1,gg_avail ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
@@ -261,6 +270,10 @@ wire [21:0] ram_addr;
 wire  [7:0] ram_dout;
 wire        ram_rd;
 
+wire code_index = &ioctl_index;
+wire code_download = ioctl_download & code_index;
+wire cart_download = ioctl_download & ~code_index;
+
 sdram ram
 (
 	.*,
@@ -274,7 +287,7 @@ sdram ram
 	.we(rom_wr),
 	.we_ack(sd_wrack),
 
-	.raddr(ioctl_addr[9] ? (ram_addr - 10'd512) & cart_mask512 : ram_addr & cart_mask),
+	.raddr(cart_sz512 ? (ram_addr + 10'd512) & cart_mask512 : ram_addr & cart_mask),
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
@@ -287,13 +300,13 @@ reg  [23:0] romwr_a;
 always @(posedge clk_sys) begin
 	reg old_download, old_reset;
 
-	old_download <= ioctl_download;
+	old_download <= cart_download;
 	old_reset <= reset;
 
 	if(~old_reset && reset) ioctl_wait <= 0;
-	if(~old_download && ioctl_download) romwr_a <= 0;
+	if(~old_download && cart_download) romwr_a <= 0;
 	else begin
-		if(ioctl_wr) begin
+		if(ioctl_wr & cart_download) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
 		end else if(ioctl_wait && (rom_wr == sd_wrack)) begin
@@ -306,20 +319,66 @@ end
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 1;
 
+reg [128:0] gg_code;
+wire gg_avail;
+
+// Code layout:
+// {clock bit, code flags,     32'b address, 32'b compare, 32'b replace}
+//  128        127:96          95:64         63:32         31:0
+// Integer values are in BIG endian byte order, so it up to the loader
+// or generator of the code to re-arrange them correctly.
+
+always_ff @(posedge clk_sys) begin
+	gg_code[128] <= 1'b0;
+
+	if (code_download & ioctl_wr) begin
+		case (ioctl_addr[3:0])
+			0:  gg_code[111:96]  <= ioctl_dout; // Flags Bottom Word
+			1:  gg_code[119:112]  <= ioctl_dout; // Flags Bottom Word
+			2:  gg_code[127:120] <= ioctl_dout; // Flags Top Word
+			3:  gg_code[127:112] <= ioctl_dout; // Flags Top Word
+			4:  gg_code[71:64]   <= ioctl_dout; // Address Bottom Word
+			5:  gg_code[79:72]   <= ioctl_dout; // Address Bottom Word
+			6:  gg_code[87:80]   <= ioctl_dout; // Address Top Word
+			7:  gg_code[95:88]   <= ioctl_dout; // Address Top Word
+			8:  gg_code[39:32]   <= ioctl_dout; // Compare Bottom Word
+			9:  gg_code[47:40]   <= ioctl_dout; // Compare Bottom Word
+			10: gg_code[55:48]   <= ioctl_dout; // Compare top Word
+			11: gg_code[63:56]   <= ioctl_dout; // Compare top Word
+			12: gg_code[7:0]    <= ioctl_dout; // Replace Bottom Word
+			13: gg_code[15:8]    <= ioctl_dout; // Replace Bottom Word
+			14: gg_code[23:16]   <= ioctl_dout; // Replace Top Word
+			15: begin
+				gg_code[31:24]   <= ioctl_dout; // Replace Top Word
+				gg_code[128]     <=  1'b1;      // Clock it in
+			end
+		endcase
+	end
+end
+
+
 reg  dbr = 0;
 always @(posedge clk_sys) begin
-	if(ioctl_download || bk_loading) dbr <= 1;
+	if(cart_download || bk_loading) dbr <= 1;
 end
 
 reg gg = 0;
 reg [21:0] cart_mask, cart_mask512;
+reg cart_sz512;
+
 always @(posedge clk_sys) begin
-	if(ioctl_wr) begin
+	reg old_download;
+	old_download <= cart_download;
+
+	if(ioctl_wr & cart_download) begin
 		cart_mask <= cart_mask | ioctl_addr[21:0];
 		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
 		if(!ioctl_addr) cart_mask <= 0;
 		if(ioctl_addr == 512) cart_mask512 <= 0;
-		gg <= ioctl_index[4:0] == 2;
+		gg <= ioctl_index[4:0] == 2;	
+	end;
+	if (old_download & ~cart_download) begin
+		cart_sz512 <= ioctl_addr[9];
 	end;
 end
 
@@ -341,8 +400,14 @@ system #(MAX_SPPL) system
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
 	.gg(gg),
+	.bios_en(~status[11]),
 
 	.RESET_n(~reset),
+
+	.GG_RESET(ioctl_download && ioctl_wr && !ioctl_addr),
+	.GG_EN(status[24]),
+	.GG_CODE(gg_code),
+	.GG_AVAIL(gg_avail),
 
 	.rom_rd(ram_rd),
 	.rom_a(ram_addr),
@@ -367,6 +432,12 @@ system #(MAX_SPPL) system
 	.y(y),
 	.color(color),
 	.mask_column(mask_column),
+	.smode_M1(smode_M1),
+	.smode_M2(smode_M2),
+	.smode_M3(smode_M3),
+	.pal(pal),
+	.region(status[10]),
+	.mapper_lock(status[15]),
 
 	.fm_ena(~status[12]),
 	.audioL(audio_l),
@@ -435,6 +506,7 @@ wire [8:0] x;
 wire [8:0] y;
 wire [11:0] color;
 wire mask_column;
+wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
 
 video video
@@ -445,10 +517,10 @@ video video
 	.gg(gg),
 	.border(status[13]),
 	.mask_column(mask_column),
-
+   .smode_M1(smode_M1),
+	.smode_M3(smode_M3),
 	.x(x),
 	.y(y),
-
 	.hsync(HSync),
 	.vsync(VSync),
 	.hblank(HBlank),
@@ -471,16 +543,16 @@ always @(negedge clk_sys) begin
 		clkd <= 0;
 		ce_vdp <= 1;
 		ce_pix <= 1;
-		ce_cpu <= 1;
 	end else if (clkd==24) begin
+		ce_cpu <= 1;  //-- changed cpu phase to please VDPTEST HCounter test;
 		ce_vdp <= 1;
 	end else if (clkd==19) begin
 		ce_vdp <= 1;
 		ce_pix <= 1;
 	end else if (clkd==14) begin
 		ce_vdp <= 1;
-		ce_cpu <= 1;
 	end else if (clkd==9) begin
+		ce_cpu <= 1;
 		ce_vdp <= 1;
 		ce_pix <= 1;
 	end else if (clkd==4) begin
@@ -516,6 +588,16 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////
+wire bk_save_write = nvram_we;
+reg bk_pending;
+
+always @(posedge clk_sys) begin
+	if (bk_ena && ~OSD_STATUS && bk_save_write)
+		bk_pending <= 1'b1;
+	else if (bk_state)
+		bk_pending <= 1'b0;
+end
+
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
@@ -530,7 +612,7 @@ dpram #(.widthad_a(15)) nvram_inst
 	.q_b         (sd_buff_din)
 );
 
-wire downloading = ioctl_download;
+wire downloading = cart_download;
 reg old_downloading = 0;
 reg bk_ena = 0;
 always @(posedge clk_sys) begin
@@ -543,7 +625,7 @@ always @(posedge clk_sys) begin
 end
 
 wire bk_load    = status[6];
-wire bk_save    = status[7];
+wire bk_save    = status[7] | (bk_pending & OSD_STATUS && status[23]);
 reg  bk_loading = 0;
 reg  bk_state   = 0;
 
