@@ -145,24 +145,18 @@ assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 
 `include "build_id.v"
-parameter CONF_STR1 = {
+parameter CONF_STR = {
 	"SMS;;",
 	"-;",
 	"FS,SMSSG;",
 	"FS,GG;",
 	"-;",
 	"C,Cheats;",
-};
-parameter CONF_STR2 = {
-	"O,Cheats enabled,ON,OFF;",
+	"H1OO,Cheats enabled,ON,OFF;",
 	"-;",
-};
-parameter CONF_STR3 = {
-	"6,Load Backup RAM;"
-};
-parameter CONF_STR4 = {
-	"7,Save Backup RAM;",
-	"ON,Autosave,OFF,ON;",
+	"D0R6,Load Backup RAM;",
+	"D0R7,Save Backup RAM;",
+	"D0ON,Autosave,OFF,ON;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -227,12 +221,12 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
+hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,gg_avail ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+	.conf_str(CONF_STR),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
@@ -241,6 +235,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 
 	.buttons(buttons),
 	.status(status),
+	.status_menumask({~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 
