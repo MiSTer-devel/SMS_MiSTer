@@ -525,8 +525,8 @@ video video
 	.smode_M3(smode_M3),
 	.x(x),
 	.y(y),
-	.hsync(HSync),
-	.vsync(VSync),
+	.hsync(HS),
+	.vsync(VS),
 	.hblank(HBlank),
 	.vblank(VBlank)
 );
@@ -564,7 +564,8 @@ always @(negedge clk_sys) begin
 	end
 end
 
-wire HSync, VSync;
+wire HS, VS;
+reg  HSync, VSync;
 wire HBlank, VBlank;
 
 wire [2:0] scale = status[5:3];
@@ -572,6 +573,11 @@ wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
 
 assign CLK_VIDEO = clk_sys;
 assign VGA_SL = sl[1:0];
+
+always @(posedge CLK_VIDEO) begin
+	HSync <= HS;
+	if(~HSync & HS) VSync <= VS;
+end
 
 video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 (
