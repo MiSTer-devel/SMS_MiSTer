@@ -36,6 +36,7 @@ entity system is
 		j1_tl:		in	 STD_LOGIC;
 		j1_tr:		in	 STD_LOGIC;
 		j1_th:      out STD_LOGIC;
+		j1_thin:		in	 STD_LOGIC;
 		j2_up:		in	 STD_LOGIC;
 		j2_down:		in	 STD_LOGIC;
 		j2_left:		in	 STD_LOGIC;
@@ -43,7 +44,9 @@ entity system is
 		j2_tl:		in	 STD_LOGIC;
 		j2_tr:		in	 STD_LOGIC;
 		j2_th:      out STD_LOGIC;
+		j2_thin:		in	 STD_LOGIC;
 		pause:		in	 STD_LOGIC;
+		phaser:		in	 STD_LOGIC;
 
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
@@ -128,6 +131,8 @@ architecture Behavioral of system is
 
 	signal TH_A:			std_logic;
 	signal TH_B:			std_logic;
+	signal TH_Ain:			std_logic;
+	signal TH_Bin:			std_logic;
 
 	signal nvram_WR:		   std_logic;
 	signal nvram_e:         std_logic := '0';
@@ -223,6 +228,9 @@ begin
 		sp64		=> sp64,
 		TH_A		=> TH_A,
 		TH_B		=> TH_B,
+		TH_Ain	=> TH_Ain,
+		TH_Bin	=> TH_Bin,
+		phaser	=> phaser,
 		gg			=> gg,
 		-- Bsg			=> sg,		-- sg1000
 		RD_n		=> vdp_RD_n,
@@ -285,6 +293,8 @@ begin
 		D_out		=> io_D_out,
 		TH_A		=> TH_A,
 		TH_B		=> TH_B,
+		TH_Ain		=> TH_Ain,
+		TH_Bin		=> TH_Bin,
 		J1_up		=> j1_up,
 		J1_down	=> j1_down,
 		J1_left	=> j1_left,
@@ -306,6 +316,8 @@ begin
 	
 	j1_th <= TH_A;
 	j2_th <= TH_B;
+	TH_Ain <= j1_thin;
+	TH_Bin <= j2_thin;
 
 	ram_a <= A(12 downto 0);
 	ram_we <= ram_WR;

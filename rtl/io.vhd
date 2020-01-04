@@ -11,6 +11,8 @@ entity io is
 		D_out:	out STD_LOGIC_VECTOR (7 downto 0);
 		TH_A:	   out STD_LOGIC;
 		TH_B:	   out STD_LOGIC;
+		TH_Ain:	   in STD_LOGIC;
+		TH_Bin:	   in STD_LOGIC;
 		J1_up:	in  STD_LOGIC;
 		J1_down:	in  STD_LOGIC;
 		J1_left:	in  STD_LOGIC;
@@ -121,13 +123,13 @@ begin
 					if ctrl(3)='0' and region='0' then
 						D_out(7) <= ctrl(7);
 					else
-						D_out(7) <= '1';
+						D_out(7) <= TH_Bin;
 					end if;
 					-- 6=j1_th
 					if ctrl(1)='0' and region='0' then
 						D_out(6) <= ctrl(5);
 					else
-						D_out(6) <= '1'; 
+						D_out(6) <= TH_Ain; 
 					end if;
 					D_out(5) <= '1';
 					D_out(4) <= '1';

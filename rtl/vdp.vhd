@@ -16,6 +16,9 @@ entity vdp is
 		sp64:				in  STD_LOGIC;
 		TH_A:				in  STD_LOGIC;
 		TH_B:				in  STD_LOGIC;
+		TH_Ain:			in  STD_LOGIC;
+		TH_Bin:			in  STD_LOGIC;
+		phaser:			in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
@@ -237,11 +240,19 @@ begin
 				old_WR_n <= WR_n;
 				old_RD_n <= RD_n;
 
-				old_TH_A <= TH_A;
-				old_TH_B <= TH_B;
-				if (old_TH_A = '0' and TH_A = '1') or (old_TH_B = '0' and TH_B = '1') then
-					latched_x <= x(8 downto 1);
-				end if;
+				if phaser = '0' then
+					old_TH_A <= TH_A;
+					old_TH_B <= TH_B;
+					if (old_TH_A = '0' and TH_A = '1') or (old_TH_B = '0' and TH_B = '1') then
+						latched_x <= x(8 downto 1);
+					end if;
+				else	
+					old_TH_A <= TH_Ain;
+					old_TH_B <= TH_Bin;
+					if (old_TH_A /= TH_Ain) or (old_TH_B /= TH_Bin) then
+						latched_x <= x(8 downto 1);
+					end if;
+				end if;	
 
 				if old_WR_n = '1' and WR_n='0' then
 					if A(0)='0' then

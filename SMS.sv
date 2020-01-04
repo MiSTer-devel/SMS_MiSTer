@@ -178,6 +178,8 @@ parameter CONF_STR = {
 	"OE,Multitap,Disabled,Port1;",
 	"OB,BIOS,Enable,Disable;",
 	"OF,Disable mapper,No,Yes;",
+	"OG,Serial,OFF,SNAC;",
+	"OH,Phaser,OFF,ON;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -452,13 +454,17 @@ system #(MAX_SPPL) system
 	.j1_tl(joya[4]),
 	.j1_tr(joya[5]),
 	.j1_th(joya_th),
+	.j1_thin(joya_thin),
 	.j2_up(joyb[3]),
 	.j2_down(joyb[2]),
 	.j2_left(joyb[1]),
 	.j2_right(joyb[0]),
 	.j2_tl(joyb[4]),
 	.j2_tr(joyb[5]),
+	.j2_th(joyb_th),
+	.j2_thin(joyb_thin),
 	.pause(joya[6]&joyb[6]),
+	.phaser(phaser),
 
 	.x(x),
 	.y(y),
@@ -492,29 +498,70 @@ system #(MAX_SPPL) system
 assign joy[0] = status[1] ? joy_1 : joy_0;
 assign joy[1] = status[1] ? joy_0 : joy_1;
 
-wire [6:0] joya = ~joy[jcnt];
-wire [6:0] joyb = status[14] ? 7'h7F : ~joy[1];
+wire raw_serial = status[16];
+wire phaser = status[17];
+wire swap = status[1];
+
+wire [6:0] joya;	
+wire [6:0] joyb;
+wire [6:0] joyser;
 
 wire      joya_th;
+wire      joyb_th;
+wire      joya_thin;
+wire      joyb_thin;
+wire      joyser_th;
 reg [1:0] jcnt = 0;
+
+
+
 always @(posedge clk_sys) begin
 	reg old_th;
 	reg [15:0] tmr;
 
-	if(ce_cpu) begin
-		if(tmr > 57000) jcnt <= 0;
-		else if(joya_th) tmr <= tmr + 1'd1;
+	if (raw_serial) begin
+		joyser[3] = USER_IN[1];//up
+		joyser[2] <= USER_IN[0];//down	
+		joyser[1] <= USER_IN[5];//left
+		joyser[0] <= USER_IN[3];//right	
+		joyser[4] <= USER_IN[2];//trigger / button1
+		joyser[5] <= USER_IN[6];//button2
+		joyser_th <= USER_IN[4];//sensor
+			if (!USER_IN[0] & !USER_IN[2] & !USER_IN[6]) begin //D 1 2 combo
+			joyser[6] <= 0;
+			end else begin
+			joyser[6] <= 1'b1;
+			end
+		joya <= swap ? ~joy[1] : joyser;
+		joyb <= swap ? joyser : ~joy[0];	
+		joya_thin <=  swap ? 1'b1 : joyser_th;
+		joyb_thin <=  swap ? joyser_th : 1'b1;
+		
+	end else begin
+		joya = ~joy[jcnt];
+		joyb = status[14] ? 7'h7F : ~joy[1];
+		joya_thin <=  1'b1;
+		joyb_thin <=  1'b1;
+				
 
-		old_th <= joya_th;
-		if(old_th & ~joya_th) begin
-			tmr <= 0;
+		if(ce_cpu) begin
+			if(tmr > 57000) jcnt <= 0;
+			else if(joya_th) tmr <= tmr + 1'd1;
+
+			old_th <= joya_th;
+			if(old_th & ~joya_th) begin
+				tmr <= 0;
 			//first clock doesn't count as capacitor has not discharged yet
 			if(tmr < 57000) jcnt <= jcnt + 1'd1;
+			end
 		end
+
+		if(reset | ~status[14]) jcnt <= 0;		
+	
 	end
 
-	if(reset | ~status[14]) jcnt <= 0;
-end
+end	
+
 
 spram #(.widthad_a(13)) ram_inst
 (
