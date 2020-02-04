@@ -29,7 +29,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [44:0] HPS_BUS,
+	inout  [45:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -59,13 +59,20 @@ module emu
 	output  [1:0] LED_POWER,
 	output  [1:0] LED_DISK,
 
+	// I/O board button press simulation (active high)
+	// b[1]: user button
+	// b[0]: osd button
+	output  [1:0] BUTTONS,
+
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
 	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
 	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
-	input         TAPE_IN,
 
-	// SD-SPI
+	//ADC
+	inout   [3:0] ADC_BUS,
+
+	//SD-SPI
 	output        SD_SCK,
 	output        SD_MOSI,
 	input         SD_MISO,
@@ -108,10 +115,10 @@ module emu
 	// Open-drain User port.
 	// 0 - D+/RX
 	// 1 - D-/TX
-	// 2..5 - USR1..USR4
+	// 2..6 - USR2..USR6
 	// Set USER_OUT to 1 to read from USER_IN.
-	input   [5:0] USER_IN,
-	output  [5:0] USER_OUT,
+	input   [6:0] USER_IN,
+	output  [6:0] USER_OUT,
 
 	input         OSD_STATUS
 );
@@ -126,6 +133,7 @@ localparam MAX_SPPL = 7;
 localparam SP64     = 1'b0;
 `endif
 
+assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign VGA_F1 = 0;
 
@@ -137,29 +145,24 @@ assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DD
 assign LED_USER  = cart_download | bk_state | (status[23] & bk_pending);
 assign LED_DISK  = 0 ;
 assign LED_POWER = 0 ;
+assign BUTTONS   = 0;
 
 assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 
 `include "build_id.v"
-parameter CONF_STR1 = {
+parameter CONF_STR = {
 	"SMS;;",
 	"-;",
 	"FS,SMSSG;",
 	"FS,GG;",
 	"-;",
 	"C,Cheats;",
-};
-parameter CONF_STR2 = {
-	"O,Cheats enabled,ON,OFF;",
+	"H1OO,Cheats enabled,ON,OFF;",
 	"-;",
-};
-parameter CONF_STR3 = {
-	"6,Load Backup RAM;"
-};
-parameter CONF_STR4 = {
-	"7,Save Backup RAM;",
-	"ON,Autosave,OFF,ON;",
+	"D0R6,Load Backup RAM;",
+	"D0R7,Save Backup RAM;",
+	"D0ON,Autosave,OFF,ON;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -224,12 +227,12 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .WIDE(0)) hps_io
+hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,gg_avail ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+	.conf_str(CONF_STR),
 
 	.joystick_0(joy_0),
 	.joystick_1(joy_1),
@@ -238,6 +241,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 
 	.buttons(buttons),
 	.status(status),
+	.status_menumask({~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 
@@ -521,8 +525,8 @@ video video
 	.smode_M3(smode_M3),
 	.x(x),
 	.y(y),
-	.hsync(HSync),
-	.vsync(VSync),
+	.hsync(HS),
+	.vsync(VS),
 	.hblank(HBlank),
 	.vblank(VBlank)
 );
@@ -560,7 +564,8 @@ always @(negedge clk_sys) begin
 	end
 end
 
-wire HSync, VSync;
+wire HS, VS;
+reg  HSync, VSync;
 wire HBlank, VBlank;
 
 wire [2:0] scale = status[5:3];
@@ -568,6 +573,11 @@ wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
 
 assign CLK_VIDEO = clk_sys;
 assign VGA_SL = sl[1:0];
+
+always @(posedge CLK_VIDEO) begin
+	HSync <= HS;
+	if(~HSync & HS) VSync <= VS;
+end
 
 video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
 (
