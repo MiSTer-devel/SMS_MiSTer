@@ -85,7 +85,16 @@ begin
 						char_address(12 downto 5) := table_address(13 downto 12) & ("011100" + y(7 downto 3));
 					else
 						char_address(12 downto 10)	:= table_address(13 downto 11);
-						char_address(9 downto 5)	:= y(7 downto 3);
+
+					   -- To enable version 1 of the VDP found on the SMS version 1, and you'd want to do that
+						-- to play only one game : Japanese version of "Ys", you can re-enable the comment in the next code line.
+						--
+						-- Since there seems to be no difference between the Japanese version of Ys and the US one, there is no reasonable need
+						-- to implement a way to select the code below manually or automatically.
+
+						char_address(9) := -- table_address(10) and 
+													y(7) ;
+						char_address(8 downto 5)	:= y(6 downto 3);						
 					end if;
 					char_address(4 downto 0)	:= x(7 downto 3) + 1;
 					data_address					:= tile_index & tile_y;
