@@ -181,6 +181,8 @@ parameter CONF_STR = {
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
+	"jn,A,B,Start;",
+	"jp,Y,A,Start;",
 	"V,v",`BUILD_DATE
 };
 
@@ -195,7 +197,6 @@ pll pll
 	.refclk(CLK_50M),
 	.rst(0),
 	.outclk_0(clk_sys),
-	.outclk_1(SDRAM_CLK),
 	.locked(locked)
 );
 
@@ -226,6 +227,7 @@ wire        img_readonly;
 wire [63:0] img_size;
 
 wire        forced_scandoubler;
+wire [21:0] gamma_bus;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 (
@@ -244,6 +246,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 	.status_menumask({~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
+	.gamma_bus(gamma_bus),
 
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0),
@@ -295,6 +298,31 @@ sdram ram
 	.dout(ram_dout),
 	.rd(ram_rd),
 	.rd_rdy()
+);
+
+altddio_out
+#(
+	.extend_oe_disable("OFF"),
+	.intended_device_family("Cyclone V"),
+	.invert_output("OFF"),
+	.lpm_hint("UNUSED"),
+	.lpm_type("altddio_out"),
+	.oe_reg("UNREGISTERED"),
+	.power_up_high("OFF"),
+	.width(1)
+)
+sdramclk_ddr
+(
+	.datain_h(1'b0),
+	.datain_l(1'b1),
+	.outclock(clk_sys),
+	.dataout(SDRAM_CLK),
+	.aclr(1'b0),
+	.aset(1'b0),
+	.oe(1'b1),
+	.outclocken(1'b1),
+	.sclr(1'b0),
+	.sset(1'b0)
 );
 
 reg  rom_wr = 0;
@@ -579,10 +607,10 @@ always @(posedge CLK_VIDEO) begin
 	if(~HSync & HS) VSync <= VS;
 end
 
-video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300)) video_mixer
+video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300), .GAMMA(1)) video_mixer
 (
 	.*,
-	.clk_sys(CLK_VIDEO),
+	.clk_vid(CLK_VIDEO),
 	.ce_pix_out(CE_PIXEL),
 	.ce_pix(ce_pix),
 	
