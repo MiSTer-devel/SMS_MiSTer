@@ -169,7 +169,7 @@ parameter CONF_STR = {
 	"O2,TV System,NTSC,PAL;",
 	"OD,Border,No,Yes;",
 `ifdef USE_SP64
-	"O8,Sprites per line,Std(8),All(64);",
+	"O8,Sprites per line,Standard,All;",
 `endif
 	"OC,FM sound,Enable,Disable;",
 	"OA,Region,US/UE,Japan;",

@@ -320,7 +320,7 @@ begin
 	boot_rom_inst : entity work.sprom
 	generic map
 	(
-		init_file=> "mboot.mif",
+		init_file=> "rtl/mboot.mif",
 		widthad_a=> 14
 	)
 	port map
