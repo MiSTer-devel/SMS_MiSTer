@@ -171,7 +171,7 @@ parameter CONF_STR = {
 `ifdef USE_SP64
 	"O8,Sprites per line,Std(8),All(64);",
 `endif
-	"OC,FM sound,Enable,Disable;",
+	"H2OC,SMS FM sound,Enable,Disable;",
 	"OA,Region,US/UE,Japan;",
 	"-;",
 	"O1,Swap joysticks,No,Yes;",
@@ -241,7 +241,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({~gg_avail,~bk_ena}),
+	.status_menumask({gg,~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 
@@ -443,7 +443,7 @@ system #(MAX_SPPL) system
 	.region(status[10]),
 	.mapper_lock(status[15]),
 
-	.fm_ena(~status[12]),
+	.fm_ena(~status[12] | gg),
 	.audioL(audio_l),
 	.audioR(audio_r),
 
