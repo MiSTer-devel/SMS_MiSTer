@@ -250,7 +250,7 @@ wire        nvram_we;
 wire  [7:0] nvram_d;
 wire  [7:0] nvram_q;
 
-system #(MAX_SPPL) system
+system #(MAX_SPPL, "../") system
 (
 	.clk_sys(clk_sys),
 	.ce_cpu(ce_cpu_p),
