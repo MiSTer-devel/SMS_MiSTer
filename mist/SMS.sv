@@ -112,6 +112,7 @@ wire [15:0] joy_1;
 wire  [1:0] buttons;
 wire [31:0] status;
 wire        ypbpr;
+wire        no_csync;
 wire        scandoubler_disable;
 
 wire        ioctl_wr;
@@ -146,6 +147,7 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 		.status(status),
 		.scandoubler_disable(scandoubler_disable),
 		.ypbpr(ypbpr),
+		.no_csync(no_csync),
 		.buttons(buttons),
 		.joystick_0(joy_0),
 		.joystick_1(joy_1),
@@ -166,17 +168,17 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 
 data_io data_io
 (
-        .clk_sys(clk_sys),
-        .SPI_SCK(SPI_SCK),
-        .SPI_DI(SPI_DI),
-        .SPI_SS2(SPI_SS2),
+	.clk_sys(clk_sys),
+	.SPI_SCK(SPI_SCK),
+	.SPI_DI(SPI_DI),
+	.SPI_SS2(SPI_SS2),
 
-        .ioctl_wait(ioctl_wait),
-        .ioctl_wr(ioctl_wr),
-        .ioctl_addr(ioctl_addr),
-        .ioctl_dout(ioctl_dout),
-        .ioctl_download(ioctl_download),
-        .ioctl_index(ioctl_index)
+	.clkref_n(ioctl_wait),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_addr(ioctl_addr),
+	.ioctl_dout(ioctl_dout),
+	.ioctl_download(ioctl_download),
+	.ioctl_index(ioctl_index)
 );
 
 wire [21:0] ram_addr;
@@ -191,7 +193,7 @@ sdram ram
 	.clk(clk_sys),
 	.clkref(ce_cpu_p),
 
-	.waddr(romwr_a),
+	.waddr(ioctl_addr),
 	.din(ioctl_dout),
 	.we(rom_wr),
 	.we_ack(sd_wrack),
@@ -204,7 +206,6 @@ sdram ram
 
 reg  rom_wr = 0;
 wire sd_wrack;
-reg  [23:0] romwr_a;
 reg  [21:0] cart_mask;
 reg  reset;
 
@@ -216,18 +217,16 @@ always @(posedge clk_sys) begin
 	old_download <= ioctl_download;
 	old_reset <= reset;
 
-	if(~old_reset && reset) ioctl_wait <= 0;
 	if(~old_download && ioctl_download) begin
 		cart_mask <= 0;
-		romwr_a <= 0;
+		ioctl_wait <= 0;
 	end else begin
 		if(ioctl_wr) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
-			cart_mask <= cart_mask | romwr_a[21:0];
+			cart_mask <= cart_mask | ioctl_addr[21:0];
 		end else if(ioctl_wait && (rom_wr == sd_wrack)) begin
 			ioctl_wait <= 0;
-			romwr_a <= romwr_a + 1'd1;
 		end
 	end
 end
@@ -237,7 +236,7 @@ wire [15:0] audioL, audioR;
 wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
 wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
 
-wire       romhdr = ioctl_addr[9]; // has 512 byte header
+wire       romhdr = ioctl_addr[9:0] == 10'h1FF; // has 512 byte header
 wire       gg = ioctl_index[7:6] == 2'd2;
 
 wire [12:0] ram_a;
@@ -294,7 +293,7 @@ system #(MAX_SPPL, "../") system
 	.mapper_lock(status[15]),
 	.fm_ena(~status[12]),  
 	.audioL(audioL),
-   .audioR(audioR),
+	.audioR(audioR),
 
 	.sp64(status[8] & SP64),
 
@@ -388,91 +387,46 @@ end
 wire  [3:0] VGA_R_O = HBlank | VBlank ? 4'h0 : color[3:0];
 wire  [3:0] VGA_G_O = HBlank | VBlank ? 4'h0 : color[7:4];
 wire  [3:0] VGA_B_O = HBlank | VBlank ? 4'h0 : color[11:8];
-wire        SD_HS_O;
-wire        SD_VS_O;
-wire        HS_O;
-wire        VS_O;
 
-wire  [5:0] SD_R_O;
-wire  [5:0] SD_G_O;
-wire  [5:0] SD_B_O;
-wire  [5:0] osd_r_in;
-wire  [5:0] osd_g_in;
-wire  [5:0] osd_b_in;
-
-scandoubler scandoubler
+mist_video #(.SD_HCNT_WIDTH(10), .COLOR_DEPTH(4)) mist_video
 (
-    .clk_sys(clk_sys),
-    .scanlines(status[4:3]),
-    .hs_in(~HSync),
-    .vs_in(~VSync),
-    .r_in(VGA_R_O),
-    .g_in(VGA_G_O),
-    .b_in(VGA_B_O),
-    .hs_out(SD_HS_O),
-    .vs_out(SD_VS_O),
-    .r_out(SD_R_O),
-    .g_out(SD_G_O),
-    .b_out(SD_B_O)
+	.clk_sys(clk_sys),
+	.scanlines(status[4:3]),
+	.scandoubler_disable(scandoubler_disable),
+	.ypbpr(ypbpr),
+	.no_csync(no_csync),
+	.rotate(2'b00),
+	.SPI_DI(SPI_DI),
+	.SPI_SCK(SPI_SCK),
+	.SPI_SS3(SPI_SS3),
+	.HSync(~HSync),
+	.VSync(~VSync),
+	.R(VGA_R_O),
+	.G(VGA_G_O),
+	.B(VGA_B_O),
+	.VGA_HS(VGA_HS),
+	.VGA_VS(VGA_VS),
+	.VGA_R(VGA_R),
+	.VGA_G(VGA_G),
+	.VGA_B(VGA_B)
 );
-
-wire [5:0] osd_r_o, osd_g_o, osd_b_o;
-assign HS_O = scandoubler_disable ? HSync : SD_HS_O;
-assign VS_O = scandoubler_disable ? VSync : SD_VS_O;
-
-osd osd
-(
-    .clk_sys(clk_sys),
-    .SPI_DI(SPI_DI),
-    .SPI_SCK(SPI_SCK),
-    .SPI_SS3(SPI_SS3),
-    .R_in(scandoubler_disable ? {VGA_R_O, VGA_R_O[1:0]} : SD_R_O),
-    .G_in(scandoubler_disable ? {VGA_G_O, VGA_G_O[1:0]} : SD_G_O),
-    .B_in(scandoubler_disable ? {VGA_B_O, VGA_B_O[1:0]} : SD_B_O),
-    .HSync(HS_O),
-    .VSync(VS_O),
-    .R_out(osd_r_o),
-    .G_out(osd_g_o),
-    .B_out(osd_b_o)
-    );
-
-wire [5:0] Y, Pb, Pr;
-	 
-rgb2ypbpr rgb2ypbpr 
-(
-	.red   ( osd_r_o ),
-	.green ( osd_g_o ),
-	.blue  ( osd_b_o ),
-	.y     ( Y       ),
-	.pb    ( Pb      ),
-	.pr    ( Pr      )
-);
-	 
-assign VGA_R = ypbpr?Pr:osd_r_o;
-assign VGA_G = ypbpr? Y:osd_g_o;
-assign VGA_B = ypbpr?Pb:osd_b_o;
-wire        csync_out = ~(HS_O ^ VS_O);
-// a minimig vga->scart cable expects a composite sync signal on the VGA_HS output.
-// and VCC on VGA_VS (to switch into rgb mode)
-assign      VGA_HS = (scandoubler_disable || ypbpr)? csync_out : HS_O;
-assign      VGA_VS = (scandoubler_disable || ypbpr)? 1'b1 : VS_O;
 
 //////////////////   AUDIO   //////////////////
 
-jt12_dac2 #(16) dacl
+dac #(16) dacl
 (
-	.clk(clk_sys),
-    .rst(reset),
-    .din(audioL),
-	.dout(AUDIO_L)
+	.clk_i(clk_sys),
+	.res_n_i(~reset),
+	.dac_i({~audioL[15], audioL[14:0]}),
+	.dac_o(AUDIO_L)
 );
 
-jt12_dac2 #(16) dacr
+dac #(16) dacr
 (
-	.clk(clk_sys),
-    .rst(reset),
-    .din(audioR),
-	.dout(AUDIO_R)
+	.clk_i(clk_sys),
+	.res_n_i(~reset),
+	.dac_i({~audioR[15], audioR[14:0]}),
+	.dac_o(AUDIO_R)
 );
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////

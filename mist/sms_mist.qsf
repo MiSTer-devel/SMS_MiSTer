@@ -294,12 +294,7 @@ set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
 set_location_assignment PLL_1 -to pll|altpll_component|auto_generated|pll1
 set_global_assignment -name SYSTEMVERILOG_FILE SMS.sv
-set_global_assignment -name VERILOG_FILE user_io.v
-set_global_assignment -name VERILOG_FILE data_io.v
-set_global_assignment -name VERILOG_FILE osd.v
-set_global_assignment -name VERILOG_FILE scandoubler.v
-set_global_assignment -name SYSTEMVERILOG_FILE rgb2ypbpr.sv
-set_global_assignment -name VERILOG_FILE jt12_dac2.v
+set_global_assignment -name QIP_FILE "mist-modules/mist.qip"
 set_global_assignment -name SDC_FILE sms_mist.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/cheatcodes.sv
 set_global_assignment -name VHDL_FILE ../rtl/video.vhd
