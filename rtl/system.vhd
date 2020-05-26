@@ -6,7 +6,8 @@ use work.jt89.all;
 
 entity system is
 	generic (
-		MAX_SPPL : integer := 7
+		MAX_SPPL : integer := 7;
+		BASE_DIR : string := ""
 	);
 	port (
 		clk_sys:		in	 STD_LOGIC;
@@ -327,7 +328,7 @@ begin
 	boot_rom_inst : entity work.sprom
 	generic map
 	(
-		init_file=> "rtl/mboot.mif",
+		init_file=> BASE_DIR & "rtl/mboot.mif",
 		widthad_a=> 14
 	)
 	port map
