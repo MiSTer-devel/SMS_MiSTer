@@ -178,7 +178,7 @@ parameter CONF_STR = {
 	"OB,BIOS,Enable,Disable;",
 	"OF,Disable mapper,No,Yes;",
 	"OG,Serial,OFF,SNAC;",
-	"H2OH,Pause Btn Combo,No,Yes;",
+	"H3OH,Pause Btn Combo,No,Yes;",
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -244,7 +244,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({~raw_serial,~gg_avail,~bk_ena}),
+	.status_menumask({~raw_serial,gg,~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 	.gamma_bus(gamma_bus),

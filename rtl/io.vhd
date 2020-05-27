@@ -110,7 +110,7 @@ begin
 					D_out(7) <= J2_down;
 					D_out(6) <= J2_up;
 					-- 5=j1_tr
-					if ctrl(0)='0' and region='0' then
+					if ctrl(0)='0' and region='0' and gg='0' then
 						D_out(5) <= ctrl(4);
 					else
 						D_out(5) <= J1_tr;
@@ -122,13 +122,13 @@ begin
 					D_out(0) <= J1_up;
 				else
 					-- 7=j2_th
-					if ctrl(3)='0' and region='0' then
+					if ctrl(3)='0' and region='0' and gg='0' then
 						D_out(7) <= ctrl(7);
 					else
 						D_out(7) <= J2_th;
 					end if;
 					-- 6=j1_th
-					if ctrl(1)='0' and region='0' then
+					if ctrl(1)='0' and region='0' and gg='0' then
 						D_out(6) <= ctrl(5);
 					else
 						D_out(6) <= J1_th;
@@ -136,7 +136,7 @@ begin
 					D_out(5) <= '1';
 					D_out(4) <= '1';
 					-- 4=j2_tr
-					if ctrl(2)='0' then
+					if ctrl(2)='0' and gg='0' then
 						D_out(3) <= ctrl(6);
 					else
 						D_out(3) <= J2_tr;
