@@ -180,6 +180,11 @@ parameter CONF_STR = {
 	"OG,Serial,OFF,SNAC;",
 	"H3OH,Pause Btn Combo,No,Yes;",
 	"-;",
+	"H2OIJ,Gun Control,Disabled,Joy1,Joy2,Mouse;",
+	"H4OK,Gun Fire,Joy,Mouse;",
+	"H4OL,Gun Port,Port1,Port2;",
+	"H4OMN,Cross,Small,Medium,Big,None;",
+	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
 	"jn,A,B,Start;",
@@ -205,6 +210,7 @@ wire reset = RESET | status[0] | buttons[1] | cart_download | bk_loading;
 
 //////////////////   HPS I/O   ///////////////////
 wire  [6:0] joy[4], joy_0, joy_1;
+wire  [7:0] joy0_x,joy0_y,joy1_x,joy1_y;
 wire  [1:0] buttons;
 wire [31:0] status;
 
@@ -230,6 +236,8 @@ wire [63:0] img_size;
 wire        forced_scandoubler;
 wire [21:0] gamma_bus;
 
+wire [24:0] ps2_mouse;
+
 hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 (
 	.clk_sys(clk_sys),
@@ -241,10 +249,12 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 	.joystick_1(joy_1),
 	.joystick_2(joy[2]),
 	.joystick_3(joy[3]),
+	.joystick_analog_0({joy0_y, joy0_x}),
+	.joystick_analog_1({joy1_y, joy1_x}),
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({~raw_serial,gg,~gg_avail,~bk_ena}),
+	.status_menumask({~gun_en,~raw_serial,gg,~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 	.gamma_bus(gamma_bus),
@@ -271,7 +281,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 	.sd_buff_wr(sd_buff_wr),
 	.img_mounted(img_mounted),
 	.img_readonly(img_readonly),
-	.img_size(img_size)
+	.img_size(img_size),
+	
+	.ps2_mouse(ps2_mouse)
 );
 
 wire [21:0] ram_addr;
@@ -566,7 +578,18 @@ always @(posedge clk_sys) begin
 	
 		USER_OUT <= 7'b1111111;
 	end
-
+	
+	if(gun_en) begin
+		if(gun_port) begin
+			joyb_th <= ~gun_sensor;
+			joyb <= {2'b11, ~gun_trigger ,4'b1111};
+		end else begin
+			joya_th <= ~gun_sensor;
+			joya <= {2'b11, ~gun_trigger ,4'b1111};
+			joyb <= raw_serial ? joyser : ~joy[0];
+			joyb_th <= raw_serial ? joyser_th : 1'b1;
+		end
+	end
 end	
 
 
@@ -673,9 +696,9 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300), .GAMMA(1)) video_mixer
 	.hq2x(scale==1),
 	.mono(0),
 
-	.R({2{color[3:0]}}),
-	.G({2{color[7:4]}}),
-	.B({2{color[11:8]}})
+	.R((gun_en & gun_target) ? 8'd255 : {2{color[3:0]}}),
+	.G((gun_en & gun_target) ? 8'd0   : {2{color[7:4]}}),
+	.B((gun_en & gun_target) ? 8'd0   : {2{color[11:8]}})
 );
 
 
@@ -758,6 +781,39 @@ always @(posedge clk_sys) begin
 		end
 	end
 end
+
+wire [1:0] gun_mode = status[19:18];
+wire       gun_btn_mode = status[20];
+wire       gun_port = status[21];
+wire       gun_en = gun_mode && !gg;
+wire       gun_target;
+wire       gun_sensor;
+wire       gun_trigger;
+
+lightgun lightgun
+(
+	.CLK(clk_sys),
+	.RESET(reset),
+
+	.MOUSE(ps2_mouse),
+	.MOUSE_XY(&gun_mode),
+
+	.JOY_X(gun_mode[0] ? joy0_x : joy1_x),
+	.JOY_Y(gun_mode[0] ? joy0_y : joy1_y),
+	.JOY(gun_mode[0] ? joy_0 : joy_1),
+
+	.HDE(~HBlank),
+	.VDE(~VBlank),
+	.CE_PIX(ce_pix),
+
+	.BTN_MODE(gun_btn_mode),
+	.SIZE(status[23:22]),
+	.SENSOR_DELAY(34),
+
+	.TARGET(gun_target),
+	.SENSOR(gun_sensor),
+	.TRIGGER(gun_trigger)
+);
 
 endmodule
 
