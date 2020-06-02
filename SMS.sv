@@ -136,8 +136,8 @@ assign LED_DISK  = 0 ;
 assign LED_POWER = 0 ;
 assign BUTTONS   = 0;
 
-assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
-assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
+assign VIDEO_ARX = status[9] ? 8'd16 : gg ? 8'd10 : 8'd4;
+assign VIDEO_ARY = status[9] ? 8'd9  : gg ? 8'd9  : 8'd3;
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -162,7 +162,8 @@ parameter CONF_STR = {
 	"P1,Audio & Video;",
 	"P1-;",
 	"P1O2,TV System,NTSC,PAL;",
-	"P1O9,Aspect ratio,4:3,16:9;",
+	"H2P1O9,Aspect ratio,4:3,16:9;",
+	"h2P1O9,Aspect ratio,10:9,16:9;",
 	"P1O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"P1-;",
 	"P1OD,Border,No,Yes;",
