@@ -123,16 +123,6 @@ module emu
 	input         OSD_STATUS
 );
 
-`define USE_SP64
-
-`ifdef USE_SP64
-localparam MAX_SPPL = 63;
-localparam SP64     = 1'b1;
-`else
-localparam MAX_SPPL = 7;
-localparam SP64     = 1'b0;
-`endif
-
 assign ADC_BUS  = 'Z;
 assign VGA_F1 = 0;
 
@@ -163,27 +153,36 @@ parameter CONF_STR = {
 	"D0R7,Save Backup RAM;",
 	"D0ON,Autosave,OFF,ON;",
 	"-;",
-	"O9,Aspect ratio,4:3,16:9;",
-	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
-	"O2,TV System,NTSC,PAL;",
-	"OD,Border,No,Yes;",
-`ifdef USE_SP64
-	"O8,Sprites per line,Standard,All;",
-`endif
-	"H2OC,SMS FM sound,Enable,Disable;",
+
 	"OA,Region,US/UE,Japan;",
-	"-;",
-	"O1,Swap joysticks,No,Yes;",
-	"OE,Multitap,Disabled,Port1;",
 	"OB,BIOS,Enable,Disable;",
 	"OF,Disable mapper,No,Yes;",
-	"OG,Serial,OFF,SNAC;",
-	"H3OH,Pause Btn Combo,No,Yes;",
 	"-;",
-	"H2OIJ,Gun Control,Disabled,Joy1,Joy2,Mouse;",
-	"H4OK,Gun Fire,Joy,Mouse;",
-	"H4OL,Gun Port,Port1,Port2;",
-	"H4OMN,Cross,Small,Medium,Big,None;",
+
+	"P1,Audio & Video;",
+	"P1-;",
+	"P1O2,TV System,NTSC,PAL;",
+	"P1O9,Aspect ratio,4:3,16:9;",
+	"P1O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
+	"P1-;",
+	"P1OD,Border,No,Yes;",
+	"P1O8,Sprites per line,Standard,All;",
+	"P1-;",
+	"P1H2OC,SMS FM sound,Enable,Disable;",
+
+	"P2,Input;",
+	"P2-;",
+	"P2O1,Swap joysticks,No,Yes;",
+	"P2OE,Multitap,Disabled,Port1;",
+	"D3P2OH,Pause Btn Combo,No,Yes;",
+	"P2-;",
+	"P2OG,Serial,OFF,SNAC;",
+	"P2-;",
+	"D2P2OIJ,Gun Control,Disabled,Joy1,Joy2,Mouse;",
+	"D4P2OK,Gun Fire,Joy,Mouse;",
+	"D4P2OL,Gun Port,Port1,Port2;",
+	"D4P2OMN,Cross,Small,Medium,Big,None;",
+
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
@@ -437,7 +436,7 @@ wire        nvram_we;
 wire  [7:0] nvram_d;
 wire  [7:0] nvram_q;
 
-system #(MAX_SPPL) system
+system #(63) system
 (
 	.clk_sys(clk_sys),
 	.ce_cpu(ce_cpu),
@@ -496,7 +495,7 @@ system #(MAX_SPPL) system
 	.audioR(audio_r),
 
 	.dbr(dbr),
-	.sp64(status[8] & SP64),
+	.sp64(status[8]),
 
 	.ram_a(ram_a),
 	.ram_we(ram_we),
@@ -624,7 +623,7 @@ video video
 	.ce_pix(ce_pix),
 	.pal(pal),
 	.gg(gg),
-	.border(status[13]),
+	.border(status[13] & ~gg),
 	.mask_column(mask_column),
    .smode_M1(smode_M1),
 	.smode_M3(smode_M3),
