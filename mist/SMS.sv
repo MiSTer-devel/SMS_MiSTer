@@ -100,10 +100,12 @@ wire       joyswap = status[1];
 wire       palmode = status[2];
 wire [1:0] scanlines = status[4:3];
 wire       enable_bios_n = status[5];
+wire       multitap = status[6];
 wire       save_ram = status[7];
 wire       sprites64 = status[8];
 wire       region = status[10];
 wire       enable_fm_n = status[12];
+wire [1:0] lightgun = status[14:13];
 wire       lockmappers = status[15];
 
 ////////////////////   CLOCKS   ///////////////////
@@ -121,8 +123,9 @@ pll pll
 assign SDRAM_CLK = clk_sys;
 
 //////////////////   MiST I/O   ///////////////////
-wire [15:0] joy_0;
-wire [15:0] joy_1;
+wire  [6:0] joy_0;
+wire  [6:0] joy_1;
+wire  [6:0] joy[4];
 wire  [1:0] buttons;
 wire [31:0] status;
 wire        ypbpr;
@@ -135,6 +138,11 @@ wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
 wire        ioctl_wait;
+
+wire  [8:0] mouse_x;
+wire  [8:0] mouse_y;
+wire  [7:0] mouse_flags;
+wire        mouse_strobe;
 
 reg  [31:0] sd_lba;
 reg         sd_rd = 0;
@@ -165,6 +173,13 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 		.buttons(buttons),
 		.joystick_0(joy_0),
 		.joystick_1(joy_1),
+		.joystick_2(joy[2]),
+		.joystick_3(joy[3]),
+
+		.mouse_x(mouse_x),
+		.mouse_y(mouse_y),
+		.mouse_flags(mouse_flags),
+		.mouse_strobe(mouse_strobe),
 
 		.sd_conf(0),
 		.sd_sdhc(1),
@@ -247,9 +262,6 @@ end
 
 wire [15:0] audioL, audioR;
 
-wire [6:0] joya = joyswap ? ~joy_1[6:0] : ~joy_0[6:0];
-wire [6:0] joyb = joyswap ? ~joy_0[6:0] : ~joy_1[6:0];
-
 wire       romhdr = ioctl_addr[9:0] == 10'h1FF; // has 512 byte header
 wire       gg = ioctl_index[7:6] == 2'd2;
 
@@ -289,13 +301,20 @@ system #(MAX_SPPL, "../") system
 	.j1_right(joya[0]),
 	.j1_tl(joya[4]),
 	.j1_tr(joya[5]),
+	.j1_th(joya_th),
 	.j2_up(joyb[3]),
 	.j2_down(joyb[2]),
 	.j2_left(joyb[1]),
 	.j2_right(joyb[0]),
 	.j2_tl(joyb[4]),
 	.j2_tr(joyb[5]),
+	.j2_th(joyb_th),
 	.pause(joya[6]&joyb[6]),
+
+	.j1_tr_out(joya_tr_out),
+	.j1_th_out(joya_th_out),
+	.j2_tr_out(joyb_tr_out),
+	.j2_th_out(joyb_th_out),
 
 	.x(x),
 	.y(y),
@@ -304,7 +323,7 @@ system #(MAX_SPPL, "../") system
 	.smode_M1(smode_M1),
 	.smode_M2(smode_M2),	
 	.smode_M3(smode_M3),	
-	.mapper_lock(mapperlock),
+	.mapper_lock(lockmappers),
 	.fm_ena(~enable_fm_n),
 	.audioL(audioL),
 	.audioR(audioR),
@@ -396,10 +415,95 @@ always @(negedge clk_sys) begin
 	end
 end
 
+/////////////////// CONTROLS //////////////////
+wire       joya_tr_out;
+wire       joya_th_out;
+wire       joyb_tr_out;
+wire       joyb_th_out;
+wire       joya_th;
+wire       joyb_th;
+wire       joyser_th;
+wire [6:0] joya, joyb;
+reg  [1:0] jcnt = 0;
+
+assign joy[0] = joyswap ? joy_1[6:0] : joy_0[6:0];
+assign joy[1] = joyswap ? joy_0[6:0] : joy_1[6:0];
+
+always @(posedge clk_sys) begin
+
+	reg old_th;
+	reg [15:0] tmr;
+
+	joya <= ~joy[jcnt];
+	joyb <= multitap ? 7'h7F : ~joy[1];
+	joya_th <=  1'b1;
+	joyb_th <=  1'b1;
+
+	if(ce_cpu_p) begin
+		if(tmr > 57000) jcnt <= 0;
+		else if(joya_th) tmr <= tmr + 1'd1;
+
+		old_th <= joya_th;
+		if(old_th & ~joya_th) begin
+			tmr <= 0;
+			//first clock doesn't count as capacitor has not discharged yet
+			if(tmr < 57000) jcnt <= jcnt + 1'd1;
+		end
+	end
+
+	if(reset | ~multitap) jcnt <= 0;
+
+	if(gun_en) begin
+		if(lightgun == 2'b10) begin
+			joyb_th <= ~gun_sensor;
+			joyb <= {2'b11, ~gun_trigger ,4'b1111};
+		end else begin
+			joya_th <= ~gun_sensor;
+			joya <= {2'b11, ~gun_trigger ,4'b1111};
+			joyb <= ~joy[0];
+			joyb_th <= 1'b1;
+		end
+	end
+end
+
+wire        gun_en = lightgun && !gg;
+wire        gun_target;
+wire        gun_sensor;
+wire        gun_trigger;
+wire [24:0] ps2_mouse = { mouse_strobe_level, mouse_y[7:0], mouse_x[7:0], mouse_flags };
+reg         mouse_strobe_level;
+
+always @(posedge clk_sys) if (mouse_strobe) mouse_strobe_level <= ~mouse_strobe_level;
+
+lightgun lightgun_instance
+(
+	.CLK(clk_sys),
+	.RESET(reset),
+
+	.MOUSE(ps2_mouse),
+	.MOUSE_XY(1'b1),
+
+	.JOY_X(),
+	.JOY_Y(),
+	.JOY(),
+
+	.HDE(~HBlank),
+	.VDE(~VBlank),
+	.CE_PIX(ce_pix),
+
+	.BTN_MODE(1'b1),
+	.SIZE(2'b01),
+	.SENSOR_DELAY(34),
+
+	.TARGET(gun_target),
+	.SENSOR(gun_sensor),
+	.TRIGGER(gun_trigger)
+);
+
 //////////////////   VIDEO   //////////////////
-wire  [3:0] VGA_R_O = HBlank | VBlank ? 4'h0 : color[3:0];
-wire  [3:0] VGA_G_O = HBlank | VBlank ? 4'h0 : color[7:4];
-wire  [3:0] VGA_B_O = HBlank | VBlank ? 4'h0 : color[11:8];
+wire  [3:0] VGA_R_O = HBlank | VBlank ? 4'h0 : (gun_en & gun_target) ? 4'hf : color[3:0];
+wire  [3:0] VGA_G_O = HBlank | VBlank ? 4'h0 : (gun_en & gun_target) ? 4'h0 : color[7:4];
+wire  [3:0] VGA_B_O = HBlank | VBlank ? 4'h0 : (gun_en & gun_target) ? 4'h0 : color[11:8];
 
 mist_video #(.SD_HCNT_WIDTH(10), .COLOR_DEPTH(4)) mist_video
 (
