@@ -96,6 +96,15 @@ parameter CONF_STR = {
 	"V,v1.0.",`BUILD_DATE
 };
 
+wire       joyswap = status[1];
+wire       palmode = status[2];
+wire [1:0] scanlines = status[4:3];
+wire       enable_bios_n = status[5];
+wire       save_ram = status[7];
+wire       sprites64 = status[8];
+wire       region = status[10];
+wire       enable_fm_n = status[12];
+wire       lockmappers = status[15];
 
 ////////////////////   CLOCKS   ///////////////////
 
@@ -238,8 +247,8 @@ end
 
 wire [15:0] audioL, audioR;
 
-wire [6:0] joya = status[1] ? ~joy_1[6:0] : ~joy_0[6:0];
-wire [6:0] joyb = status[1] ? ~joy_0[6:0] : ~joy_1[6:0];
+wire [6:0] joya = joyswap ? ~joy_1[6:0] : ~joy_0[6:0];
+wire [6:0] joyb = joyswap ? ~joy_0[6:0] : ~joy_1[6:0];
 
 wire       romhdr = ioctl_addr[9:0] == 10'h1FF; // has 512 byte header
 wire       gg = ioctl_index[7:6] == 2'd2;
@@ -263,10 +272,10 @@ system #(MAX_SPPL, "../") system
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
-	.pal(pal),
+	.pal(palmode),
 	.gg(gg),
-	.region(status[10]),
-	.bios_en(~status[5]),
+	.region(region),
+	.bios_en(~enable_bios_n),
 
 	.RESET_n(~reset),
 
@@ -295,12 +304,12 @@ system #(MAX_SPPL, "../") system
 	.smode_M1(smode_M1),
 	.smode_M2(smode_M2),	
 	.smode_M3(smode_M3),	
-	.mapper_lock(status[15]),
-	.fm_ena(~status[12]),  
+	.mapper_lock(mapperlock),
+	.fm_ena(~enable_fm_n),
 	.audioL(audioL),
 	.audioR(audioR),
 
-	.sp64(status[8] & SP64),
+	.sp64(sprites64 & SP64),
 
 	.ram_a(ram_a),
 	.ram_we(ram_we),
@@ -328,13 +337,12 @@ wire [11:0] color;
 wire mask_column;
 wire HSync, VSync, HBlank, VBlank;
 wire smode_M1, smode_M2, smode_M3;
-wire pal = status[2];
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
-	.pal(pal),
+	.pal(palmode),
 	.gg(gg),
 	.border(~gg),
 	.mask_column(mask_column),
@@ -396,7 +404,7 @@ wire  [3:0] VGA_B_O = HBlank | VBlank ? 4'h0 : color[11:8];
 mist_video #(.SD_HCNT_WIDTH(10), .COLOR_DEPTH(4)) mist_video
 (
 	.clk_sys(clk_sys),
-	.scanlines(status[4:3]),
+	.scanlines(scanlines),
 	.scandoubler_disable(scandoubler_disable),
 	.ypbpr(ypbpr),
 	.no_csync(no_csync),
@@ -448,7 +456,7 @@ dpram #(.widthad_a(13)) nvram_inst
 
 reg  bk_ena     = 0;
 reg  bk_load    = 0;
-wire bk_save    = status[7];
+wire bk_save    = save_ram;
 reg  bk_reset   = 0;
 
 always @(posedge clk_sys) begin
