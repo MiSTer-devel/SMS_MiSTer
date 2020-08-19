@@ -298,6 +298,7 @@ always@(posedge clk_sys) begin
 				'h2F: io_dout <= 1;
 				'h32: io_dout <= gamma_bus[21];
 				'h36: begin io_dout <= info_n; info_n <= 0; end
+				'h39: io_dout <= 1;
 			endcase
 
 			sd_buff_addr <= 0;
@@ -664,7 +665,7 @@ always@(posedge clk_sys) begin
 
 	tx_empty <= ((wptr == rptr) && (tx_state == 0));
 
-	if(we) begin
+	if(we && !has_data) begin
 		fifo[wptr] <= wdata;
 		wptr <= wptr + 1'd1;
 	end
@@ -704,6 +705,8 @@ always@(posedge clk_sys) begin
 						ps2_dat_out <= 1;
 						has_data <= 1;
 						rx_state <= 0;
+						rptr     <= 0;
+						wptr     <= 0;
 					end
 			endcase
 		end else begin
