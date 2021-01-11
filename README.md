@@ -10,6 +10,7 @@
 * Hide Borders Option - Allows you to fill the screen vertically without black borders.
 * FM Audio Support
 * Extra Sprites Option
+* Cheats
 
 ### Download precompiled binaries at:
 * For MiSTer, go to [releases](https://github.com/MiSTer-devel/SMS_MISTer/tree/master/releases) folder.
