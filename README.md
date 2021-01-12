@@ -4,6 +4,14 @@
 * Copy the *.rbf file at the root of the SD card.
 * Copy *.SMS ROMs into SMS folder.
 
+### Features: 
+* Master System, Game Gear and SG-1000 Support
+* NTSC & PAL Support
+* Hide Borders Option - Allows you to fill the screen vertically without black borders.
+* FM Audio Support
+* Extra Sprites Option
+* Cheats
+
 ### Download precompiled binaries at:
 * For MiSTer, go to [releases](https://github.com/MiSTer-devel/SMS_MISTer/tree/master/releases) folder.
 * For MiST, go to [mist-binaries](https://github.com/mist-devel/mist-binaries/tree/master/cores/sms).
