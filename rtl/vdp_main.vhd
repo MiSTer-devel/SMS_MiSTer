@@ -26,6 +26,7 @@ entity vdp_main is
 					
 		display_on:			in  std_logic;
 		mask_column0:		in  std_logic;
+		black_column:			in  std_logic;
 		smode_M1:			in  std_logic;
 		smode_M3:			in  std_logic;
 		smode_M4:			in  std_logic;
@@ -170,7 +171,8 @@ begin
 	end process;
 	
 	vram_A <= spr_vram_A when x>=256 and x<496 else bg_vram_A;  -- Does bg only need x<504 only?
-	color <= cram_D when smode_M4='1' else 
+	color <= "000000000000" when black_column='1' and mask_column0='1' and x>0 and x<9 else
+			cram_D when smode_M4='1' else 
 			"000000000000" when out_color="0000" else 
 			"000000000000" when out_color="0001" else 
 			"010010100010" when out_color="0010" else 

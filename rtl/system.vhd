@@ -55,6 +55,7 @@ entity system is
 		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		mask_column:out STD_LOGIC;
+		black_column:		in STD_LOGIC;
 		smode_M1:		out STD_LOGIC;
 		smode_M2:		out STD_LOGIC;
 		smode_M3:		out STD_LOGIC;
@@ -244,6 +245,7 @@ begin
 		smode_M2  => smode_M2,
 		smode_M3  => smode_M3,
 		mask_column => mask_column,
+		black_column => black_column,
 		reset_n  => RESET_n
 	);
 
