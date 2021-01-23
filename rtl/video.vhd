@@ -11,6 +11,7 @@ entity video is
 		gg:				in  std_logic;
 		border:        in  std_logic := '1';
 		mask_column:	in  std_logic := '0';
+		cut_mask:		in	std_logic;
 		smode_M1:		in	 std_logic;
 		smode_M3:		in	 std_logic;
 		
@@ -117,7 +118,7 @@ begin
 	vbl_st  <= conv_std_logic_vector(184,9) when (smode_M1='1' and gg='1' and border='0')
 			else conv_std_logic_vector(224,9) when smode_M1 = '1'
 			else conv_std_logic_vector(240,9) when smode_M3 = '1'
-			else conv_std_logic_vector(215,9) when border = '1' and gg = '0'
+			else conv_std_logic_vector(216,9) when border = '1' and gg = '0'
 			else conv_std_logic_vector(192,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(168,9);
 			
@@ -132,7 +133,7 @@ begin
 			else conv_std_logic_vector(208,9);
 
 	hbl_end <= conv_std_logic_vector(500,9) when border = '1' and gg = '0'
-			else conv_std_logic_vector(008,9) when (border xor gg) = '0' and mask_column = '1'
+			else conv_std_logic_vector(008,9) when (border xor gg) = '0' and mask_column = '1' and cut_mask = '1'
 			else conv_std_logic_vector(000,9) when (border xor gg) = '0'
 			else conv_std_logic_vector(048,9);
 
