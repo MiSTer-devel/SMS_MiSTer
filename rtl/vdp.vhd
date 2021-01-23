@@ -25,6 +25,7 @@ entity vdp is
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		mask_column:   out STD_LOGIC;
+		black_column:		in STD_LOGIC;
 		smode_M1: 		out STD_LOGIC;
 		smode_M2: 		out STD_LOGIC;
 		smode_M3: 		out STD_LOGIC;
@@ -138,6 +139,7 @@ begin
 						
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,
+		black_column	=> black_column,
 		overscan			=> overscan,
 
 		bg_address		=> bg_address,
