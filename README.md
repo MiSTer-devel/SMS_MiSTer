@@ -22,6 +22,13 @@
 * The "Aspect ratio" doesn't do much in PAL mode, that's normal
 * The "Region" parameter toggle some hardware features that are specific to the different console models.
   Some localized games need these modifications to work properly
+* The "Masked left column" option controls behaviour of left column when hidden by system (usually during horizontal 
+  scrolling). "BG" sets it to the background/overscan colour, as on original hardware. "Black" makes it black,
+  which may look better on non full-screen settings as the column will blend in with surrounding black area.
+  "Cut" will remove the column from the active image, so the horizontal resolution becomes 248 instead of 256. This
+  will distort the image when scaled, particularly on integer scaling settings, but will use more of the screen.
+  When "Border" is set to "Yes" the left column is always shown as part of the border, so "Masked left column" is 
+  disabled.
 * Each game cartridge comes with a specific mapper, which description is not included in the .gg ou .sms file.
   The core has a special logic to automatically determine which mapper needs to be used, but some games make
   a good effort to make this logic fail. The "Disable mappers" parameter permits to force the usage 
