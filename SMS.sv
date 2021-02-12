@@ -195,8 +195,8 @@ video_crop video_crop
 (
 	.*,
 	.VGA_DE_IN(vga_de),
-	.ARX((!ar) ? 12'd4 : (ar - 1'd1)),
-	.ARY((!ar) ? 12'd3 : 12'd0),
+	.ARX((!ar) ? (border ? 12'd47 : 12'd32) : (ar - 1'd1)),
+	.ARY((!ar) ? (border ? 12'd35 : 12'd21) : 12'd0),
 	.CROP_SIZE(en216p ? 10'd216 : 10'd0),
 	.CROP_OFF(0)
 );
@@ -688,6 +688,7 @@ wire [11:0] color;
 wire mask_column;
 wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
+wire border = status[13] & ~gg;
 
 video video
 (
@@ -695,7 +696,7 @@ video video
 	.ce_pix(ce_pix),
 	.pal(pal),
 	.gg(gg),
-	.border(status[13] & ~gg),
+	.border(border),
 	.mask_column(mask_column),
 	.cut_mask(status[29]),
    .smode_M1(smode_M1),
