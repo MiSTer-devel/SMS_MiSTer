@@ -764,14 +764,8 @@ end
 video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300), .GAMMA(1)) video_mixer
 (
 	.*,
-	.clk_vid(CLK_VIDEO),
-	.ce_pix_out(CE_PIXEL),
-	.ce_pix(ce_pix),
-	
-	.scanlines(0),
 	.scandoubler(scale || forced_scandoubler),
 	.hq2x(scale==1),
-	.mono(0),
 
 	.VGA_DE(vga_de),
 	.R((gun_en & gun_target) ? 8'd255 : {2{color[3:0]}}),
