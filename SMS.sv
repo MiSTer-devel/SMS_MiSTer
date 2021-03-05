@@ -257,12 +257,14 @@ parameter CONF_STR = {
 	"D4P2OK,Gun Fire,Joy,Mouse;",
 	"D4P2OL,Gun Port,Port1,Port2;",
 	"D4P2OMN,Cross,Small,Medium,Big,None;",
+	"P2-;",
+	"P2o0,Paddle,Disabled,Enabled;",
 
 	"-;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,Pause;",
-	"jn,A,B,Start;",
-	"jp,Y,A,Start;",
+	"jn,A|P,B,Start;",
+	"jp,Y|P,A,Start;",
 	"V,v",`BUILD_DATE
 };
 
@@ -285,6 +287,7 @@ wire reset = RESET | status[0] | buttons[1] | cart_download | bk_loading;
 //////////////////   HPS I/O   ///////////////////
 wire  [6:0] joy[4], joy_0, joy_1;
 wire  [7:0] joy0_x,joy0_y,joy1_x,joy1_y;
+wire  [7:0] paddle_0, paddle_1;
 wire  [1:0] buttons;
 wire [63:0] status;
 
@@ -325,6 +328,8 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(0)) hps_io
 	.joystick_3(joy[3]),
 	.joystick_analog_0({joy0_y, joy0_x}),
 	.joystick_analog_1({joy1_y, joy1_x}),
+	.paddle_0(paddle_0),
+	.paddle_1(paddle_1),
 
 	.buttons(buttons),
 	.status(status),
@@ -665,8 +670,12 @@ always @(posedge clk_sys) begin
 			joyb_th <= raw_serial ? joyser_th : 1'b1;
 		end
 	end
-end	
 
+	if (paddle_en) begin
+		{joya[0], joya[1], joya[2], joya[3], joya[5]} <= {paddle_0_nib, paddle_0_tr};
+		{joyb[0], joyb[1], joyb[2], joyb[3], joyb[5]} <= {paddle_1_nib, paddle_1_tr};
+	end
+end
 
 spram #(.widthad_a(13)) ram_inst
 (
@@ -886,6 +895,71 @@ lightgun lightgun
 	.SENSOR(gun_sensor),
 	.TRIGGER(gun_trigger)
 );
+
+// Paddle support
+wire       jp_region    = status[10];
+wire       paddle_en    = status[32];
+
+reg  [3:0] paddle_0_nib,   paddle_1_nib;
+reg  [3:0] paddle_0_nib_q, paddle_1_nib_q;
+reg        paddle_0_tr,    paddle_1_tr;
+
+reg        joya_th_out_q,  joyb_th_out_q;
+wire       joya_th_rise,   joyb_th_rise;
+wire       joya_th_fall,   joyb_th_fall;
+
+always_ff @(posedge clk_sys) begin
+	if (jp_region) begin
+		// Japanese paddle (HPD-200)
+		if (en16khz) begin
+			if (paddle_0_tr) begin
+				{paddle_0_nib_q, paddle_0_nib} <= paddle_0;
+				{paddle_1_nib_q, paddle_1_nib} <= paddle_1;
+				paddle_0_tr  <= 1'b0;
+				paddle_1_tr  <= 1'b0;
+			end else begin
+				paddle_0_nib <= paddle_0_nib_q;
+				paddle_1_nib <= paddle_1_nib_q;
+				paddle_0_tr  <= 1'b1;
+				paddle_1_tr  <= 1'b1;
+			end
+		end
+	end else begin
+		// Export paddle (Non-existent but implemented in some games?)
+		joya_th_out_q <= joya_th_out;
+		joyb_th_out_q <= joyb_th_out;
+
+		if (joya_th_fall) begin
+			{paddle_0_nib_q, paddle_0_nib} <= paddle_0;
+			paddle_0_tr  <= 1'b0;
+		end else if (joya_th_rise) begin
+			paddle_0_nib <= paddle_0_nib_q;
+			paddle_0_tr  <= 1'b0;
+		end
+
+		if (joyb_th_fall) begin
+			{paddle_1_nib_q, paddle_1_nib} <= paddle_1;
+			paddle_1_tr  <= 1'b0;
+		end else if (joyb_th_rise) begin
+			paddle_1_nib <= paddle_1_nib_q;
+			paddle_1_tr  <= 1'b0;
+		end
+	end
+end
+
+assign joya_th_rise = ~joya_th_out_q &  joya_th_out;
+assign joyb_th_rise = ~joyb_th_out_q &  joyb_th_out;
+assign joya_th_fall =  joya_th_out_q & ~joya_th_out;
+assign joyb_th_fall =  joyb_th_out_q & ~joyb_th_out;
+
+wire       en16khz;
+reg [11:0] cnt_en16khz;
+
+always_ff @(posedge clk_sys) begin
+	cnt_en16khz <= cnt_en16khz + 1'd1;
+	if (cnt_en16khz == 3355) cnt_en16khz <= 0;
+end
+assign en16khz = cnt_en16khz == 0;
 
 endmodule
 
