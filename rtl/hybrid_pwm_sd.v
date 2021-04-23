@@ -75,14 +75,14 @@ always @(posedge clk) begin
 	if(init && dump) begin
 		initctr_l<=initctr; // Lags one step behind to avoid wrapping from max -> 0 on terminate
 		if(terminate && term_ena)
-			initctr <= initctr+1;	// Increase the counter on termination	
+			initctr <= initctr+1'd1;	// Increase the counter on termination
 		else
-			initctr <= initctr-1;	// Decresae the counter on power-on
+			initctr <= initctr-1'd1;	// Decresae the counter on power-on
 	end
 	if(!init && terminate)
 		term_ena<=1'b1;	// Termination can't start until init is complete.
 	if(!init && terminate && !term_ena)
-		initctr <= initctr+1;	// Kick-start the termination, setting initctr[13]
+		initctr <= initctr+1'd1;	// Kick-start the termination, setting initctr[13]
 end
 
 // Periodic dumping of the accumulator to kill standing tones.
@@ -94,7 +94,7 @@ always @(posedge clk) begin
 	dump <=1'b0;
 	if(pwmcounter==5'b11111)
 	begin
-		dumpcounter<=dumpcounter+1;
+		dumpcounter<=dumpcounter+1'd1;
 		dump<=dumpcounter==0 ? 1'b1 : 1'b0;
 	end
 end
@@ -134,7 +134,7 @@ always @(posedge clk) begin
 
 	if(dump)	// dump the accumulator
 	begin
-		sigma_l[10:0]<=11'h100_00000000;
+		sigma_l[10:0]<=11'b100_00000000;
 		sigma_r[10:0]<=11'b100_00000000;
 	end
 end

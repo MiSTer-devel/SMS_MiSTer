@@ -17,4 +17,5 @@ set_global_assignment -name VHDL_FILE rtl/vdp_background.vhd
 set_global_assignment -name VHDL_FILE rtl/vdp.vhd
 set_global_assignment -name VHDL_FILE rtl/system.vhd
 set_global_assignment -name VHDL_FILE rtl/io.vhd
+set_global_assignment -name VHDL_FILE rtl/AudioMix.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE SMS.sv
