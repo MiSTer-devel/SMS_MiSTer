@@ -458,9 +458,9 @@ port map(
 				if bootloader_n='1' and not mapper_msx_lock then 
 					if MREQ_n='0' then 
 					-- in this state, A is stable but not D_out
-						if A="0000" then
+						if A=x"0000" then
 							mapper_msx_check0 <= (D_out=x"41") ;
-						elsif A="0001" then
+						elsif A=x"0001" then
 							mapper_msx_check1 <= (D_out=x"42") ;
 							mapper_msx_lock0 <= true ;
 						end if;
