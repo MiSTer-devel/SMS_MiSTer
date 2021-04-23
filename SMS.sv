@@ -688,12 +688,15 @@ spram #(.widthad_a(13)) ram_inst
 
 wire [15:0] audio_l, audio_r; 
 
-compressor compressor
-(
-	clk_sys,
-	audio_l[15:4], audio_r[15:4],
-	AUDIO_L,       AUDIO_R
-); 
+assign AUDIO_L=audio_l;
+assign AUDIO_R=audio_r;
+
+//compressor compressor
+//(
+//	clk_sys,
+//	audio_l[15:4], audio_r[15:4],
+//	AUDIO_L,       AUDIO_R
+//); 
 
 wire [8:0] x;
 wire [8:0] y;
