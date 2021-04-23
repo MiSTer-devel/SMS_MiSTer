@@ -411,23 +411,19 @@ mist_video #(.SD_HCNT_WIDTH(10), .COLOR_DEPTH(4)) mist_video
 	.VGA_B(VGA_B)
 );
 
+
 //////////////////   AUDIO   //////////////////
 
-dac #(16) dacl
+hybrid_pwm_sd dac
 (
-	.clk_i(clk_sys),
-	.res_n_i(~reset),
-	.dac_i({~audioL[15], audioL[14:0]}),
-	.dac_o(AUDIO_L)
+	.clk(clk_sys),
+	.terminate(1'b0),
+	.d_l({~audioL[15], audioL[14:0]}),
+	.q_l(AUDIO_L),
+	.d_r({~audioR[15], audioR[14:0]}),
+	.q_r(AUDIO_R)
 );
 
-dac #(16) dacr
-(
-	.clk_i(clk_sys),
-	.res_n_i(~reset),
-	.dac_i({~audioR[15], audioR[14:0]}),
-	.dac_o(AUDIO_R)
-);
 
 /////////////////////////  STATE SAVE/LOAD  /////////////////////////////
 // 8k auxilary RAM - 32k doesn't fit

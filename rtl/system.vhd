@@ -1,7 +1,8 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL; 
+use IEEE.NUMERIC_STD.ALL; 
+--use IEEE.STD_LOGIC_ARITH.ALL;
+-- use IEEE.STD_LOGIC_UNSIGNED.ALL; 
 use work.jt89.all;
 
 entity system is
@@ -128,6 +129,9 @@ architecture Behavioral of system is
 	signal bal_WR_n:			std_logic;
 
 	signal FM_out:				std_logic_vector(13 downto 0);
+	signal FM_gated:			std_logic_vector(12 downto 0);
+	alias FM_sign:				std_logic is FM_out(13);
+	alias FM_adj:				std_logic is FM_out(12);
 	signal fm_WR_n:	   	std_logic;
 	
 	signal det_D:		   	std_logic_vector(2 downto 0);
@@ -277,10 +281,34 @@ begin
 		mixout   => FM_out
 	);
 
-	audioL <= (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
-	     else (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00");
-	audioR <= (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outR & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
-	     else (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outL & "00");
+	
+-- AMR - Clamped volume boosting - if the top two bits match, truncate the topmost bit.
+-- If the top two bits don't match, duplicate the second bit across the output.
+
+FM_gated <= (others=>'0') when fm_ena='0' else  -- All zero if FM is disabled
+				FM_out(FM_out'high-1 downto 0) when FM_sign=FM_adj else -- Pass through
+				(FM_gated'high=>FM_sign,others=>FM_adj); -- Clamp
+
+-- The old code shifts FM right by one place and PSG right by three places.
+-- This version shift FM left one place and PSG right by one place, so the volume
+-- is four times higher.  I haven't yet found a game in which this clips.
+
+mix : entity work.AudioMix
+port map(
+	clk => clk_sys,
+	reset_n => RESET_n,
+	audio_in_l1 => signed((PSG_outL(10) & PSG_outL & "0000")),
+	audio_in_l2 => signed((FM_gated & "000")),
+	audio_in_r1 => signed((PSG_outR(10) & PSG_outR & "0000")),
+	audio_in_r2 => signed((FM_gated & "000")),
+	std_logic_vector(audio_l) => audioL,
+	std_logic_vector(audio_r) => audioR
+);
+
+--	audioL <= (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
+--	     else (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00");
+--	audioR <= (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outR & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
+--	     else (PSG_outR(10) & PSG_outR(10) & PSG_outR(10) & PSG_outL & "00");
 
 	io_inst: entity work.io
 	port map
