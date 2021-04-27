@@ -152,10 +152,13 @@ architecture Behavioral of system is
 	signal mapper_codies:	std_logic := '0'; -- Ernie Els Golf mapper
 	signal mapper_codies_lock:	std_logic := '0'; 
 	
-	signal mapper_msx_check0 : boolean := false ;
-	signal mapper_msx_check1 : boolean := false ;
+	signal mapper_msx_check00 : boolean := false ;
+	signal mapper_msx_check01 : boolean := false ;
+	signal mapper_msx_check10 : boolean := false ;
+	signal mapper_msx_check11 : boolean := false ;
 	signal mapper_msx_lock0 :  boolean := false ;
 	signal mapper_msx_lock :   boolean := false ;
+	signal mapper_msx_prereq : std_logic := '0' ;
 	signal mapper_msx :		   std_logic := '0' ;
 
 	signal GENIE		: boolean;
@@ -444,31 +447,36 @@ port map(
 		end if;
 	end process;
 
-	-- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
+	-- detect MSX mapper pre-requirement: we check the two first bytes of the rom, must be 41:42 or F3:C3
 	process (RESET_n, clk_sys)
 	begin
 		if RESET_n='0' then
-			mapper_msx_check0 <= false ;
-			mapper_msx_check1 <= false ;
+			mapper_msx_check00 <= false ;
+			mapper_msx_check01 <= false ;
+			mapper_msx_check10 <= false ;
+			mapper_msx_check11 <= false ;
 			mapper_msx_lock0 <= false ;
 			mapper_msx_lock <= false ;
-			mapper_msx <= '0' ;
+			mapper_msx_prereq <= '0' ;
 		else
 			if rising_edge(clk_sys) then
 				if bootloader_n='1' and not mapper_msx_lock then 
 					if MREQ_n='0' then 
 					-- in this state, A is stable but not D_out
 						if A=x"0000" then
-							mapper_msx_check0 <= (D_out=x"41") ;
+							mapper_msx_check00 <= (D_out=x"41") ;
+							mapper_msx_check10 <= (D_out=x"F3") ;
 						elsif A=x"0001" then
-							mapper_msx_check1 <= (D_out=x"42") ;
+							mapper_msx_check01 <= (D_out=x"42") ;
+							mapper_msx_check11 <= (D_out=x"C3") ;
 							mapper_msx_lock0 <= true ;
 						end if;
 					else
 					-- this state is similar to old_MREQ_n
 					-- now we can lock values depending on D_out
-						if mapper_msx_check0 and mapper_msx_check1 then
-							mapper_msx <= '1'; -- if 4142 lock msx mapper on
+						if (mapper_msx_check00 and mapper_msx_check01) or
+						   (mapper_msx_check10 and mapper_msx_check11) then
+							mapper_msx_prereq <= '1'; -- if 4142 or F3C3, then it's a possible msx mapper
 						end if;
 						-- be paranoid : give only 1 chance to the mapper to lock on
 						mapper_msx_lock <= mapper_msx_lock0 ; 
@@ -493,11 +501,18 @@ port map(
 			lock_mapper_B <= '0' ;
 			mapper_codies <= '0' ;
 			mapper_codies_lock <= '0' ;
+			mapper_msx <= '0';
 		else
 			if rising_edge(clk_sys) then
 				if WR_n='1' and MREQ_n='0' then
 					last_read_addr <= A; -- gyurco anti-ldir patch
 				end if;
+
+				if mapper_lock = '0' and mapper_msx_prereq = '1' and WR_n='0' and MREQ_n = '0' and
+				   last_read_addr(15 downto 12) /= "00000000000000" and A(15 downto 2)="00000000000000" then
+					mapper_msx <= '1';
+				end if;
+
 				if mapper_msx = '1' then
 					if WR_n='0' and A(15 downto 2)="00000000000000" then
 						case A(1 downto 0) is
