@@ -1,5 +1,5 @@
 # Sega Master System and Game Gear for the [MiSTer](https://github.com/MiSTer-devel/Main_MiSTer/wiki) and [MiST](https://github.com/mist-devel/mist-board/wiki) boards
-
+ 
 ### Installation:
 * Copy the *.rbf file at the root of the SD card.
 * Copy *.SMS ROMs into SMS folder.
