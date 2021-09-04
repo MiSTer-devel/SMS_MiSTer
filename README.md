@@ -6,6 +6,7 @@
 
 ### Features: 
 * Master System, Game Gear and SG-1000 Support
+* Sega System E arcade hardware support
 * NTSC & PAL Support
 * Hide Borders Option - Allows you to fill the screen vertically without black borders.
 * FM Audio Support

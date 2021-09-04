@@ -13,17 +13,21 @@ entity vdp is
 		ce_pix:			in  STD_LOGIC;
 		ce_sp:			in  STD_LOGIC;
 		gg:				in  STD_LOGIC;
+		se_bank:			in  STD_LOGIC;
 		sp64:				in  STD_LOGIC;
 		HL:				in  STD_LOGIC;
 		RD_n:				in  STD_LOGIC;
 		WR_n:				in  STD_LOGIC;
 		IRQ_n:			out STD_LOGIC;
+		WR_direct:		in  STD_LOGIC;
+		A_direct:		in  STD_LOGIC_VECTOR (13 downto 8);
 		A:					in  STD_LOGIC_VECTOR (7 downto 0);
 		D_in:				in  STD_LOGIC_VECTOR (7 downto 0);
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
 		x:					in  STD_LOGIC_VECTOR (8 downto 0);
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
+		y1:            out std_logic;
 		mask_column:   out STD_LOGIC;
 		black_column:		in STD_LOGIC;
 		smode_M1: 		out STD_LOGIC;
@@ -38,6 +42,7 @@ architecture Behavioral of vdp is
 	signal old_RD_n:			STD_LOGIC;
 	signal old_WR_n:			STD_LOGIC;
 	signal old_HL:				STD_LOGIC;
+	signal old_WR_direct:	STD_LOGIC;
 
 	-- helper bits
 	signal data_write:		std_logic;
@@ -47,6 +52,7 @@ architecture Behavioral of vdp is
 	signal spr_overflow:		std_logic;
 	
 	-- vram and cram lines for the cpu interface
+	signal vram_cpu_A:		std_logic_vector(14 downto 0);
 	signal xram_cpu_A:		std_logic_vector(13 downto 0);
 	signal vram_cpu_WE:		std_logic;
 	signal cram_cpu_WE:		std_logic;
@@ -133,6 +139,7 @@ begin
 		y					=> y,
 
 		color				=> color,
+		y1					=> y1,
 		smode_M1			=> xmode_M1,
 		smode_M3			=> xmode_M3,
 		smode_M4			=> xmode_M4,
@@ -162,18 +169,18 @@ begin
   vdp_vram_inst : entity work.dpram
     generic map
     (
-      widthad_a		=> 14
+      widthad_a		=> 15
     )
     port map
     (
       clock_a			=> clk_sys,
-      address_a		=> xram_cpu_A(13 downto 0),
+      address_a		=> vram_cpu_A,
       wren_a			=> vram_cpu_WE,
       data_a			=> D_in,
       q_a				=> vram_cpu_D_out,
 
       clock_b			=> clk_sys,
-      address_b		=> vram_vdp_A,
+      address_b		=> se_bank & vram_vdp_A,
       wren_b			=> '0',
       data_b			=> (others => '0'),
       q_b				=> vram_vdp_D
@@ -193,9 +200,10 @@ begin
 	cram_vdp_A_in <= xram_cpu_A(4 downto 0) when gg='0' else xram_cpu_A(5 downto 1);
 	cram_vdp_D_in <= (D_in(5 downto 4) & D_in(5 downto 4) & D_in(3 downto 2) & D_in(3 downto 2) & D_in(1 downto 0) & D_in(1 downto 0))
 							when gg='0' else (D_in(3 downto 0) & cram_latch);
-	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) else '0';
-	vram_cpu_WE <= data_write when not to_cram else '0';
-
+	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) and WR_direct='0' else '0';
+	vram_cpu_WE <= data_write when (WR_direct='1' or not to_cram) else '0';
+	vram_cpu_A <= not se_bank & A_direct & A when WR_direct='1' else se_bank & xram_cpu_A;
+	
 	smode_M1 <= mode_M1 and mode_M2 ;
 	smode_M2 <= mode_M2;
 	smode_M3 <= mode_M3 and mode_M2 ;
@@ -241,7 +249,11 @@ begin
 			if ce_vdp = '1' then
 				old_WR_n <= WR_n;
 				old_RD_n <= RD_n;
+				old_WR_direct <= WR_direct;
 
+				if old_WR_direct = '0' and WR_direct='1' then
+					data_write <= '1';
+				end if;
 				if old_WR_n = '1' and WR_n='0' then
 					if A(0)='0' then
 						data_write <= '1';
