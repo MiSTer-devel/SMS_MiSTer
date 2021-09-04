@@ -10,6 +10,10 @@ entity io is
 		D_in:		in	 STD_LOGIC_VECTOR (7 downto 0);
 		D_out:	out STD_LOGIC_VECTOR (7 downto 0);
 		HL_out:	out STD_LOGIC;
+		vdp1_bank:out STD_LOGIC;
+		vdp2_bank:out STD_LOGIC;
+		vdp_cpu_bank:out STD_LOGIC;
+		rom_bank:out STD_LOGIC_VECTOR (3 downto 0);
 		J1_tr_out: out  STD_LOGIC;
 		J1_th_out: out  STD_LOGIC;
 		J2_tr_out: out  STD_LOGIC;
@@ -21,6 +25,8 @@ entity io is
 		J1_tl:	in  STD_LOGIC;
 		J1_tr:	in  STD_LOGIC;
 		J1_th:	in  STD_LOGIC;
+		j1_start:in  STD_LOGIC;
+		j1_coin:	in  STD_LOGIC;
 		J2_up:	in  STD_LOGIC;
 		J2_down:	in  STD_LOGIC;
 		J2_left:	in  STD_LOGIC;
@@ -28,9 +34,23 @@ entity io is
 		J2_tl:	in  STD_LOGIC;
 		J2_tr:	in  STD_LOGIC;
 		J2_th:	in  STD_LOGIC;
+		j2_start:in  STD_LOGIC;
+		j2_coin:	in  STD_LOGIC;
 		Pause:	in  STD_LOGIC;
+		E0Type:	in  STD_LOGIC_VECTOR(1 downto 0);
+		E1Use:	in	 STD_LOGIC;
+		E2Use:	in	 STD_LOGIC;
+		E0:		in  STD_LOGIC_VECTOR(7 downto 0);
+		F2:		in  STD_LOGIC_VECTOR(7 downto 0);
+		F3:		in  STD_LOGIC_VECTOR(7 downto 0);
+		has_paddle:in STD_LOGIC;
+		has_pedal:in STD_LOGIC;
+		paddle:	in  STD_LOGIC_VECTOR(7 downto 0);
+		paddle2:	in  STD_LOGIC_VECTOR(7 downto 0);
+		pedal:	in  STD_LOGIC_VECTOR(7 downto 0);
 		pal:		in	 STD_LOGIC;
 		gg:		in  STD_LOGIC;
+		systeme:	in  STD_LOGIC;
 		region:	in	 STD_LOGIC;
 		RESET_n:	in  STD_LOGIC);
 end io;
@@ -44,6 +64,9 @@ architecture rtl of io is
 	signal gg_pdr:	std_logic_vector(7 downto 0) := (others=>'0');
 	signal j1_th_dir: std_logic := '0';
 	signal j2_th_dir: std_logic := '0';
+	signal analog_select: std_logic;
+	signal analog_player: std_logic;
+	signal analog_upper: std_logic;
 	-- signal gg_sctrl:	std_logic_vector(7 downto 3) := "00111";
 
 begin
@@ -56,6 +79,8 @@ begin
 			gg_txd <= x"00" ;
 			gg_rxd <= x"FF";
 			gg_pdr <= x"00";
+			analog_select <= '0';
+			analog_player <= '0';
 			-- gg_sctrl <= "00111" ;
 		elsif rising_edge(clk) then
 			if gg='1' and A(7 downto 3) = "00000" then
@@ -68,6 +93,19 @@ begin
 						-- when "101" => gg_sctrl <= D_in(7 downto 3) ; --sio.sctrl = data & 0xF8;
 						when others => null ;
 					end case;
+				end if;
+			elsif systeme='1' and A = x"F7" then
+				if WR_n='0' then
+					vdp1_bank <= D_in(7);
+					vdp2_bank <= D_in(6);
+					vdp_cpu_bank <= D_in(5);
+					rom_bank <= D_in(3 downto 0);
+				end if;
+			elsif systeme='1' and A = x"FA" then
+				if WR_n='0' then
+					analog_player <= D_in(3); -- paddle select ridleofp
+					analog_upper  <= D_in(2); -- upperbits ridleofp
+					analog_select <= D_in(0); -- analog select(paddle, pedal) hangonjr
 				end if;
 			elsif A(0)='1' then
 --				if WR_n='0' and ((A(7 downto 4)/="0000") or (A(3 downto 0)="0000")) then
@@ -106,6 +144,83 @@ begin
 						when "110" => D_out <= (others => '1');
 						when others => null ;
 					end case;
+				elsif systeme='1' and A(7 downto 0)=x"e0" then
+					D_out(7) <= not j2_start or E0Type(1) or E0Type(0);
+					D_out(6) <= not j1_start or E0Type(1);
+					D_out(5) <= '1'; -- not used?
+					D_out(4) <= not j1_start or not E0Type(0);
+					D_out(3) <= E0(3); -- service
+					D_out(2) <= E0(2); -- service no toggle (usually)
+					D_out(1) <= not j2_coin;
+					D_out(0) <= not j1_coin;
+				elsif systeme='1' and A(7 downto 0)=x"e1" then
+					if (E1Use='1') then
+						D_out(7) <= '1';
+						D_out(6) <= '1';
+						D_out(5) <= J1_tr;
+						D_out(4) <= J1_tl;
+						D_out(3) <= J1_right;
+						D_out(2) <= J1_left;
+						D_out(1) <= J1_down;
+						D_out(0) <= J1_up;
+					else
+						D_out <= x"FF";
+					end if;
+				elsif systeme='1' and A(7 downto 0)=x"e2" then
+					if (E2Use='1') then
+						D_out(7) <= '1';
+						D_out(6) <= '1';
+						D_out(5) <= J2_tr;
+						D_out(4) <= J2_tl;
+						D_out(3) <= J2_right;
+						D_out(2) <= J2_left;
+						D_out(1) <= J2_down;
+						D_out(0) <= J2_up;
+					else
+						D_out <= x"FF";
+					end if;
+				elsif systeme='1' and A(7 downto 0)=x"f2" then
+					D_out <= F2; -- free play or 1coin/credit
+				elsif systeme='1' and A(7 downto 0)=x"f3" then
+					D_out <= F3; -- dip switch options
+				elsif systeme='1' and A(7 downto 0)=x"f8" then  -- analog (paddle, pedal)
+					if (has_pedal='0' and has_paddle='0') then
+						D_out <= x"FF";
+					elsif has_pedal='1' then
+						if analog_select='0' then
+							D_out <= paddle;
+						else
+							D_out <= pedal;
+						end if;
+					elsif analog_upper='1' then
+						if analog_player='0' then
+							D_out(7) <= '0';
+							D_out(6) <= J1_tl;
+							D_out(5) <= J1_tr;
+							D_out(4) <= '0';--j1_middle;
+							D_out(3 downto 0) <= paddle(7 downto 4);
+						else
+							D_out(7) <= '0';
+							D_out(6) <= J2_tl;
+							D_out(5) <= J2_tr;
+							D_out(4) <= '0';--j1_middle;
+							D_out(3 downto 0) <= paddle2(7 downto 4);
+						end if;
+					else
+						if analog_player='0' then
+							D_out(3 downto 0) <= paddle(7 downto 4);
+							D_out(7 downto 4) <= paddle(3 downto 0);
+						else
+							D_out(3 downto 0) <= paddle2(7 downto 4);
+							D_out(7 downto 4) <= paddle2(3 downto 0);
+						end if;
+					end if;
+				elsif systeme='1' and A(7 downto 0)=x"f9" then
+					D_out <= x"FF"; -- analog (paddle, pedal, dial)
+				elsif systeme='1' and A(7 downto 0)=x"fa" then
+					D_out <= x"00"; -- analog (paddle, pedal, dial)
+				elsif systeme='1' and A(7 downto 0)=x"fb" then
+					D_out <= x"FF"; -- analog (paddle, pedal, dial)
 				elsif A(0)='0' then
 					D_out(7) <= J2_down;
 					D_out(6) <= J2_up;

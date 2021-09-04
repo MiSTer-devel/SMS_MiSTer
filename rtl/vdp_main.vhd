@@ -23,6 +23,7 @@ entity vdp_main is
 		y:						in  std_logic_vector(8 downto 0);
 			
 		color:				out std_logic_vector (11 downto 0);
+		y1:               out std_logic;
 					
 		display_on:			in  std_logic;
 		mask_column0:		in  std_logic;
@@ -136,6 +137,7 @@ begin
 		variable spr_active	: boolean;
 		variable bg_active	: boolean;
 	begin
+		y1 <= '1';
 		if ((x>48 and x<=208) or (gg='0' and x<=256 and x>0)) and -- thank you slingshot
  			(mask_column0='0' or x>=9) and display_on='1' then
 			if (((y>=24 and y<168) and smode_M1='0')
@@ -149,6 +151,7 @@ begin
 				if not spr_active and not bg_active then
 					out_color <= overscan ;
 					cram_A <= bg_color(4)&"0000";
+					y1 <= '0';
 				elsif (bg_priority='0' and spr_active) or (bg_priority='1' and not bg_active) then
 					out_color <= spr_color ;
 					cram_A <= "1"&spr_color;

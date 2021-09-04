@@ -1,11 +1,12 @@
 # Sega Master System and Game Gear for the [MiSTer](https://github.com/MiSTer-devel/Main_MiSTer/wiki) and [MiST](https://github.com/mist-devel/mist-board/wiki) boards
- 
+
 ### Installation:
 * Copy the *.rbf file at the root of the SD card.
 * Copy *.SMS ROMs into SMS folder.
 
 ### Features: 
 * Master System, Game Gear and SG-1000 Support
+* Sega System E arcade hardware support
 * NTSC & PAL Support
 * Hide Borders Option - Allows you to fill the screen vertically without black borders.
 * FM Audio Support
