@@ -1,15 +1,30 @@
 <misterromdescription>
 	<name>Fantasy Zone II - The Tears of Opa-Opa (MC-8123, 317-0057)</name>
-	<setname>fantzn2</setname>
-	<rbf>SMS</rbf>
-	<mameversion></mameversion>
-	<year></year>
+	<region>Japan</region>
+	<homebrew>no</homebrew>
+	<bootleg>no</bootleg>
+	<version></version>
+	<alternative></alternative>
+	<platform>Sega System E</platform>
+	<series>Fantasy Zone</series>
+	<year>1988</year>
 	<manufacturer>Sega</manufacturer>
+	<category>Shooter</category>
+
+	<setname>fantzn2</setname>
+	<parent>fantzn2</parent>
+	<mameversion>0235</mameversion>
+	<rbf>SMS</rbf>
+	<about></about>
+
+	<resolution>15kHz</resolution>
+	<rotation>horizontal</rotation>
+	<flip></flip>
+
 	<players>1</players>
 	<joystick>8-way</joystick>
-	<rotation>horizontal</rotation>
-	<region></region>
 	<buttons names="Fire/Button1,Bomb/Button2,-,-,-,-,Coin,Start,Pause" default="A,B,X,Y,R,L,Select,Start" count="1"/>
+	
 	<switches base="24" default="FF,FF,FF">
 		<!-- SWA -->
 		<dip name="Coin A" bits="0,3" ids="1/1,1/1 2/3,1/1 4/5,1/1 5/6,2/1 4/3,2/1 5/3 6/4,2/3,4/1,3/1,2/1,1/6,1/5,1/4,1/3,1/2,1/1"/>
@@ -23,6 +38,7 @@
 		<dip name="Service Toggle" bits="18" ids="On,Off"/>
 		<dip name="Service Mode" bits="19" ids="On,Off"/>
 	</switches>
+
 	<rom index="0" zip="fantzn2.zip" type="merged" md5="b2a30dbfbf4547642bd33b538a978096">
 		<!-- banks, size: 0x40000 -->
 		<part crc="57B45681" name="epr-11415.ic5"/>
@@ -42,4 +58,8 @@
 <!--
 	<nvram index="4" size="3"/>
 -->
+
+	<remark></remark>
+
+	<mratimestamp>20210904000000</mratimestamp>
 </misterromdescription>
