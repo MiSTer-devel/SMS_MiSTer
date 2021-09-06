@@ -633,8 +633,12 @@ system #(63) system
 	
 	.encrypt(SYSMODE[0][1:0]),
 	.key_a(key_a),
-	.key_d(key_d)
+	.key_d(key_d),
 	
+	.ROMCL(clk_sys),
+	.ROMAD(ioctl_addr),
+	.ROMDT(ioctl_dout),
+	.ROMEN(ioctl_wr & ioctl_index==0)
 );
 
 wire [12:0] key_a;

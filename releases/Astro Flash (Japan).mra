@@ -24,7 +24,7 @@
 		<dip name="Service Toggle" bits="18" ids="On,Off"/>
 		<dip name="Service Mode" bits="19" ids="On,Off"/>
 	</switches>
-	<rom index="0" zip="transfrm.zip" type="merged" md5="2bc658193e8e93f4d7991694547a875f">
+	<rom index="0" zip="transfrm.zip" type="merged" md5="18fec1824591aa3d342dd0d3cca0dab0">
 		<!-- banks, size: 0x40000 -->
 		<part crc="DF0F639F" name="epr-7347.ic5"/>
 		<part crc="0F38EA96" name="epr-7348.ic4"/>
@@ -38,11 +38,29 @@
 		<!-- maincpu, size: 0x8000 -->
 		<part crc="66061137" name="epr-7605.ic7"/>
 
-		<!-- key, size: 0x2000 -->
-		<part crc="FFFFFFFF" name="317-missing.key"/>
+		<!-- encryption_device: 315-5177, size: 0x80 * 2 -->
+		<part>
+			04 54 51 15 40 44 01 51 55 10 44 41 05 55 50 14
+			41 45 00 50 54 11 45 40 04 54 51 15 40 44 01 51
+			55 10 44 41 05 55 50 14 41 45 00 50 54 11 45 40
+			04 54 51 15 40 44 01 51 55 10 44 41 05 55 50 14
+			04 54 51 15 40 44 01 51 55 10 44 41 05 55 50 14
+			41 45 00 50 54 11 45 40 04 54 51 15 40 44 01 51
+			55 10 44 41 05 55 50 14 41 45 00 50 54 11 45 40
+			04 54 51 15 40 44 01 51 55 10 44 41 05 55 50 14
+
+			00 00 00 00 01 01 01 01 01 02 02 02 02 02 03 03
+			03 03 04 04 04 04 04 05 05 05 05 05 06 06 06 06
+			06 07 07 07 07 07 08 08 08 08 09 09 09 09 09 0a
+			0a 0a 0a 0a 0b 0b 0b 0b 0b 0c 0c 0c 0c 0c 0d 0d
+			08 08 08 08 09 09 09 09 09 0a 0a 0a 0a 0a 0b 0b
+			0b 0b 0c 0c 0c 0c 0c 0d 0d 0d 0d 0d 0e 0e 0e 0e
+			0e 0f 0f 0f 0f 0f 10 10 10 10 11 11 11 11 11 12
+			12 12 12 12 13 13 13 13 13 14 14 14 14 14 15 15
+		</part>
 	</rom>
 	<rom index="4">
-		<part>41</part>
+		<part>42</part>
 	</rom>
 <!--
 	<nvram index="4" size="3"/>

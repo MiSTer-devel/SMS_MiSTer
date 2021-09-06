@@ -106,7 +106,12 @@ entity system is
 		-- MC8123 decryption
 		encrypt:		in  STD_LOGIC_VECTOR(1 downto 0);
 		key_a : 		out STD_LOGIC_VECTOR(12 downto 0);
-		key_d : 		in  STD_LOGIC_VECTOR(7 downto 0)
+		key_d : 		in  STD_LOGIC_VECTOR(7 downto 0);
+		
+		ROMCL  : IN  STD_LOGIC;
+		ROMAD  : IN STD_LOGIC_VECTOR(24 downto 0);
+		ROMDT  : IN STD_LOGIC_VECTOR(7 downto 0);
+		ROMEN  : IN  STD_LOGIC
 
 	);
 end system;
@@ -211,7 +216,8 @@ architecture Behavioral of system is
 	signal mapper_msx_lock :   boolean := false ;
 	signal mapper_msx :		   std_logic := '0' ;
 
-	signal mc8123_D_out : std_logic_vector(7 downto 0);
+	signal mc8123_D_out    : std_logic_vector(7 downto 0);
+	signal segadect2_D_out : std_logic_vector(7 downto 0);
 
 	signal GENIE		: boolean;
 	signal GENIE_DO	: std_logic_vector(7 downto 0);
@@ -247,6 +253,21 @@ architecture Behavioral of system is
 	);
 	END COMPONENT;
 
+	COMPONENT SEGASYS1_DECT2 IS
+	PORT (
+		clk    : IN  STD_LOGIC;
+		mrom_m1: IN  STD_LOGIC;
+		mrom_ad: IN  STD_LOGIC_VECTOR(14 downto 0);
+		mrom_dt: OUT STD_LOGIC_VECTOR(7 downto 0);
+		rad    : OUT STD_LOGIC_VECTOR(14 downto 0);
+		rdt    : IN STD_LOGIC_VECTOR(7 downto 0);
+		ROMCL  : IN  STD_LOGIC;
+		ROMAD  : IN STD_LOGIC_VECTOR(24 downto 0);
+		ROMDT  : IN STD_LOGIC_VECTOR(7 downto 0);
+		ROMEN  : IN  STD_LOGIC
+	);
+	END COMPONENT;
+	
 	
 begin
 
@@ -530,6 +551,22 @@ port map(
 		key_d		=> key_d
 	);
 
+	
+	segadect2_inst : component SEGASYS1_DECT2
+	port map
+	(
+		clk		=> clk_sys,
+		mrom_m1	=> not M1_n,
+		mrom_ad	=> A(14 downto 0),
+		mrom_dt	=> segadect2_D_out,
+--		rad      =>,
+		rdt		=> rom_do,
+		ROMCL		=> ROMCL,
+		ROMAD		=> ROMAD,
+		ROMDT		=> ROMDT,
+		ROMEN		=> ROMEN
+	);
+	
 	-- glue logic
 	bal_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)="00000110" and gg='1' else '1';
 	vdp_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 6)="10" and (A(2)='0' or systeme='0') else '1';
@@ -565,7 +602,9 @@ port map(
 		end if;
 	end process;
 	
-	irom_D_out <=	boot_rom_D_out when bootloader_n='0' and A(15 downto 14)="00" else mc8123_D_out when (encrypt(0)='1' and A(15)='0') or (encrypt(1)='1' and A(14)='0') else rom_do;
+	irom_D_out <=	boot_rom_D_out when bootloader_n='0' and A(15 downto 14)="00"
+	               else segadect2_D_out when (encrypt(1 downto 0)="10" and A(15)='0')
+						else mc8123_D_out when (encrypt(0)='1' and A(15)='0') or (encrypt(1 downto 0)="11" and A(14)='0') else rom_do;
 	
 	process (clk_sys)
 	begin
