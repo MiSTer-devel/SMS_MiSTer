@@ -268,7 +268,6 @@ architecture Behavioral of system is
 	);
 	END COMPONENT;
 	
-	
 begin
 
 	-- Game Genie
@@ -551,7 +550,6 @@ port map(
 		key_d		=> key_d
 	);
 
-	
 	segadect2_inst : component SEGASYS1_DECT2
 	port map
 	(
