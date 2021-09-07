@@ -378,7 +378,7 @@ wire        ram_rd;
 
 wire code_index = &ioctl_index;
 wire code_download = ioctl_download & code_index;
-wire cart_download = ioctl_download & ~(|ioctl_index[7:2]);
+wire cart_download = ioctl_download & ~code_index & (ioctl_index!=4) & (ioctl_index!=254);
 
 // SYSMODE[0]: [0]=EncryptBase,[1]=EncryptBank,[2]=Paddle,[3]=Pedal,[4,5]=E0Type,[6]=E1,[7]=E2
 // SYSMODE[1]: [0]=
@@ -519,7 +519,8 @@ always @(posedge clk_sys) begin
 		if(!ioctl_addr) cart_mask <= 0;
 		if(ioctl_addr == 512) cart_mask512 <= 0;
 		gg <= ioctl_index[4:0] == 2;	
-		systeme <= ioctl_index[4:0] == 3;	
+		if ((ioctl_index[4:0] == 1) || (ioctl_index[4:0] == 2))
+		systeme <= 1'b0;
 	end;
 	if (old_download & ~cart_download) begin
 		cart_sz512 <= ioctl_addr[9];
