@@ -432,8 +432,8 @@ FM_gated <= (others=>'0') when fm_ena='0' else  -- All zero if FM is disabled
 				FM_out(FM_out'high-1 downto 0) when FM_sign=FM_adj else -- Pass through
 				(FM_gated'high=>FM_sign,others=>FM_adj); -- Clamp
 
-mix_inL <= (others=>'0') when psg_enables(0)='1' else (PSG_outL(10) & PSG_outL & '0') when systeme='1' else (others=>'0');
-mix_inR <= (others=>'0') when psg_enables(0)='1' else (PSG_outR(10) & PSG_outR & '0') when systeme='1' else (others=>'0');
+mix_inL <= (others=>'0') when psg_enables(0)='1' else (PSG_outL(10) & PSG_outL & '0');
+mix_inR <= (others=>'0') when psg_enables(0)='1' else (PSG_outR(10) & PSG_outR & '0');
 mix2_inL <= (others=>'0') when psg_enables(1)='1' else (PSG2_outL(10) & PSG2_outL & '0') when systeme='1' else FM_gated;
 mix2_inR <= (others=>'0') when psg_enables(1)='1' else (PSG2_outR(10) & PSG2_outR & '0') when systeme='1' else FM_gated;
 				
