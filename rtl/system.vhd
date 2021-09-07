@@ -549,7 +549,7 @@ port map(
 		key_a		=> key_a,
 		key_d		=> key_d
 	);
-
+	
 	segadect2_inst : component SEGASYS1_DECT2
 	port map
 	(
