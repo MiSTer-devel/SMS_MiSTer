@@ -87,7 +87,7 @@ wire  [7:0] mdec    = ( mdat & andv ) | ( dectbl ^ xorv );
 DLROM #(7,8) dect( clk, decidx, dectbl, ROMCL,ROMAD,ROMDT,ROMEN & `EN_DEC1TBL );
 
 reg phase = 1'b0;
-always @( negedge clk ) begin
+always @(posedge clk ) begin
 	if ( phase ) mrom_dt <= mdec;
 	else madr <= { mrom_m1, mrom_ad };
 	phase <= ~phase;
@@ -165,7 +165,7 @@ DLROM #(7,8) xort(clk,ix,xd, ROMCL,ROMAD,ROMDT,ROMEN & `EN_DEC2XOR);
 DLROM #(7,8) swpt(clk,ix,sd, ROMCL,ROMAD,ROMDT,ROMEN & `EN_DEC2SWP);
 
 reg phase = 1'b0;
-always @( negedge clk ) begin
+always @(posedge clk ) begin
 	if ( phase ) mrom_dt <= (bswp(sd,rdt) ^ xd);
 	else madr <= { mrom_m1, mrom_ad };
 	phase <= ~phase;

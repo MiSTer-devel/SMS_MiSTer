@@ -34,7 +34,7 @@ wire [3:0] param = {key[1]^key[6]^key[7],
 	            key[0]^key[2]^key[3],
 		    key[0]^~m1};
 
-always @( negedge clk ) begin
+always @(posedge clk) begin
 	case (decrypt_type)
 		0: d <= decrypt_type_0 (prog_d, param, swap);
 		1: d <= decrypt_type_0 (prog_d, param, swap);
