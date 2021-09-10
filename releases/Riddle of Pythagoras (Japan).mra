@@ -9,7 +9,7 @@
 	<series></series>
 	<year>1986</year>
 	<manufacturer>Sega / Nasco</manufacturer>
-	<category>Ball & Paddle</category>
+	<category>Ball and Paddle</category>
 
 	<setname>ridleofp</setname>
 	<parent>ridleofp</parent>
@@ -23,7 +23,7 @@
 
 	<players>1</players>
 	<joystick>8-way</joystick>
-	<buttons names="Launch/Button1,Button2,-,-,-,-,Coin,Start,Pause" default="A,B,X,Y,R,L,Select,Start" count="1"/>
+	<buttons names="Launch/Button1,Button2,-,-,-,-,Coin,Start,Pause" default="A,B,R,Start,Select" count="1"/>
 	
 	<switches base="24" default="FF,FF,FF">
 		<!-- SWA -->
