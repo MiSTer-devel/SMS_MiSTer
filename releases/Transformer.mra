@@ -12,7 +12,7 @@
 	<category>Shooter</category>
 
 	<setname>transfrm</setname>
-	<parent>transfrm</setname>
+	<parent>transfrm</parent>
 	<mameversion>0235</mameversion>
 	<rbf>SMS</rbf>
 	<about></about>
