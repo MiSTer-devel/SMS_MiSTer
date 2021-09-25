@@ -171,6 +171,7 @@ architecture Behavioral of system is
 	signal vdp_cpu_bank:		std_logic := '0';
 	signal rom_bank:			std_logic_vector(3 downto 0) := "0000";
 
+	signal PSG_disable:		std_logic;
 	signal PSG_outL:			std_logic_vector(10 downto 0);
 	signal PSG_outR:			std_logic_vector(10 downto 0);
 	signal PSG_mux:			std_logic_vector(7 downto 0);
@@ -428,12 +429,14 @@ begin
 -- AMR - Clamped volume boosting - if the top two bits match, truncate the topmost bit.
 -- If the top two bits don't match, duplicate the second bit across the output.
 
-FM_gated <= (others=>'0') when fm_ena='0' else  -- All zero if FM is disabled
+FM_gated <= (others=>'0') when fm_ena='0' or det_D(0)='0' else  -- All zero if FM is disabled
 				FM_out(FM_out'high-1 downto 0) when FM_sign=FM_adj else -- Pass through
 				(FM_gated'high=>FM_sign,others=>FM_adj); -- Clamp
 
-mix_inL <= (others=>'0') when psg_enables(0)='1' else (PSG_outL(10) & PSG_outL & '0');
-mix_inR <= (others=>'0') when psg_enables(0)='1' else (PSG_outR(10) & PSG_outR & '0');
+PSG_disable <= '1' when (fm_ena='1' and (not det_D(1)=det_D(0))) else '0';
+				 
+mix_inL <= (others=>'0') when psg_enables(0)='1' or PSG_disable='1' else (PSG_outL(10) & PSG_outL & '0');
+mix_inR <= (others=>'0') when psg_enables(0)='1' or PSG_disable='1' else (PSG_outR(10) & PSG_outR & '0');
 mix2_inL <= (others=>'0') when psg_enables(1)='1' else (PSG2_outL(10) & PSG2_outL & '0') when systeme='1' else FM_gated;
 mix2_inR <= (others=>'0') when psg_enables(1)='1' else (PSG2_outR(10) & PSG2_outR & '0') when systeme='1' else FM_gated;
 				
