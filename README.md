@@ -1,5 +1,7 @@
 # Sega Master System and Game Gear for the [MiSTer](https://github.com/MiSTer-devel/Main_MiSTer/wiki) and [MiST](https://github.com/mist-devel/mist-board/wiki) boards
 
+This core is a port of Bens Sega Master System implementation for the Papilio. See http://fpga-hacks.blogspot.de/
+
 ### Installation:
 * Copy the *.rbf file at the root of the SD card.
 * Copy *.SMS ROMs into SMS folder.
