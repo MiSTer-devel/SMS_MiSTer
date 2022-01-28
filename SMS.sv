@@ -185,7 +185,7 @@ assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DD
 assign LED_USER  = cart_download | bk_state | (status[25] & bk_pending);
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign BUTTONS   = 0;
+assign BUTTONS   = osd_btn;
 assign VGA_SCALER= 0;
 assign HDMI_FREEZE = 0;
 
@@ -967,8 +967,23 @@ wire bk_save    = status[7] | (bk_pending & OSD_STATUS && status[25]);
 reg  bk_loading = 0;
 reg  bk_state   = 0;
 
+reg osd_btn = 0;
 always @(posedge clk_sys) begin
+
 	reg old_load = 0, old_save = 0, old_ack;
+	integer timeout = 0;
+	reg     last_rst = 0;
+
+	if (RESET) last_rst = 0;
+	if (status[0]) last_rst = 1;
+
+	if (last_rst & ~status[0]) begin
+		osd_btn <= 0;
+		if(timeout < 24000000) begin
+			timeout <= timeout + 1;
+			osd_btn <= 1;
+		end
+	end
 
 	old_load <= bk_load & bk_ena;
 	old_save <= bk_save & bk_ena;
