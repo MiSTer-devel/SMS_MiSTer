@@ -41,6 +41,7 @@ entity system is
 		j1_th:		in  STD_LOGIC;
 		j1_start:	in  STD_LOGIC;
 		j1_coin:		in  STD_LOGIC;
+		j1_a3:		in  STD_LOGIC;
 		j2_up:		in	 STD_LOGIC;
 		j2_down:		in	 STD_LOGIC;
 		j2_left:		in	 STD_LOGIC;
@@ -50,6 +51,7 @@ entity system is
 		j2_th:		in  STD_LOGIC;
 		j2_start:	in  STD_LOGIC;
 		j2_coin:		in  STD_LOGIC;
+		j2_a3:		in  STD_LOGIC;
 		pause:		in	 STD_LOGIC;
 		
 		E0Type:	in  STD_LOGIC_VECTOR(1 downto 0);
@@ -488,6 +490,7 @@ port map(
 		J1_th		=> j1_th,
 		J1_start	=> j1_start,
 		J1_coin	=> j1_coin,
+		J1_a3		=> j1_a3,
 		J2_up		=> j2_up,
 		J2_down	=> j2_down,
 		J2_left	=> j2_left,
@@ -497,6 +500,7 @@ port map(
 		J2_th		=> j2_th,
 		J2_start	=> j2_start,
 		J2_coin	=> j2_coin,
+		J2_a3		=> j2_a3,
 		Pause		=> pause,
 		E0Type	=> E0Type,
 		E1Use		=> E1Use,

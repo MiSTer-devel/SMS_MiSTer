@@ -27,6 +27,7 @@ entity io is
 		J1_th:	in  STD_LOGIC;
 		j1_start:in  STD_LOGIC;
 		j1_coin:	in  STD_LOGIC;
+		j1_a3:	in  STD_LOGIC;
 		J2_up:	in  STD_LOGIC;
 		J2_down:	in  STD_LOGIC;
 		J2_left:	in  STD_LOGIC;
@@ -36,6 +37,7 @@ entity io is
 		J2_th:	in  STD_LOGIC;
 		j2_start:in  STD_LOGIC;
 		j2_coin:	in  STD_LOGIC;
+		j2_a3:	in  STD_LOGIC;
 		Pause:	in  STD_LOGIC;
 		E0Type:	in  STD_LOGIC_VECTOR(1 downto 0);
 		E1Use:	in	 STD_LOGIC;
@@ -194,16 +196,16 @@ begin
 						end if;
 					elsif analog_upper='1' then
 						if analog_player='0' then
-							D_out(7) <= '0';
+							D_out(7) <= J1_tl or J1_tr or J1_a3;
 							D_out(6) <= J1_tl;
 							D_out(5) <= J1_tr;
-							D_out(4) <= '0';--j1_middle;
+							D_out(4) <= J1_a3;--j1_middle;
 							D_out(3 downto 0) <= paddle(7 downto 4);
 						else
-							D_out(7) <= '0';
+							D_out(7) <= J1_tl or J1_tr or J1_a3;
 							D_out(6) <= J2_tl;
 							D_out(5) <= J2_tr;
-							D_out(4) <= '0';--j1_middle;
+							D_out(4) <= J2_a3;--j1_middle;
 							D_out(3 downto 0) <= paddle2(7 downto 4);
 						end if;
 					else
