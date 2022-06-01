@@ -268,9 +268,9 @@ parameter CONF_STR = {
 
 	"-;",
 	"R0,Reset;",
-	"J1,Fire 1,Fire 2,Pause,Coin;",
-	"jn,A|P,B,Start,Coin;",
-	"jp,Y|P,A,Start,Coin;",
+	"J1,Fire 1,Fire 2,Pause,Coin,Arcade 3;",
+	"jn,A|P,B,Start,Coin,X;",
+	"jp,Y|P,A,Start,Coin,X;",
 	"V,v",`BUILD_DATE
 };
 
@@ -629,6 +629,7 @@ system #(63) system
 	.j1_th(joya_th),
 	.j1_start(swap ? joy_1[11] : joy_0[11]),
 	.j1_coin(swap ? joy_1[10] : joy_0[10]),
+	.j1_a3(swap ? joy_1[8] : joy_0[8]),
 
 	.j2_up(joyb[3]),
 	.j2_down(joyb[2]),
@@ -640,6 +641,7 @@ system #(63) system
 	.pause(joya[6]&joyb[6]),
 	.j2_start(swap ? joy_0[11] : joy_1[11]),
 	.j2_coin(swap ? joy_0[10] : joy_1[10]),
+	.j2_a3(swap ? joy_0[8] : joy_1[8]),
 
 	.j1_tr_out(joya_tr_out),
 	.j1_th_out(joya_th_out),
