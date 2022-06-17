@@ -198,8 +198,8 @@ video_freak video_freak
 (
 	.*,
 	.VGA_DE_IN(vga_de),
-	.ARX((!ar) ? (border ? 12'd47 : 12'd32) : (ar - 1'd1)),
-	.ARY((!ar) ? (border ? 12'd35 : 12'd21) : 12'd0),
+	.ARX((!ar) ? (gg ? 12'd4 : (border ? 12'd47 : 12'd32)) : (ar - 1'd1)),
+	.ARY((!ar) ? (gg ? 12'd3 : (border ? 12'd35 : 12'd21)) : 12'd0),
 	.CROP_SIZE(en216p ? 10'd216 : 10'd0),
 	.CROP_OFF(0),
 	.SCALE(status[31:30])
