@@ -13,6 +13,7 @@ entity vdp is
 		ce_pix:			in  STD_LOGIC;
 		ce_sp:			in  STD_LOGIC;
 		gg:				in  STD_LOGIC;
+		ggres:			        in STD_LOGIC;
 		se_bank:			in  STD_LOGIC;
 		sp64:				in  STD_LOGIC;
 		HL:				in  STD_LOGIC;
@@ -128,7 +129,7 @@ begin
 		ce_vdp			=> ce_vdp,
 		ce_pix			=> ce_pix,
 		ce_sp				=> ce_sp,
-		gg					=> gg,
+		ggres					=> ggres,
 		sp64				=> sp64,
 		vram_A			=> vram_vdp_A,
 		vram_D			=> vram_vdp_D,
