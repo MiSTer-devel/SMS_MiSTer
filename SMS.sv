@@ -211,7 +211,7 @@ video_freak video_freak
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXX
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -248,6 +248,7 @@ parameter CONF_STR = {
 	"P1OD,Border,No,Yes;",
 	"D5P1OST,Masked left column,BG,Black,Cut;",
 	"P1O8,Sprites per line,Standard,All;",
+	"P1o7,Game Gear Res.,Standard,Extended;",
 	"P1-;",
 	"D2P1OC,SMS FM sound,Enable,Disable;",
 
@@ -606,6 +607,7 @@ system #(63) system
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
 	.gg(gg),
+	.ggres(ggres),
 	.systeme(systeme),
 	.bios_en(~status[11] & ~systeme),
 
@@ -845,13 +847,14 @@ wire mask_column;
 wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
 wire border = status[13] & ~gg;
+wire ggres = ~status[39] & gg;
 
 video video
 (
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
 	.pal(pal),
-	.gg(gg),
+	.ggres(ggres),
 	.border(border),
 	.mask_column(mask_column),
 	.cut_mask(status[29]),

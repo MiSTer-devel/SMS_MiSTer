@@ -17,6 +17,7 @@ entity system is
 		ce_pix:		in	 STD_LOGIC; 
 		ce_sp:		in	 STD_LOGIC;
 		gg:			in	 STD_LOGIC;
+		ggres:			in STD_LOGIC;
 		systeme:		in  STD_LOGIC;
 		-- sg:			in	 STD_LOGIC;		-- sg1000
 		bios_en:	in	 STD_LOGIC;
@@ -327,6 +328,7 @@ begin
 		sp64		=> sp64,
 		HL			=> HL,
 		gg			=> gg,
+		ggres			=> ggres,
 		-- Bsg			=> sg,		-- sg1000
 		se_bank	=> vdp_se_bank,
 		RD_n		=> vdp_RD_n,
@@ -362,6 +364,7 @@ begin
 		sp64		=> sp64,
 		HL			=> HL,
 		gg			=> gg,
+		ggres			=> ggres,
 		-- Bsg			=> sg,		-- sg1000
 		se_bank	=> vdp2_se_bank,
 		RD_n		=> vdp2_RD_n,
