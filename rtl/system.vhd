@@ -16,6 +16,7 @@ entity system is
 		ce_vdp:		in	 STD_LOGIC;
 		ce_pix:		in	 STD_LOGIC; 
 		ce_sp:		in	 STD_LOGIC;
+		turbo:		in	 STD_LOGIC;
 		gg:			in	 STD_LOGIC;
 		ggres:			in STD_LOGIC;
 		systeme:		in  STD_LOGIC;
@@ -207,7 +208,7 @@ architecture Behavioral of system is
 	signal nvram_e:         std_logic := '0';
 	signal nvram_ex:        std_logic := '0';
 	signal nvram_p:         std_logic := '0';
-	signal nvram_cme:       std_logic := '0'; -- cpdemasters ram extension
+	signal nvram_cme:       std_logic := '0'; -- codemasters ram extension
 	signal nvram_D_out:     std_logic_vector(7 downto 0);
 	
 	signal lock_mapper_B:	std_logic := '0';
@@ -417,11 +418,12 @@ begin
 		rst		=> not RESET_n
 	);
 	
-	fm: work.opll
+	fm: work.oplldelay
    port map
 	(
 		xin		=> clk_sys,
-		xena		=> ce_cpu,
+		xena		=> ce_cpu, 
+		delay => turbo,
 		d        => D_in,
 		a        => A(0),
 		cs_n     => '0',
@@ -523,7 +525,7 @@ port map(
 		RESET_n	=> RESET_n
 	);
 	
-	ce_z80 <= ce_pix when systeme = '1' else ce_cpu;
+	ce_z80 <= ce_pix when (systeme = '1' or turbo='1') else ce_cpu;
 
 	ram_a <= A(13 downto 0) when systeme = '1' else '0' & A(12 downto 0);
 	ram_we <= ram_WR;
