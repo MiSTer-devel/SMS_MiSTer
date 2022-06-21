@@ -211,7 +211,7 @@ video_freak video_freak
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXX
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -232,6 +232,7 @@ parameter CONF_STR = {
 	"H8OA,Region,US/UE,Japan;",
 	"H8OB,BIOS,Enable,Disable;",
 	"H8OF,Disable mapper,No,Yes;",
+	"H8o8,Z80 Speed,3.59MHz,5.385MHz;",
 	"H8-;",
 	"H7o12,VDPs,Both,2,1,None;",
 	"H7o34,PSGs,Both,2,1,None;",
@@ -456,7 +457,7 @@ sdram ram
 
 	.init(~locked),
 	.clk(clk_sys),
-	.clkref(systeme ? ce_pix : ce_cpu),
+	.clkref(systeme ? ce_pix : turbo ? ce_pix : ce_cpu),
 
 	.waddr(romwr_a),
 	.din(ioctl_dout),
@@ -606,6 +607,7 @@ system #(63) system
 	.ce_vdp(ce_vdp),
 	.ce_pix(ce_pix),
 	.ce_sp(ce_sp),
+	.turbo(turbo),
 	.gg(gg),
 	.ggres(ggres),
 	.systeme(systeme),
@@ -848,6 +850,7 @@ wire smode_M1, smode_M2, smode_M3;
 wire pal = status[2];
 wire border = status[13] & ~gg;
 wire ggres = ~status[39] & gg;
+wire turbo = status[40];
 
 video video
 (
@@ -869,6 +872,7 @@ video video
 );
 
 reg ce_cpu;
+reg ce_snd;
 reg ce_vdp;
 reg ce_pix;
 reg ce_sp;
