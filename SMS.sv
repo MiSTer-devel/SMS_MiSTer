@@ -232,7 +232,7 @@ parameter CONF_STR = {
 	"H8OA,Region,US/UE,Japan;",
 	"H8OB,BIOS,Enable,Disable;",
 	"H8OF,Disable mapper,No,Yes;",
-	"H8o8,Z80 Speed,3.59MHz,5.385MHz;",
+	"H8o8,Z80 Speed,Normal,Turbo;",
 	"H8-;",
 	"H7o12,VDPs,Both,2,1,None;",
 	"H7o34,PSGs,Both,2,1,None;",

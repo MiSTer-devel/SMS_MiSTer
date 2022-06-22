@@ -190,6 +190,8 @@ architecture Behavioral of system is
 	signal FM_gated:			std_logic_vector(12 downto 0);
 	alias FM_sign:				std_logic is FM_out(13);
 	alias FM_adj:				std_logic is FM_out(12);
+	signal fm_a:            std_logic;
+	signal fm_d:            std_logic_vector(7 downto 0);
 	signal fm_WR_n:	   	std_logic;
 
 	signal mix_inL:			std_logic_vector(12 downto 0);
@@ -418,20 +420,32 @@ begin
 		rst		=> not RESET_n
 	);
 	
-	fm: work.oplldelay
-   port map
+	fm: work.opll
+	port map
 	(
 		xin		=> clk_sys,
-		xena		=> ce_cpu, 
-		delay => turbo,
-		d        => D_in,
-		a        => A(0),
+		xena		=> ce_cpu,
+		d        => fm_d,
+		a        => fm_a,
 		cs_n     => '0',
-		we_n		=> fm_WR_n,
+		we_n		=> '0',
 		ic_n		=> RESET_n,
 		mixout   => FM_out
 	);
-
+	
+	process (clk_sys)
+	begin
+		if rising_edge(clk_sys) then
+			if RESET_n='0' then
+				fm_d <= (others => '0');
+				fm_a <= '0';
+			elsif fm_WR_n='0' then
+				fm_d <= D_in;
+				fm_a <= A(0);
+			end if;
+		end if;
+	end process;
+	
 	
 -- AMR - Clamped volume boosting - if the top two bits match, truncate the topmost bit.
 -- If the top two bits don't match, duplicate the second bit across the output.
