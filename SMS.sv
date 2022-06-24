@@ -246,10 +246,10 @@ parameter CONF_STR = {
 	"P1-;",
 	"P1OUV,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
-	"P1OD,Border,No,Yes;",
-	"D5P1OST,Masked left column,BG,Black,Cut;",
+	"D2P1OD,Border,No,Yes;",
+	"D2D5P1OST,Masked left column,BG,Black,Cut;",
 	"P1O8,Sprites per line,Standard,All;",
-	"P1o7,Game Gear Res.,Standard,Extended;",
+	"d2P1o7,Game Gear Res.,Standard,Extended;",
 	"P1-;",
 	"D2P1OC,SMS FM sound,Enable,Disable;",
 
