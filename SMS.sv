@@ -247,7 +247,7 @@ parameter CONF_STR = {
 	"P1OUV,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
 	"D2P1OD,Border,No,Yes;",
-	"D2D5P1OST,Masked left column,BG,Black,Cut;",
+	"D5P1OST,Masked left column,BG,Black,Cut;",
 	"P1O8,Sprites per line,Standard,All;",
 	"d2P1o7,Game Gear Res.,Standard,Extended;",
 	"P1-;",
