@@ -80,7 +80,7 @@ begin
       init_id := 0;
       rstate <= 0;
 
-    elsif clk'event and clk = '1' then
+    elsif rising_edge(clk) then
 
       if init_id /= VOICE_ID_TYPE'high+1 then
 

@@ -131,7 +131,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             --  アドレス指定された次のサイクルで対応する値が出てくる（1cycle delay）
             ff_data0 <= log2lin_data( conv_integer( addr(12 downto 6) ) );
             ff_data1 <= log2lin_data( conv_integer( w_addr1           ) );
@@ -140,7 +140,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             ff_sign     <= addr( 13 );
             ff_weight   <= addr( 5 downto 0 );
         end if;
@@ -161,7 +161,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             data <= (
                 sign    => ff_sign,
                 value   => w_inter( 8 downto 0 )

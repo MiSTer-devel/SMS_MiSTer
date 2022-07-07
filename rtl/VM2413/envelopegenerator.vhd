@@ -120,7 +120,7 @@ begin
     begin
         if( reset = '1' )then
             rslot   <= (others => '0');
-        elsif( clk'event and clk='1' )then
+        elsif rising_edge(clk) then
             if( clkena = '1' )then
                 if( stage = "10" )then
                     if( slot = "10001" )then
@@ -153,7 +153,7 @@ begin
             amphase(amphase'high downto amphase'high-4) := "00001";
             amphase(amphase'high-5 downto 0)            := (others=>'0');
 
-        elsif( clk'event and clk='1' )then
+        elsif rising_edge(clk) then
 
             aridx <= egphase( 22-1 downto 0 );
 

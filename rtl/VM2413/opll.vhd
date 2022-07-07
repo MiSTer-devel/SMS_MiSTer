@@ -259,7 +259,7 @@ begin
         if( reset ='1' )then
             opllwr  <= '0';
             opllptr <= (others =>'0');
-        elsif( xin'event and xin = '1' )then
+        elsif rising_edge(xin) then
             if( xena = '1' )then
                 if(    cs_n = '0' and we_n = '0' and a = '0' )then
                     opllptr <= d;

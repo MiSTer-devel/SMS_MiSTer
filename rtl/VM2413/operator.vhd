@@ -113,7 +113,7 @@ begin
         if( reset = '1' )then
             opout       <= (others => '0');
             ff_egout    <= (others => '0');
-        elsif( clk'event and clk='1' )then
+        elsif rising_edge(clk) then
             if( clkena = '1' )then
                 if( stage = "00" )then
                     --  サイン波の参照アドレス（位相）を決定するステージ

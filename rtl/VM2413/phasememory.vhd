@@ -63,7 +63,7 @@ begin
 
       init_slot := 0;
 
-   elsif clk'event and clk = '1' then
+   elsif rising_edge(clk) then
 
      if init_slot /= 18 then
 

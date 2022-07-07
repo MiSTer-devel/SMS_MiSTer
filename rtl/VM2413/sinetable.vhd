@@ -141,7 +141,7 @@ begin
     --  ”gŒ`ƒƒ‚ƒŠ
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             if( clkena = '1' )then
                 ff_data0 <= sin_data( conv_integer( w_addr0 ) );
                 ff_data1 <= sin_data( conv_integer( w_addr1 ) );
@@ -152,7 +152,7 @@ begin
     --  Cüî•ñ‚Ì’x‰„i”gŒ`ƒƒ‚ƒŠ‚Ì“Ç‚İo‚µ’x‰„‚É‚ ‚í‚¹‚éj
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             if( clkena = '1' )then
                 ff_sign     <= addr(17);
                 ff_wf       <= wf and addr(17);
@@ -178,7 +178,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             if( clkena = '1' )then
                 --  •âŠÔ‰‰Z‚ÌŒ‹‰Ê‚ğ‚¢‚Á‚½‚ñ FF ‚É“ü‚ê‚Ä‰‰Z’x‰„‚ğ‹zû
                 ff_data <= (ff_sign & w_inter(12 downto 0)) or w_wf;
