@@ -69,7 +69,7 @@ begin
 		mix    <= (others =>'0');
 		mixout <= (others =>'0');
 
-    elsif clk'event and clk = '1' then if clkena='1' then
+    elsif rising_edge(clk) then if clkena='1' then
 
       if stage = 0 then
 

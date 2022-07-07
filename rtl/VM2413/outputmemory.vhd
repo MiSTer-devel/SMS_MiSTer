@@ -64,7 +64,7 @@ begin
 
       init_ch := 0;
 
-    elsif clk'event and clk='1' then
+    elsif rising_edge(clk) then
 
       if init_ch /= 18 then
 

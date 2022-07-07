@@ -155,7 +155,7 @@ begin
         if( reset = '1' )then
             mo_wr <= '0';
             fb_wr <= '0';
-        elsif( clk'event and clk = '1' )then
+        elsif rising_edge(clk) then
             if( clkena = '1' )then
                 mo_addr <= slot;
 

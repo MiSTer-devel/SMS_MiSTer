@@ -59,7 +59,7 @@ begin
     begin
         if( reset = '1' )then
             ff_count <= "1000111" - delay;
-        elsif( clk'event and clk='1' )then
+        elsif rising_edge(clk) then
             if( clkena ='1' )then
                 if( ff_count = "1000111" )then      -- 71
                     ff_count <= (others => '0');

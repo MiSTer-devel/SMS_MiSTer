@@ -110,7 +110,7 @@ begin
       noise14 := '0';
       noise17 := '0';
 
-    elsif clk'event and clk='1' then if clkena = '1' then
+    elsif rising_edge(clk) then if clkena = '1' then
 
       noise <= noise14 xor noise17;
 

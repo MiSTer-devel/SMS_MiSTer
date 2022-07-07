@@ -117,7 +117,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             if( clkena = '1' )then
                 ff_d1 <= ar_adjust( conv_integer( w_addr1 ) );
                 ff_d2 <= ar_adjust( conv_integer( w_addr2 ) );
@@ -127,7 +127,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             if( clkena = '1' )then
                 ff_w <= addr( 14 downto 7 );    --  データ自体のビット数が 7bit なので 8bit で十分
             end if;
@@ -149,7 +149,7 @@ begin
 
     process( clk )
     begin
-        if( clk'event and clk = '1' )then
+        if rising_edge(clk) then
             if( clkena = '1' )then
                 data <=w_inter( 12 downto 0 );  --  MSB は必ず 0
             end if;

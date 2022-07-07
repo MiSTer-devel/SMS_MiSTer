@@ -61,7 +61,7 @@ begin
     begin
         if( reset = '1' )then
             init_state := 0;
-        elsif( clk'event and clk ='1' )then
+        elsif rising_edge(clk) then
             if( init_state /= 9 )then
                 --  ‹N“®‚µ‚Ä‚·‚®‚É RAM ‚Ì“à—e‚ğ‰Šú‰»‚·‚é
                 regs_array( init_state ) <= (others => '0');

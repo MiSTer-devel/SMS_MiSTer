@@ -62,7 +62,7 @@ begin
 
      init_slot := 0;
 
-   elsif clk'event and clk = '1' then
+   elsif rising_edge(clk) then
 
      if init_slot /= 18 then
        egdata_set(init_slot) <= (others=>'1');

@@ -184,7 +184,7 @@ begin
 
   begin
 
-    if clk'event and clk = '1' then
+    if rising_edge(clk) then
       if (VRC7 = '0') then
         data <= CONV_VOICE(base_voices(addr));
       else

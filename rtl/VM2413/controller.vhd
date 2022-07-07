@@ -181,7 +181,7 @@ begin   -- rtl
     begin
         if( reset = '1' )then
             regs_addr   <= (others => '0');
-        elsif( clk'event and clk = '1' )then
+        elsif rising_edge(clk) then
             if clkena='1' then
                 if( stage = "00" )then
                     regs_addr <= slot( 4 downto 1 );
@@ -197,7 +197,7 @@ begin   -- rtl
     begin
         if( reset = '1' )then
             slot_voice_addr <= 0;
-        elsif( clk'event and clk = '1' )then
+        elsif rising_edge(clk) then
             if clkena='1' then
                 if( stage = "00" )then
                     if( rflag(5) = '1' and w_channel >= "0110" )then
@@ -260,7 +260,7 @@ begin   -- rtl
             extra_mode := '0';
             vindex := 0;
 
-        elsif clk'event and clk='1' then if clkena='1' then
+        elsif rising_edge(clk) then if clkena='1' then
 
             case stage is
             --------------------------------------------------------------------------
