@@ -31,6 +31,7 @@ entity vdp_main is
 		smode_M1:			in  std_logic;
 		smode_M3:			in  std_logic;
 		smode_M4:			in  std_logic;
+		ysj_quirk:			in  std_logic;
 		overscan:			in  std_logic_vector (3 downto 0);
 
 		bg_address:			in  std_logic_vector (3 downto 0);
@@ -104,6 +105,7 @@ begin
 		smode_M1			=> smode_M1,
 		smode_M3			=> smode_M3,
 		smode_M4			=> smode_M4,
+		ysj_quirk			=> ysj_quirk,
 		
 		priority			=> bg_priority);
 		

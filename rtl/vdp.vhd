@@ -35,6 +35,7 @@ entity vdp is
 		smode_M2: 		out STD_LOGIC;
 		smode_M3: 		out STD_LOGIC;
 		smode_M4: 		out STD_LOGIC;
+		ysj_quirk:		in  STD_LOGIC;
 		reset_n:       in  STD_LOGIC);
 end vdp;
 
@@ -144,6 +145,7 @@ begin
 		smode_M1			=> xmode_M1,
 		smode_M3			=> xmode_M3,
 		smode_M4			=> xmode_M4,
+		ysj_quirk			=> ysj_quirk,
 						
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,

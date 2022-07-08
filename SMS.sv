@@ -498,6 +498,25 @@ sdramclk_ddr
 reg  rom_wr = 0;
 wire sd_wrack;
 reg  [23:0] romwr_a;
+reg  ysj_quirk = 0;
+
+always @(posedge clk_sys) begin
+	reg [31:0] cart_id;
+	reg old_download;
+	old_download <= cart_download;
+
+	if(~old_download && cart_download) {ysj_quirk} <= 0;
+
+	if(ioctl_wr & cart_download) begin
+		if(ioctl_addr == 'h7ffc) cart_id[31:24] <= ioctl_dout[7:0];
+		if(ioctl_addr == 'h7ffd) cart_id[23:16] <= ioctl_dout[7:0];
+		if(ioctl_addr == 'h7ffe) cart_id[15:08] <= ioctl_dout[7:0];
+		if(ioctl_addr == 'h7fff) cart_id[07:00] <= ioctl_dout[7:0];
+		if(ioctl_addr == 'h8000) begin
+			if(cart_id == 32'h13_70_01_4F) ysj_quirk <= 1; // Ys (Japan) Graphics Fix, forces VDP Version 1
+		end
+	end
+end
 
 always @(posedge clk_sys) begin
 	reg old_download, old_reset;
@@ -673,6 +692,7 @@ system #(63) system
 	.smode_M1(smode_M1),
 	.smode_M2(smode_M2),
 	.smode_M3(smode_M3),
+	.ysj_quirk(ysj_quirk),
 	.pal(pal),
 	.region(status[10]),
 	.mapper_lock(status[15] && ~systeme),
@@ -777,7 +797,7 @@ always @(posedge clk_sys) begin
 		joya_th <=  swap ? 1'b1 : joyser_th;
 		joyb_th <=  swap ? joyser_th : 1'b1;
 
-		USER_OUT <= {swap ? joyb_tr_out : joya_tr_out, 1'b1, swap ? joyb_th_out : joya_th_out, 4'b1111, };
+		USER_OUT <= {swap ? joyb_tr_out : joya_tr_out, 1'b1, swap ? joyb_th_out : joya_th_out, 4'b1111 };
 
 	end else begin
 		joya <= ~joy[jcnt];
@@ -861,7 +881,7 @@ video video
 	.border(border),
 	.mask_column(mask_column),
 	.cut_mask(status[29]),
-   .smode_M1(smode_M1),
+	.smode_M1(smode_M1),
 	.smode_M3(smode_M3),
 	.x(x),
 	.y(y),
