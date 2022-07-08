@@ -82,6 +82,7 @@ entity system is
 		smode_M1:		out STD_LOGIC;
 		smode_M2:		out STD_LOGIC;
 		smode_M3:		out STD_LOGIC;
+		ysj_quirk:		in	STD_LOGIC;
 		pal:				in STD_LOGIC;
 		region:			in	STD_LOGIC;
 		mapper_lock:	in STD_LOGIC;
@@ -349,6 +350,7 @@ begin
 		smode_M1  => smode_M1,
 		smode_M2  => smode_M2,
 		smode_M3  => smode_M3,
+		ysj_quirk	=> ysj_quirk,
 		mask_column => mask_column,
 		black_column => black_column,
 		reset_n  => RESET_n
@@ -385,6 +387,7 @@ begin
 --		smode_M1  => smode2_M1,
 --		smode_M2  => smode2_M2,
 --		smode_M3  => smode2_M3,
+		ysj_quirk	=> ysj_quirk,
 --		mask_column => mask2_column,
 		black_column => black_column,
 		reset_n  => RESET_n
