@@ -189,8 +189,15 @@ assign BUTTONS   = osd_btn;
 assign VGA_SCALER= 0;
 assign HDMI_FREEZE = 0;
 
-reg en216p;
-always @(posedge CLK_VIDEO) en216p <= ((HDMI_WIDTH == 1920) && (HDMI_HEIGHT == 1080) && !forced_scandoubler && !scale);
+wire       vcrop_en = status[50];
+wire [3:0] vcopt    = status[54:51];
+reg        en216p;
+reg  [4:0] voff;
+
+always @(posedge CLK_VIDEO) begin
+	en216p <= ((HDMI_WIDTH == 1920) && (HDMI_HEIGHT == 1080) && !forced_scandoubler && !scale);
+	voff <= (vcopt < 6) ? {vcopt,1'b0} : ({vcopt,1'b0} - 5'd24);
+end
 
 wire [1:0] ar = status[27:26];
 wire vga_de;
@@ -200,8 +207,8 @@ video_freak video_freak
 	.VGA_DE_IN(vga_de),
 	.ARX((!ar) ? (gg ? 12'd4 : (border ? 12'd47 : 12'd32)) : (ar - 1'd1)),
 	.ARY((!ar) ? (gg ? 12'd3 : (border ? 12'd35 : 12'd21)) : 12'd0),
-	.CROP_SIZE(en216p ? 10'd216 : 10'd0),
-	.CROP_OFF(0),
+	.CROP_SIZE(en216p && vcrop_en ? 10'd216 : 10'd0),
+	.CROP_OFF(voff),
 	.SCALE(status[31:30])
 );
 
@@ -243,6 +250,8 @@ parameter CONF_STR = {
 	"P1O2,TV System,NTSC,PAL;",
 	"P1OQR,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
+	"d6P1oI,Vertical Crop,Disabled,216p(5x);",
+	"d6P1oJM,Crop Offset,0,2,4,8,10,12,-12,-10,-8,-6,-4,-2;",
 	"P1-;",
 	"P1OUV,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
