@@ -12,8 +12,8 @@ entity video is
 		ggres:        in  std_logic :='0';
 		mask_column:	in  std_logic := '0';
 		cut_mask:		in	std_logic;
-		smode_M1:		in	 std_logic;
-		smode_M3:		in	 std_logic;
+		smode_M1:		in	 std_logic; -- 224p mode
+		smode_M3:		in	 std_logic; -- 240p mode
 		
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
@@ -115,18 +115,17 @@ begin
 	x	<= hcount;
 	y	<= vcount;
 
-	vbl_st  <= conv_std_logic_vector(184,9) when (smode_M1='1' and ggres='1')
+	vbl_st  <= conv_std_logic_vector(184,9) when (smode_M1='1' and ggres='1' and border='0')
 			else conv_std_logic_vector(224,9) when smode_M1 = '1'
 			else conv_std_logic_vector(240,9) when smode_M3 = '1'
-			else conv_std_logic_vector(216,9) when border = '1' and pal = '0'
-			else conv_std_logic_vector(240,9) when border = '1'
-			else conv_std_logic_vector(192,9) when ggres = '0'
+			else conv_std_logic_vector(216,9) when border = '1' and ggres = '0'
+			else conv_std_logic_vector(192,9) when (border xor ggres) = '0'
 			else conv_std_logic_vector(168,9);
-			
-	vbl_end <= conv_std_logic_vector(40,9)  when (smode_M1='1' and ggres='1')
-			else conv_std_logic_vector(000,9) when smode_M1 = '1' or smode_M3 = '1' or (border = '0' and ggres = '0')
-			else conv_std_logic_vector(488,9) when border = '1' and pal = '0'
-			else conv_std_logic_vector(458,9) when border = '1'
+
+	vbl_end <= conv_std_logic_vector(40,9)  when (smode_M1='1' and ggres='1' and border='0')
+			else conv_std_logic_vector(000,9) when smode_M1 = '1' or smode_M3 = '1' 
+			else conv_std_logic_vector(488,9) when border = '1' and ggres = '0'
+			else conv_std_logic_vector(000,9) when (border xor ggres) = '0'
 			else conv_std_logic_vector(024,9);
 
 	hbl_st  <= conv_std_logic_vector(270,9) when border = '1' and ggres = '0'
