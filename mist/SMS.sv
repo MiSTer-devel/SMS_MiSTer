@@ -362,7 +362,7 @@ video video
 	.clk(clk_sys),
 	.ce_pix(ce_pix),
 	.pal(palmode),
-	.gg(gg),
+	.ggres(gg),
 	.border(~gg),
 	.mask_column(mask_column),
 	.x(x),
