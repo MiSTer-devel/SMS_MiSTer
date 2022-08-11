@@ -28,6 +28,7 @@ entity vdp is
 		x:					in  STD_LOGIC_VECTOR (8 downto 0);
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
+		palettemode:	in STD_LOGIC;
 		y1:            out std_logic;
 		mask_column:   out STD_LOGIC;
 		black_column:		in STD_LOGIC;
@@ -141,6 +142,7 @@ begin
 		y					=> y,
 
 		color				=> color,
+		palettemode			=> palettemode,
 		y1					=> y1,
 		smode_M1			=> xmode_M1,
 		smode_M3			=> xmode_M3,
