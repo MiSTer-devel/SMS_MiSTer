@@ -564,7 +564,7 @@ always_ff @(posedge clk_sys) begin
 	if (code_download & ioctl_wr) begin
 		case (ioctl_addr[3:0])
 			0:  gg_code[111:96]  <= ioctl_dout; // Flags Bottom Word
-			1:  gg_code[119:112]  <= ioctl_dout; // Flags Bottom Word
+			1:  gg_code[119:112] <= ioctl_dout; // Flags Bottom Word
 			2:  gg_code[127:120] <= ioctl_dout; // Flags Top Word
 			3:  gg_code[127:112] <= ioctl_dout; // Flags Top Word
 			4:  gg_code[71:64]   <= ioctl_dout; // Address Bottom Word
@@ -575,7 +575,7 @@ always_ff @(posedge clk_sys) begin
 			9:  gg_code[47:40]   <= ioctl_dout; // Compare Bottom Word
 			10: gg_code[55:48]   <= ioctl_dout; // Compare top Word
 			11: gg_code[63:56]   <= ioctl_dout; // Compare top Word
-			12: gg_code[7:0]    <= ioctl_dout; // Replace Bottom Word
+			12: gg_code[7:0]     <= ioctl_dout; // Replace Bottom Word
 			13: gg_code[15:8]    <= ioctl_dout; // Replace Bottom Word
 			14: gg_code[23:16]   <= ioctl_dout; // Replace Top Word
 			15: begin
@@ -592,29 +592,34 @@ always @(posedge clk_sys) begin
 	if(cart_download || bk_loading) dbr <= 1;
 end
 
-reg gg = 0;
-reg systeme = 0;
+reg        gg          = 0;
+reg        systeme     = 0;
+reg        palettemode = 0;
 reg [21:0] cart_mask, cart_mask512;
-reg cart_sz512;
+reg        cart_sz512;
 
 always @(posedge clk_sys) begin
 	reg old_download;
 	old_download <= cart_download;
 
-	if(ioctl_wr & cart_download) begin
+	if (ioctl_wr & cart_download) begin
 		cart_mask <= cart_mask | ioctl_addr[21:0];
 		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
-		if(!ioctl_addr) cart_mask <= 0;
-		if(ioctl_addr == 512) cart_mask512 <= 0;
-		gg <= ioctl_index[4:0] == 2;	
+		if (!ioctl_addr) 
+			cart_mask <= 0;
+		if (ioctl_addr == 512) 
+			cart_mask512 <= 0;
+			gg <= ioctl_index[4:0] == 2;	
 		if ((ioctl_index[4:0] == 1) || (ioctl_index[4:0] == 2))
-		systeme <= 1'b0;
+			systeme <= 1'b0;
+		if ((ioctl_index[4:0] == 1) && (ioctl_index[6:5] == 2'b10)) // .SG file extension
+			palettemode <= 1'b1;
 	end;
 	if (old_download & ~cart_download) begin
 		cart_sz512 <= ioctl_addr[9];
 	end;
 	if (ioctl_wr & (ioctl_index==4)) begin
-		systeme <= 1'b1;;
+		systeme <= 1'b1;
 	end;
 end
 
@@ -696,6 +701,7 @@ system #(63) system
 	.x(x),
 	.y(y),
 	.color(color),
+	.palettemode(palettemode),
 	.mask_column(mask_column),
 	.black_column(status[28] && ~status[13]),
 	.smode_M1(smode_M1),
