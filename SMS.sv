@@ -229,16 +229,16 @@ parameter CONF_STR = {
 	"DIP;",
 	"-;",
 	"C,Cheats;",
-	"H1OO,Cheats enabled,ON,OFF;",
+	"H1OO,Cheats Enabled,ON,OFF;",
 	"-;",
-	"H8D0R6,Load Backup RAM;",
-	"H8D0R7,Save Backup RAM;",
-	"H8D0OP,Autosave,OFF,ON;",
+	"H8OP,Autosave,OFF,ON;",
+	"H8H9D0R6,Load Backup RAM;",
+	"H8H9D0R7,Save Backup RAM;",
 	"H8-;",
 
-	"H8OA,Region,US/UE,Japan;",
+	"H8OA,Region,US/EU,Japan;",
 	"H8OB,BIOS,Enable,Disable;",
-	"H8OF,Disable mapper,No,Yes;",
+	"H8OF,Disable Mapper,No,Yes;",
 	"H8o8,Z80 Speed,Normal,Turbo;",
 	"H8-;",
 	"H7o12,VDPs,Both,2,1,None;",
@@ -248,27 +248,26 @@ parameter CONF_STR = {
 	"P1,Audio & Video;",
 	"P1-;",
 	"P1O2,TV System,NTSC,PAL;",
+	"P1-;",
 	"P1OQR,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"d6P1oI,Vertical Crop,Disabled,216p(5x);",
 	"d6P1oJM,Crop Offset,0,2,4,8,10,12,-12,-10,-8,-6,-4,-2;",
-	"P1-;",
 	"P1OUV,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P1-;",
 	"D2P1OD,Border,No,Yes;",
-	"D5P1OST,Masked left column,BG,Black,Cut;",
-	"P1O8,Sprites per line,Standard,All;",
+	"P1OST,Masked Left Column,BG,Black,Cut;",
+	"P1O8,Sprites Per Line,Standard,All;",
 	"d2P1o7,Game Gear Res.,Standard,Extended;",
 	"P1-;",
-	"D2P1OC,SMS FM sound,Enable,Disable;",
+	"P1OC,SMS FM Sound,Enable,Disable;",
 
 	"P2,Input;",
 	"P2-;",
-	"P2O1,Swap joysticks,No,Yes;",
+	"P2O1,Swap Joysticks,No,Yes;",
 	"P2OE,Multitap,Disabled,Port1;",
+	"P2OG,SNAC,Off,On;",
 	"D3P2OH,Pause Btn Combo,No,Yes;",
-	"P2-;",
-	"P2OG,Serial,OFF,SNAC;",
 	"P2-;",
 	"D2P2OIJ,Gun Control,Disabled,Joy1,Joy2,Mouse;",
 	"D4P2OK,Gun Fire,Joy,Mouse;",
@@ -410,7 +409,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(0)) hps_io
 	.buttons(buttons),
 	.ps2_key(ps2_key),
 	.status(status),
-	.status_menumask({systeme,~dbg_menu,en216p,status[13],~gun_en,~raw_serial,gg,~gg_avail,~bk_ena}),
+	.status_menumask({status[25],systeme,~dbg_menu,en216p,status[13],~gun_en,~raw_serial,gg,~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 	.gamma_bus(gamma_bus),
@@ -425,7 +424,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(0)) hps_io
 	.ioctl_index(ioctl_index),
 
 	.ioctl_wait(ioctl_wait),
-	
+
 	.sd_lba('{sd_lba}),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
@@ -437,7 +436,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(0)) hps_io
 	.img_mounted(img_mounted),
 	.img_readonly(img_readonly),
 	.img_size(img_size),
-	
+
 	.ps2_mouse(ps2_mouse)
 );
 
@@ -580,14 +579,14 @@ always_ff @(posedge clk_sys) begin
 			14: gg_code[23:16]   <= ioctl_dout; // Replace Top Word
 			15: begin
 				gg_code[31:24]   <= ioctl_dout; // Replace Top Word
-				gg_code[128]     <=  1'b1;      // Clock it in
+				gg_code[128]     <= 1'b1;       // Clock it in
 			end
 		endcase
 	end
 end
 
 
-reg  dbr = 0;
+reg dbr = 0;
 always @(posedge clk_sys) begin
 	if(cart_download || bk_loading) dbr <= 1;
 end
@@ -605,15 +604,15 @@ always @(posedge clk_sys) begin
 	if (ioctl_wr & cart_download) begin
 		cart_mask <= cart_mask | ioctl_addr[21:0];
 		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
-		if (!ioctl_addr) 
+		if (!ioctl_addr)
 			cart_mask <= 0;
-		if (ioctl_addr == 512) 
+		if (ioctl_addr == 512)
 			cart_mask512 <= 0;
-			gg <= ioctl_index[4:0] == 2;	
 		if ((ioctl_index[4:0] == 1) || (ioctl_index[4:0] == 2))
 			systeme <= 1'b0;
 		if ((ioctl_index[4:0] == 1) && (ioctl_index[6:5] == 2'b10)) // .SG file extension
 			palettemode <= 1'b1;
+		gg <= ioctl_index[4:0] == 2;
 	end;
 	if (old_download & ~cart_download) begin
 		cart_sz512 <= ioctl_addr[9];
@@ -697,7 +696,7 @@ system #(63) system
 	.paddle(paddle),
 	.paddle2(paddle2),
 	.pedal(pedal),
-		
+
 	.x(x),
 	.y(y),
 	.color(color),
@@ -730,11 +729,11 @@ system #(63) system
 	.nvram_we(nvram_we),
 	.nvram_d(nvram_d),
 	.nvram_q(nvram_q),
-	
+
 	.encrypt(SYSMODE[0][1:0]),
 	.key_a(key_a),
 	.key_d(key_d),
-	
+
 	.ROMCL(clk_sys),
 	.ROMAD(ioctl_addr),
 	.ROMDT(ioctl_dout),
@@ -767,7 +766,7 @@ wire raw_serial = status[16];
 wire pause_combo = status[17];
 wire swap = status[1];
 
-wire [7:0] joya;	
+wire [7:0] joya;
 wire [7:0] joyb;
 wire [7:0] joyser;
 
@@ -793,22 +792,22 @@ always @(posedge clk_sys) begin
 
 	if (raw_serial) begin
 		joyser[3] <= USER_IN[1];//up
-		joyser[2] <= USER_IN[0];//down	
+		joyser[2] <= USER_IN[0];//down
 		joyser[1] <= USER_IN[5];//left
-		joyser[0] <= USER_IN[3];//right	
+		joyser[0] <= USER_IN[3];//right
 		joyser[4] <= USER_IN[2];//trigger / button1
 		joyser[5] <= USER_IN[6];//button2
 		joyser_th <= USER_IN[4];//sensor
-		
+
 		if (tmr) tmr <= tmr - 1'd1;
 		if (!USER_IN[0] & !USER_IN[2] & !USER_IN[6] & pause_combo) begin //D 1 2 combo
 			tmr <= 57000;
 		end
 		joyser[6] <= !tmr;
 		joyser[7] <= 1'b0;
-		
+
 		joya <= swap ? ~joy[1] : joyser;
-		joyb <= swap ? joyser : ~joy[0];	
+		joyb <= swap ? joyser : ~joy[0];
 		joya_th <=  swap ? 1'b1 : joyser_th;
 		joyb_th <=  swap ? joyser_th : 1'b1;
 
@@ -819,7 +818,6 @@ always @(posedge clk_sys) begin
 		joyb <= status[14] ? 8'hFF : ~joy[1];
 		joya_th <=  1'b1;
 		joyb_th <=  1'b1;
-				
 
 		if(ce_cpu) begin
 			if(tmr > 57000) jcnt <= 0;
@@ -834,10 +832,10 @@ always @(posedge clk_sys) begin
 		end
 
 		if(reset | ~status[14]) jcnt <= 0;
-	
+
 		USER_OUT <= 7'b1111111;
 	end
-	
+
 	if(gun_en) begin
 		if(gun_port) begin
 			joyb_th <= ~gun_sensor;
@@ -865,7 +863,7 @@ spram #(.widthad_a(14)) ram_inst
 	.q         (ram_q)
 );
 
-wire [15:0] audio_l, audio_r; 
+wire [15:0] audio_l, audio_r;
 
 assign AUDIO_L=audio_l;
 assign AUDIO_R=audio_r;
@@ -875,7 +873,7 @@ assign AUDIO_R=audio_r;
 //	clk_sys,
 //	audio_l[15:4], audio_r[15:4],
 //	AUDIO_L,       AUDIO_R
-//); 
+//);
 
 wire [8:0] x;
 wire [8:0] y;
@@ -998,10 +996,10 @@ wire downloading = cart_download;
 reg old_downloading = 0;
 reg bk_ena = 0;
 always @(posedge clk_sys) begin
-	
+
 	old_downloading <= downloading;
 	if(~old_downloading & downloading) bk_ena <= 0;
-	
+
 	//Save file always mounted in the end of downloading state.
 	if(downloading && img_mounted && !img_readonly) bk_ena <= 1;
 end
@@ -1032,9 +1030,9 @@ always @(posedge clk_sys) begin
 	old_load <= bk_load & bk_ena;
 	old_save <= bk_save & bk_ena;
 	old_ack  <= sd_ack;
-	
+
 	if(~old_ack & sd_ack) {sd_rd, sd_wr} <= 0;
-	
+
 	if(!bk_state) begin
 		if((~old_load & bk_load) | (~old_save & bk_save)) begin
 			bk_state <= 1;
@@ -1181,13 +1179,13 @@ always @(posedge clk_sys) begin
 	reg old_stb;
 	reg enter = 0;
 	reg esc = 0;
-	
+
 	old_stb <= ps2_key[10];
 	if(old_stb ^ ps2_key[10]) begin
 		if(ps2_key[7:0] == 'h5A) enter <= ps2_key[9];
 		if(ps2_key[7:0] == 'h76) esc   <= ps2_key[9];
 	end
-	
+
 	if(enter & esc) begin
 		dbg_menu <= ~dbg_menu;
 		enter <= 0;
@@ -1196,5 +1194,3 @@ always @(posedge clk_sys) begin
 end
 
 endmodule
-
-

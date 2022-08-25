@@ -141,7 +141,7 @@ architecture Behavioral of system is
 	signal vdp_D_out:			std_logic_vector(7 downto 0);
 	signal vdp_IRQ_n:			std_logic;
 	signal vdp_color:			std_logic_vector(11 downto 0);
-	signal vdp_y1:				std_logic;
+--	signal vdp_y1:				std_logic;
 	signal vdp2_RD_n:			std_logic;
 	signal vdp2_WR_n:			std_logic;
 	signal vdp2_D_out:		std_logic_vector(7 downto 0);
@@ -348,7 +348,7 @@ begin
 		y			=> y,
 		color		=> vdp_color,
 		palettemode	=> palettemode,
-		y1       => vdp_y1,
+--		y1       => vdp_y1,
 		smode_M1  => smode_M1,
 		smode_M2  => smode_M2,
 		smode_M3  => smode_M3,
