@@ -961,9 +961,9 @@ video_mixer #(.HALF_DEPTH(1), .LINE_LENGTH(300), .GAMMA(1)) video_mixer
 	.freeze_sync(),
 
 	.VGA_DE(vga_de),
-	.R((gun_en & gun_target) ? 8'd255 : {2{color[3:0]}}),
-	.G((gun_en & gun_target) ? 8'd0   : {2{color[7:4]}}),
-	.B((gun_en & gun_target) ? 8'd0   : {2{color[11:8]}})
+	.R((gun_en & gun_target && (~&gun_crosshair)) ? 8'd255 : {2{color[3:0]}}),
+	.G((gun_en & gun_target && (~&gun_crosshair)) ? 8'd0   : {2{color[7:4]}}),
+	.B((gun_en & gun_target && (~&gun_crosshair)) ? 8'd0   : {2{color[11:8]}})
 );
 
 
@@ -1069,6 +1069,7 @@ wire       gun_en = gun_mode && !gg;
 wire       gun_target;
 wire       gun_sensor;
 wire       gun_trigger;
+wire [1:0] gun_crosshair = status[23:22];
 
 lightgun lightgun
 (
@@ -1087,7 +1088,7 @@ lightgun lightgun
 	.CE_PIX(ce_pix),
 
 	.BTN_MODE(gun_btn_mode),
-	.SIZE(status[23:22]),
+	.SIZE(gun_crosshair),
 	.SENSOR_DELAY(34),
 
 	.TARGET(gun_target),
