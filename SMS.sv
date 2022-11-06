@@ -1,6 +1,6 @@
 //============================================================================
 //  SMS replica
-// 
+//
 //  Port to MiSTer
 //  Copyright (C) 2017-2019 Sorgelig
 //
@@ -181,7 +181,6 @@ assign VGA_F1 = 0;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
-assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
 assign LED_USER  = cart_download | bk_state | (status[25] & bk_pending);
 assign LED_DISK  = 0;
@@ -190,6 +189,7 @@ assign BUTTONS   = osd_btn;
 assign VGA_SCALER= 0;
 assign VGA_DISABLE = 0;
 assign HDMI_FREEZE = 0;
+assign FB_FORCE_BLANK = 0;
 
 wire       vcrop_en = status[50];
 wire [3:0] vcopt    = status[54:51];
@@ -201,14 +201,46 @@ always @(posedge CLK_VIDEO) begin
 	voff <= (vcopt < 6) ? {vcopt,1'b0} : ({vcopt,1'b0} - 5'd24);
 end
 
+wire video_rotated;
+wire no_rotate = ~status[41];
+wire flip = status[42];
+wire rotate_ccw = 0;
+wire [5:0] arx, ary;
+
+always_comb begin
+	if (no_rotate) begin
+		if (gg) begin
+			arx = 6'd4;
+			ary = 6'd3;
+		end else begin
+			if (border) begin
+				arx = 6'd47;
+				ary = 6'd35;
+			end else begin
+				arx = 6'd32;
+				ary = 6'd21;
+			end
+		end
+	end else begin
+		if (border) begin
+			arx = 6'd35;
+			ary = 6'd47;
+		end else begin
+			arx = 6'd21;
+			ary = 6'd32;
+		end
+	end
+end
+
 wire [1:0] ar = status[27:26];
 wire vga_de;
+screen_rotate screen_rotate (.*);
 video_freak video_freak
 (
 	.*,
 	.VGA_DE_IN(vga_de),
-	.ARX((!ar) ? (gg ? 12'd4 : (border ? 12'd47 : 12'd32)) : (ar - 1'd1)),
-	.ARY((!ar) ? (gg ? 12'd3 : (border ? 12'd35 : 12'd21)) : 12'd0),
+	.ARX((!ar) ? arx : (ar - 1'd1)),
+	.ARY((!ar) ? ary : 12'd0),
 	.CROP_SIZE(en216p && vcrop_en ? 10'd216 : 10'd0),
 	.CROP_OFF(voff),
 	.SCALE(status[31:30])
@@ -216,11 +248,11 @@ video_freak video_freak
 
 
 // Status Bit Map:
-//             Upper                             Lower              
-// 0         1         2         3          4         5         6   
+//             Upper                             Lower
+// 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXX         XXXXX
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX       XXXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -250,6 +282,8 @@ parameter CONF_STR = {
 	"P1,Audio & Video;",
 	"P1-;",
 	"P1O2,TV System,NTSC,PAL;",
+	"h8P1o9,Orientation,Horz,Vert;",
+	"h8P1oA,Flip Screen,Off,On;",
 	"P1-;",
 	"P1OQR,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
