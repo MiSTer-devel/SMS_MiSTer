@@ -256,13 +256,13 @@ video_freak video_freak
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX       XXXXX
+// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX       XXXXX  XXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
 	"SMS;;",
 	"-;",
-	"H8FS1,SMSSG;",
+	"H8FS1,SMSSG SC ;",
 	"H8FS2,GG;",
 	"DIP;",
 	"-;",
@@ -316,6 +316,11 @@ parameter CONF_STR = {
 	"D4P2OMN,Cross,Small,Medium,Big,None;",
 	"P2-;",
 	"P2o56,Paddle Control,Disabled,Paddle,Joy;",
+	"P2-;",
+	"P2oP,SK-1100,Off,On;",
+	"P2-;",
+	"P2oQ,SC-3000,Off,On;",
+	"P2oRS,SG/SC Cart RAM,Off,2KB,16KB,32KB;",
 
 	"-;",
 	"H8RB,Soft Reset;",
@@ -404,20 +409,25 @@ end
 reg        ext_bios_loaded = 0;
 reg        old_bios_download;
 reg  [1:0] old_bios_mode;
+reg        old_sc3000_mode;
+reg  [1:0] old_sc_cart_ram;
 reg [21:0] reset_timer;
 reg        bios_config_reset;
 
 always_ff @(posedge clk_sys) begin
 	old_bios_download <= bios_download;
 	old_bios_mode     <= status[44:43];
+	old_sc3000_mode   <= status[58];
+	old_sc_cart_ram   <= status[60:59];
 
 	// Set ext_bios_loaded ONLY after download completes
 	if (old_bios_download && !bios_download) begin
 		ext_bios_loaded <= 1;
 	end
 
-	// Generate a 40ms pulse (at 50MHz) on BIOS config change or download
-	if ((old_bios_mode != status[44:43]) || (old_bios_download ^ bios_download)) begin
+	// Generate a 40ms pulse (at 50MHz) on BIOS or SC config changes.
+	if ((old_bios_mode != status[44:43]) || (old_bios_download ^ bios_download) ||
+	    (old_sc3000_mode != status[58]) || (old_sc_cart_ram != status[60:59])) begin
 		reset_timer <= 22'd2000000;
 	end else if (reset_timer > 0) begin
 		reset_timer <= reset_timer - 1'd1;
@@ -451,12 +461,19 @@ wire  [7:0] paddle_0, paddle_1;
 wire  [1:0] buttons;
 wire [10:0] ps2_key;
 wire [63:0] status;
+reg  [127:0] status_in = 0;
+reg          status_set = 0;
+reg         sc3000_auto = 0;
+reg         sc_multicart_auto = 0;
+reg         sc_megacart_auto = 0;
+reg         sc3000_menu_auto = 0;
 
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
+wire [31:0] ioctl_file_ext;
 wire        ioctl_wait;
 
 reg  [31:0] sd_lba;
@@ -493,6 +510,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(0)) hps_io
 	.buttons(buttons),
 	.ps2_key(ps2_key),
 	.status(status),
+	.status_in(status_in),
+	.status_set(status_set),
 	.status_menumask({status[25],systeme,~dbg_menu,en216p,status[13],~gun_en,~raw_serial,gg,~gg_avail,~bk_ena}),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
@@ -506,6 +525,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(0)) hps_io
 	.ioctl_dout(ioctl_dout),
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
+	.ioctl_file_ext(ioctl_file_ext),
 
 	.ioctl_wait(ioctl_wait),
 
@@ -707,18 +727,71 @@ end
 reg        gg          = 0;
 reg        systeme     = 0;
 reg        palettemode = 0;
+reg        load_sc     = 0;
+reg        load_sg     = 0;
+reg        load_sc_multicart = 0;
+reg        load_sc_megacart = 0;
 reg [21:0] cart_mask, cart_mask512;
 reg        cart_sz512;
+wire [7:0] ioctl_ext_b0 = ioctl_file_ext[7:0];
+wire [7:0] ioctl_ext_b1 = ioctl_file_ext[15:8];
+wire [7:0] ioctl_ext_b2 = ioctl_file_ext[23:16];
+wire [7:0] ioctl_ext_b3 = ioctl_file_ext[31:24];
+wire       ioctl_ext_has_s = (ioctl_ext_b0 == "S") || (ioctl_ext_b0 == "s") ||
+                             (ioctl_ext_b1 == "S") || (ioctl_ext_b1 == "s") ||
+                             (ioctl_ext_b2 == "S") || (ioctl_ext_b2 == "s") ||
+                             (ioctl_ext_b3 == "S") || (ioctl_ext_b3 == "s");
+wire       ioctl_ext_has_c = (ioctl_ext_b0 == "C") || (ioctl_ext_b0 == "c") ||
+                             (ioctl_ext_b1 == "C") || (ioctl_ext_b1 == "c") ||
+                             (ioctl_ext_b2 == "C") || (ioctl_ext_b2 == "c") ||
+                             (ioctl_ext_b3 == "C") || (ioctl_ext_b3 == "c");
+wire       ioctl_ext_has_g = (ioctl_ext_b0 == "G") || (ioctl_ext_b0 == "g") ||
+                             (ioctl_ext_b1 == "G") || (ioctl_ext_b1 == "g") ||
+                             (ioctl_ext_b2 == "G") || (ioctl_ext_b2 == "g") ||
+                             (ioctl_ext_b3 == "G") || (ioctl_ext_b3 == "g");
+wire       ioctl_ext_has_m = (ioctl_ext_b0 == "M") || (ioctl_ext_b0 == "m") ||
+                             (ioctl_ext_b1 == "M") || (ioctl_ext_b1 == "m") ||
+                             (ioctl_ext_b2 == "M") || (ioctl_ext_b2 == "m") ||
+                             (ioctl_ext_b3 == "M") || (ioctl_ext_b3 == "m");
+wire       ioctl_ext_is_sc = ioctl_ext_has_s && ioctl_ext_has_c && !ioctl_ext_has_g && !ioctl_ext_has_m;
+wire       ioctl_ext_is_sg = ioctl_ext_has_s && ioctl_ext_has_g && !ioctl_ext_has_c && !ioctl_ext_has_m;
+wire       sc_file = ioctl_ext_is_sc;
+wire       sg_file = ioctl_ext_is_sg;
+wire       sgsc_file = sc_file | sg_file;
 
 always @(posedge clk_sys) begin
 	reg old_download;
 	old_download <= cart_download;
+	status_set <= 1'b0;
 
 	if (eject_rom) begin
 		cart_mask <= 0;
 		cart_mask512 <= 0;
 		cart_sz512 <= 0;
 		gg <= 0;
+		palettemode <= 0;
+		load_sc <= 0;
+		load_sg <= 0;
+		load_sc_multicart <= 0;
+		load_sc_megacart <= 0;
+		sc3000_auto <= 0;
+		sc_multicart_auto <= 0;
+		sc_megacart_auto <= 0;
+		if (sc3000_menu_auto) begin
+			status_in <= {64'd0, status};
+			status_in[58] <= 1'b0;
+			status_set <= 1'b1;
+			sc3000_menu_auto <= 1'b0;
+		end
+	end else if (~old_download & cart_download) begin
+		load_sc <= 0;
+		load_sg <= 0;
+		load_sc_multicart <= 0;
+		load_sc_megacart <= 0;
+		palettemode <= 0;
+		sc3000_auto <= 0;
+		sc_multicart_auto <= 0;
+		sc_megacart_auto <= 0;
 	end else if (ioctl_wr & cart_download) begin
 		cart_mask <= cart_mask | ioctl_addr[21:0];
 		cart_mask512 <= cart_mask512 | (ioctl_addr[21:0] - 10'd512);
@@ -728,12 +801,35 @@ always @(posedge clk_sys) begin
 			cart_mask512 <= 0;
 		if ((ioctl_index[4:0] == 1) || (ioctl_index[4:0] == 2))
 			systeme <= 1'b0;
-		if ((ioctl_index[4:0] == 1) && (ioctl_index[6:5] == 2'b10)) // .SG file extension
-			palettemode <= 1'b1;
+		load_sc <= sc_file;
+		load_sg <= sg_file;
+		// Large .sg/.sc images use the Survivors paging latch family:
+		// >32KB = multicart-style banking, >2MB = 128-slot megacart banking.
+		load_sc_multicart <= load_sc_multicart | (sgsc_file & (ioctl_addr > 25'h07FFF));
+		load_sc_megacart <= load_sc_megacart | (sgsc_file & (ioctl_addr > 25'h1FFFFF));
 		gg <= ioctl_index[4:0] == 2;
 	end;
 	if (old_download & ~cart_download) begin
-		cart_sz512 <= ioctl_addr[9];
+		sc3000_auto <= load_sc;
+		sc_multicart_auto <= (load_sc | load_sg) & load_sc_multicart;
+		sc_megacart_auto <= (load_sc | load_sg) & load_sc_megacart;
+		palettemode <= load_sg;
+		if (load_sc) begin
+			if (!status[58]) begin
+				status_in <= {64'd0, status};
+				status_in[58] <= 1'b1;
+				status_set <= 1'b1;
+				sc3000_menu_auto <= 1'b1;
+			end
+		end else if (sc3000_menu_auto) begin
+			status_in <= {64'd0, status};
+			status_in[58] <= 1'b0;
+			status_set <= 1'b1;
+			sc3000_menu_auto <= 1'b0;
+		end
+		// Headered dumps end at size = N*1024 + 512, so the final byte address
+		// has low 10 bits of 10'h1FF.
+		cart_sz512 <= (ioctl_addr[9:0] == 10'h1FF);
 	end;
 	if (ioctl_wr & (ioctl_index==4)) begin
 		systeme <= 1'b1;
@@ -818,11 +914,18 @@ system #(63) system
 	.paddle(paddle),
 	.paddle2(paddle2),
 	.pedal(pedal),
+	.sc3000_en(sc3000_en),
+	.sc_multicart_en(sc_multicart_en),
+	.sc_megacart_en(sc_megacart_en),
+	.sc_cart_ram(sc_cart_ram),
+	.sk1100_en(sk1100_en),
+	.sk1100_row_sel(sk1100_row_sel),
+	.sk1100_row_data(sk1100_row_data),
 
 	.x(x),
 	.y(y),
 	.color(color),
-	.palettemode(palettemode),
+	.palettemode(sg_palette),
 	.mask_column(mask_column),
 	.black_column(status[28] && ~status[13]),
 	.smode_M1(smode_M1),
@@ -887,10 +990,18 @@ assign joy[3] = joy_3[7:0];
 wire raw_serial = status[16];
 wire pause_combo = status[17];
 wire swap = status[1];
+wire sk1100_en = status[57];
+wire sc3000_en = status[58] | sc3000_auto;
+wire [1:0] sc_cart_ram = status[60:59];
+wire sg_palette = palettemode | sc3000_en;
+wire sc_multicart_en = sg_palette & sc_multicart_auto;
+wire sc_megacart_en = sc_multicart_en & sc_megacart_auto;
 
 wire [7:0] joya;
 wire [7:0] joyb;
 wire [7:0] joyser;
+wire [2:0] sk1100_row_sel;
+wire [11:0] sk1100_row_data;
 
 wire      joya_tr_out;
 wire      joya_th_out;
@@ -907,6 +1018,21 @@ wire [7:0] paddlein = paddle_en ? paddle_0 : has_pedal ? {~joy0_x[7],joy0_x[6:0]
 wire [7:0] paddle2 = paddle_en ? paddle_1 : joy1_x;
 wire [7:0] pedallimit = paddlein[7:5]==3'b111 ? 8'hE0 : paddlein[7:5]==3'b000 ? 8'h20 : paddlein;
 wire [7:0] paddle = has_pedal ? pedallimit : paddlein;
+wire [11:0] sk1100_joy_row = {
+	joyb[5], joyb[4], joyb[0], joyb[1], joyb[2], joyb[3],
+	joya[5], joya[4], joya[0], joya[1], joya[2], joya[3]
+};
+
+keyboard keyboard_mapper
+(
+	.clk_sys(clk_sys),
+	.reset(raw_reset),
+	.enable(sk1100_en | sc3000_en),
+	.joy_row(sk1100_joy_row),
+	.row_sel(sk1100_row_sel),
+	.ps2_key(ps2_key),
+	.row_data(sk1100_row_data)
+);
 
 always @(posedge clk_sys) begin
 	reg old_th;

@@ -8,11 +8,15 @@ port (
 	clk_sys:				in  STD_LOGIC;
 	ce_pix:				in  STD_LOGIC;
 	reset:				in  std_logic;
+	screen_x:			in  std_logic_vector(8 downto 0);
 	table_address:		in  std_logic_vector(13 downto 10);
 	pt_address:			in  std_logic_vector(13 downto 11);
 	ct_address:			in  std_logic_vector(13 downto 6);
 	scroll_x:			in  std_logic_vector(7 downto 0);
 	disable_hscroll:	in  std_logic;
+	mode_M1_raw:		in  std_logic;
+	mode_M2_raw:		in  std_logic;
+	mode_M3_raw:		in  std_logic;
 	smode_M1:			in  std_logic;
 	smode_M2:			in  std_logic;
 	smode_M3:			in  std_logic;
@@ -20,6 +24,8 @@ port (
 	ysj_quirk:			in  std_logic;
 	y:						in  std_logic_vector(7 downto 0);
 	screen_y:			in  std_logic_vector(8 downto 0);
+	text_fg_color:		in  std_logic_vector(3 downto 0);
+	overscan:			in  std_logic_vector(3 downto 0);
 
 	vram_A:				out std_logic_vector(13 downto 0);
 	vram_D:				in  std_logic_vector(7 downto 0);
@@ -35,6 +41,7 @@ architecture rtl of vdp_background is
 	signal x					: std_logic_vector (7 downto 0);
 	signal tile_y			: std_logic_vector (2 downto 0);
 	signal palette			: std_logic;
+	signal palette_shift	: std_logic;
 	signal priority_latch: std_logic;
 	signal flip_x			: std_logic;
 
@@ -49,8 +56,18 @@ architecture rtl of vdp_background is
 	signal shift1			: std_logic_vector(7 downto 0);
 	signal shift2			: std_logic_vector(7 downto 0);
 	signal shift3			: std_logic_vector(7 downto 0);
+	signal text_shift		: std_logic_vector(5 downto 0) := (others=>'0');
+	signal text_tile_index: std_logic_vector(7 downto 0) := (others=>'0');
+	signal text_pattern	: std_logic_vector(7 downto 0) := (others=>'0');
+	signal text_phase		: std_logic_vector(2 downto 0) := (others=>'0');
+	signal text_column	: std_logic_vector(5 downto 0) := (others=>'0');
+	signal text_mode		: std_logic;
+	signal gfx1_mode		: std_logic;
 	
 begin
+
+	text_mode <= '1' when smode_M4='0' and mode_M1_raw='1' and mode_M2_raw='0' and mode_M3_raw='0' else '0';
+	gfx1_mode <= '1' when smode_M4='0' and mode_M1_raw='0' and mode_M2_raw='0' and mode_M3_raw='0' else '0';
 	
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
@@ -77,13 +94,67 @@ begin
 		end if;
 	end process;
 
+	process (clk_sys) begin
+		if rising_edge(clk_sys) then
+			if ce_pix = '1' then
+				if reset='1' or text_mode='0' then
+					text_phase <= (others=>'0');
+					text_column <= (others=>'0');
+				elsif conv_integer(screen_x)=7 then
+					text_phase <= "000";
+					text_column <= (others=>'0');
+				elsif conv_integer(screen_x)>=8 and conv_integer(screen_x)<247 then
+					if text_phase="101" then
+						text_phase <= "000";
+						text_column <= text_column + 1;
+					else
+						text_phase <= text_phase + 1;
+					end if;
+				else
+					text_phase <= (others=>'0');
+					text_column <= (others=>'0');
+				end if;
+			end if;
+		end if;
+	end process;
+
 	process (clk_sys)
 		variable char_address	: std_logic_vector(12 downto 0);
 		variable data_address	: std_logic_vector(11 downto 0);
+		variable sx				: integer;
+		variable text_row		: integer;
+		variable text_name		: integer;
 	begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				if smode_M4='1' then
+				sx := conv_integer(screen_x);
+				if text_mode='1' then
+					text_row := conv_integer(y(7 downto 3));
+					if sx < 8 then
+						case sx is
+						when 0 =>
+							vram_A <= table_address & conv_std_logic_vector(text_row * 40, 10);
+						when 2 =>
+							vram_A <= pt_address & text_tile_index & y(2 downto 0);
+						when others =>
+							null;
+						end case;
+					elsif sx >= 8 and sx < 248 then
+						case text_phase is
+						when "000" =>
+							if text_column < "100111" then
+								text_name := (text_row * 40) + conv_integer(text_column) + 1;
+								vram_A <= table_address & conv_std_logic_vector(text_name, 10);
+							end if;
+						when "010" =>
+							if text_column < "100111" then
+								vram_A <= pt_address & text_tile_index & y(2 downto 0);
+							end if;
+						when others =>
+							null;
+						end case;
+					end if;
+				elsif smode_M4='1' then
 					if (smode_M1='1' or smode_M3='1') then
 						char_address(12 downto 5) := table_address(13 downto 12) & ("011100" + y(7 downto 3));
 					else
@@ -111,21 +182,21 @@ begin
 				else 
 					case x(2 downto 0) is
 					when "000" => vram_A <= table_address & y(7 downto 3) & x(7 downto 3);
-				when "010" => 
-					if smode_M2 = '1' then -- Graphics II (Mode 2)
-						vram_A <= pt_address(13) & ( y(7 downto 6) and pt_address(12 downto 11) )&
+					when "010" =>
+						if gfx1_mode='1' then
+							vram_A <= pt_address & tile_index(7 downto 0) & y(2 downto 0);
+						else
+							vram_A <= pt_address(13) & ( y(7 downto 6) and pt_address(12 downto 11) )&
 										tile_index(7 downto 0) & y(2 downto 0);
-					else -- Default / Graphics I / Text
-						vram_A <= pt_address(13 downto 11) & tile_index(7 downto 0) & y(2 downto 0);
-					end if;
-				when "011" => 
-					if smode_M2 = '1' then -- Graphics II (Mode 2)
-						vram_A <= ct_address(13) & 
-										( (y(7 downto 6) & tile_index(7 downto 3)) and ct_address(12 downto 6) ) &
-										tile_index(2 downto 0) & y(2 downto 0);
-					else -- Default / Graphics I
-						vram_A <= ct_address(13 downto 6) & '0' & tile_index(7 downto 3);
-					end if;
+						end if;
+					when "011" =>
+						if gfx1_mode='1' then
+							vram_A <= ct_address(13 downto 6) & '0' & tile_index(7 downto 3);
+						else
+							vram_A <= ct_address(13) & ( y(7 downto 6) and ct_address(12 downto 11) )&
+									   tile_index(7 downto 0) &
+										y(2 downto 0);
+						end if;
 					when others =>
 					end case;	
 				end if ;
@@ -136,7 +207,26 @@ begin
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				if smode_M4='1' then
+				if text_mode='1' then
+					if conv_integer(screen_x)=1 then
+						text_tile_index <= vram_D;
+					elsif conv_integer(screen_x)=3 then
+						text_pattern <= vram_D;
+					elsif conv_integer(screen_x)>=8 and conv_integer(screen_x)<248 then
+						case text_phase is
+						when "001" =>
+							if text_column < "100111" then
+								text_tile_index <= vram_D;
+							end if;
+						when "011" =>
+							if text_column < "100111" then
+								text_pattern <= vram_D;
+							end if;
+						when others =>
+							null;
+						end case;
+					end if;
+				elsif smode_M4='1' then
 					case x(2 downto 0) is
 					when "001" =>
 						tile_index(7 downto 0) <= vram_D;
@@ -186,38 +276,57 @@ begin
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
-				case x(2 downto 0) is
-				when "111" =>
-					if flip_x='0' then
-						shift0	<= data0;
-						shift1	<= data1;
-						shift2	<= data2;
-						if smode_M4='1' then
-							shift3	<= vram_D;
+				if text_mode='1' then
+					if conv_integer(screen_x)=7 then
+						text_shift <= text_pattern(7 downto 2);
+						priority <= '0';
+					elsif conv_integer(screen_x)>=8 and conv_integer(screen_x)<248 then
+						if text_phase="101" then
+							text_shift <= text_pattern(7 downto 2);
+							priority <= '0';
 						else
-							shift3 <= data3;
+							text_shift(5 downto 1) <= text_shift(4 downto 0);
+							text_shift(0) <= '0';
 						end if;
 					else
-						shift0	<= data0(0)&data0(1)&data0(2)&data0(3)&data0(4)&data0(5)&data0(6)&data0(7);
-						shift1	<= data1(0)&data1(1)&data1(2)&data1(3)&data1(4)&data1(5)&data1(6)&data1(7);
-						shift2	<= data2(0)&data2(1)&data2(2)&data2(3)&data2(4)&data2(5)&data2(6)&data2(7);
-						shift3	<= vram_D(0)&vram_D(1)&vram_D(2)&vram_D(3)&vram_D(4)&vram_D(5)&vram_D(6)&vram_D(7);
+						text_shift <= (others=>'0');
+						priority <= '0';
 					end if;
-					color(4)	<= palette;
-					priority	<= priority_latch;
-				when others =>
-					shift0(7 downto 1) <= shift0(6 downto 0) ;
-					shift1(7 downto 1) <= shift1(6 downto 0) ;
-					shift2(7 downto 1) <= shift2(6 downto 0) ;
-					shift3(7 downto 1) <= shift3(6 downto 0) ;
-				end case;
+				else
+					case x(2 downto 0) is
+					when "111" =>
+						if flip_x='0' then
+							shift0	<= data0;
+							shift1	<= data1;
+							shift2	<= data2;
+							if smode_M4='1' then
+								shift3	<= vram_D;
+							else
+								shift3 <= data3;
+							end if;
+						else
+							shift0	<= data0(0)&data0(1)&data0(2)&data0(3)&data0(4)&data0(5)&data0(6)&data0(7);
+							shift1	<= data1(0)&data1(1)&data1(2)&data1(3)&data1(4)&data1(5)&data1(6)&data1(7);
+							shift2	<= data2(0)&data2(1)&data2(2)&data2(3)&data2(4)&data2(5)&data2(6)&data2(7);
+							shift3	<= vram_D(0)&vram_D(1)&vram_D(2)&vram_D(3)&vram_D(4)&vram_D(5)&vram_D(6)&vram_D(7);
+						end if;
+						palette_shift <= palette;
+						priority	<= priority_latch;
+					when others =>
+						shift0(7 downto 1) <= shift0(6 downto 0) ;
+						shift1(7 downto 1) <= shift1(6 downto 0) ;
+						shift2(7 downto 1) <= shift2(6 downto 0) ;
+						shift3(7 downto 1) <= shift3(6 downto 0) ;
+					end case;
+				end if;
 			end if;
 		end if;
 	end process;
 	
-	color(0) <= shift0(7);
-	color(1) <= shift1(7);
-	color(2) <= shift2(7);
-	color(3) <= shift3(7);
+	color(0) <= shift0(7) when text_mode='0' else text_fg_color(0) when text_shift(5)='1' else overscan(0);
+	color(1) <= shift1(7) when text_mode='0' else text_fg_color(1) when text_shift(5)='1' else overscan(1);
+	color(2) <= shift2(7) when text_mode='0' else text_fg_color(2) when text_shift(5)='1' else overscan(2);
+	color(3) <= shift3(7) when text_mode='0' else text_fg_color(3) when text_shift(5)='1' else overscan(3);
+	color(4) <= '0' when text_mode='1' else palette_shift;
 end architecture;
 

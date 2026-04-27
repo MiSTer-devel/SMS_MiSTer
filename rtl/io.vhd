@@ -1,5 +1,6 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 entity io is
     Port(
@@ -51,6 +52,14 @@ entity io is
 		paddle:	in  STD_LOGIC_VECTOR(7 downto 0);
 		paddle2:	in  STD_LOGIC_VECTOR(7 downto 0);
 		pedal:	in  STD_LOGIC_VECTOR(7 downto 0);
+		palettemode:in STD_LOGIC;
+		sc3000_en:in STD_LOGIC;
+		sc_multicart_en:in STD_LOGIC;
+		sc_megacart_en:in STD_LOGIC;
+		sk1100_en:in STD_LOGIC;
+		sc_multicart_page:out STD_LOGIC_VECTOR(6 downto 0);
+		sk1100_row_sel:out STD_LOGIC_VECTOR(2 downto 0);
+		sk1100_row_data:in STD_LOGIC_VECTOR(11 downto 0);
 		pal:		in	 STD_LOGIC;
 		gg:		in  STD_LOGIC;
 		systeme:	in  STD_LOGIC;
@@ -67,12 +76,30 @@ architecture rtl of io is
 	signal gg_pdr:	std_logic_vector(7 downto 0) := (others=>'0');
 	signal j1_th_dir: std_logic := '0';
 	signal j2_th_dir: std_logic := '0';
+	signal sg_mode: std_logic;
+	signal sk1100_active: std_logic;
+	signal sc_multicart_latch: std_logic_vector(7 downto 0) := (others=>'1');
+	signal sk1100_port_c: std_logic_vector(7 downto 0) := (others=>'1');
+	signal sk1100_port_a: std_logic_vector(7 downto 0);
+	signal sk1100_port_b: std_logic_vector(3 downto 0);
 	signal analog_select: std_logic;
 	signal analog_player: std_logic;
 	signal analog_upper: std_logic;
 	-- signal gg_sctrl:	std_logic_vector(7 downto 3) := "00111";
 
 begin
+
+	sg_mode <= '1' when (palettemode='1' or sc3000_en='1' or sk1100_en='1') and gg='0' and systeme='0' else '0';
+	sk1100_active <= '1' when (sc3000_en='1' or sk1100_en='1') and sg_mode='1' else '0';
+	-- Survivors multicart family:
+	-- Mk II uses Q0..Q4 plus Q6 for 64x32KB slots.
+	-- The older Megacart extends that to 128x32KB using Q7 as the extra slot bit,
+	-- while Q5 remains unused in the menu paging scheme
+	sc_multicart_page <= sc_multicart_latch(7) & sc_multicart_latch(6) & sc_multicart_latch(4 downto 0) when sc_megacart_en='1' else
+						 '0' & sc_multicart_latch(6) & sc_multicart_latch(4 downto 0);
+	sk1100_row_sel <= sk1100_port_c(2 downto 0);
+	sk1100_port_a <= sk1100_row_data(7 downto 0);
+	sk1100_port_b <= sk1100_row_data(11 downto 8);
 
 	process (clk, RESET_n)
 	begin
@@ -82,6 +109,8 @@ begin
 			gg_txd <= x"00" ;
 			gg_rxd <= x"FF";
 			gg_pdr <= x"00";
+			sc_multicart_latch <= x"FF";
+			sk1100_port_c <= x"FF";
 			analog_select <= '0';
 			analog_player <= '0';
 			-- gg_sctrl <= "00111" ;
@@ -110,6 +139,27 @@ begin
 					analog_upper  <= D_in(2); -- upperbits ridleofp
 					analog_select <= D_in(0); -- analog select(paddle, pedal) hangonjr
 				end if;
+			elsif sc_multicart_en='1' and A(7 downto 5)="111" then
+				if WR_n='0' then
+					sc_multicart_latch <= D_in;
+				end if;
+			elsif sg_mode='1' and sk1100_active='1' and A(7 downto 5)="110" then
+				if WR_n='0' then
+					case A(1 downto 0) is
+						when "10" =>
+							sk1100_port_c <= D_in;
+						when "11" =>
+							if D_in(7)='0' then
+								sk1100_port_c(to_integer(unsigned(D_in(3 downto 1)))) <= D_in(0);
+							end if;
+						when others =>
+							null;
+					end case;
+				end if;
+			elsif sg_mode='1' and sk1100_active='0' and (A = x"DE" or A = x"DF") then
+				-- Plain SG-1000 carts don't have the SC-3000/SK-1100 PPI attached.
+				-- Ignore these writes so they don't accidentally hit the SMS control port.
+				null;
 			elsif A(0)='1' then
 --				if WR_n='0' and ((A(7 downto 4)/="0000") or (A(3 downto 0)="0000")) then
 				if WR_n='0' then
@@ -224,6 +274,20 @@ begin
 					D_out <= x"00"; -- analog (paddle, pedal, dial)
 				elsif systeme='1' and A(7 downto 0)=x"fb" then
 					D_out <= x"FF"; -- analog (paddle, pedal, dial)
+				elsif sg_mode='1' and sk1100_active='1' and A(7 downto 5)="110" then
+					case A(1 downto 0) is
+						when "00" =>
+							D_out <= sk1100_port_a;
+						when "01" =>
+							D_out(7 downto 4) <= "0111";
+							D_out(3 downto 0) <= sk1100_port_b;
+						when "10" =>
+							D_out <= sk1100_port_c;
+						when others =>
+							D_out <= x"FF";
+					end case;
+				elsif sg_mode='1' and sk1100_active='0' and (A = x"DE" or A = x"DF") then
+					D_out <= x"FF";
 				elsif A(0)='0' then
 					D_out(7) <= J2_down;
 					D_out(6) <= J2_up;

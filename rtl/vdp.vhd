@@ -91,6 +91,7 @@ architecture Behavioral of vdp is
 	signal spr_tall:			std_logic := '0';
 	signal spr_wide:			std_logic := '0';
 	signal spr_high_bits:	std_logic_vector(2 downto 0) := "000";
+	signal legacy_fg_color:	std_logic_vector(3 downto 0) := (others=>'0');
 
 	-- various counters
 	signal last_x0:			std_logic := '0';
@@ -155,7 +156,11 @@ begin
 		display_on		=> display_on,
 		mask_column0	=> mask_column0,
 		black_column	=> black_column,
+		mode_M1_raw		=> mode_M1,
+		mode_M2_raw		=> mode_M2,
+		mode_M3_raw		=> mode_M3,
 		overscan			=> overscan,
+		text_fg_color	=> legacy_fg_color,
 
 		bg_address		=> bg_address,
 		m2mg_address	=> m2mg_address,
@@ -244,6 +249,7 @@ begin
 			mode_M2			<= '0';
 			mode_M3			<= '0';
 			mode_M4			<= '1';
+			legacy_fg_color <= (others=>'0');
 			
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
@@ -307,6 +313,7 @@ begin
 							when "100110" =>
 								spr_high_bits	<= xram_cpu_A(2 downto 0);
 							when "100111" =>
+								legacy_fg_color <= xram_cpu_A(7 downto 4);
 								overscan			<= xram_cpu_A(3 downto 0);
 							when "101000" =>
 								bg_scroll_x		<= xram_cpu_A(7 downto 0);
