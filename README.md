@@ -14,6 +14,7 @@ This core is a port of Ben's Sega Master System implementation for the Papilio. 
 * Extended Game Gear Resolution Option
 * Z80 Turbo Option
 * Lightgun, Paddle controls, Keyboard(SK-1100) and Multitap Support
+* Gear to Gear link cable over USERIO
 
 ## Where to Download
 
