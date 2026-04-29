@@ -37,7 +37,74 @@ entity vdp is
 		smode_M3: 		out STD_LOGIC;
 		smode_M4: 		out STD_LOGIC;
 		ysj_quirk:		in  STD_LOGIC;
-		reset_n:       in  STD_LOGIC);
+		reset_n:       in  STD_LOGIC;
+
+		-- ----------------------------------------------------------------
+		-- Save-state interface
+		-- ----------------------------------------------------------------
+		-- Snapshot of VDP control registers (packed, combinational):
+		--  [0]            disable_hscroll
+		--  [1]            disable_vscroll
+		--  [2]            mask_column0
+		--  [3]            irq_line_en
+		--  [4]            spr_shift
+		--  [5]            mode_M4
+		--  [6]            mode_M2  (reg 0, bit 1)
+		--  [7]            display_on
+		--  [8]            irq_frame_en
+		--  [9]            mode_M1
+		--  [10]           mode_M3
+		--  [11]           spr_tall
+		--  [12]           spr_wide
+		--  [16:13]        bg_address
+		--  [19:17]        m2mg_address
+		--  [27:20]        m2ct_address
+		--  [35:28]        bg_scroll_x
+		--  [43:36]        bg_scroll_y
+		--  [50:44]        spr_address
+		--  [53:51]        spr_high_bits
+		--  [57:54]        legacy_fg_color
+		--  [61:58]        overscan
+		--  [69:62]        irq_line_count
+		--  [83:70]        xram_cpu_A
+		--  [84]           address_ff
+		--  [85]           to_cram
+		--  [93:86]        vram_cpu_D_outl  (read-latch)
+		--  [101:94]       cram_latch       (GG CRAM low-byte latch)
+		--  [102]          xram_cpu_read
+		--  [103]          reset_flags
+		--  [111:104]      hbl_counter
+		--  [114:112]      irq_delay
+		--  [115]          vbl_irq
+		--  [116]          hbl_irq
+		--  [117]          collide_flag
+		--  [118]          overflow_flag
+		--  [119]          line_overflow
+		--  [120]          last_x0
+		-- Total: 121 bits -> packed into ss_regs[127:0] (16 bytes, 2 DDRAM words)
+		ss_regs_out    : out STD_LOGIC_VECTOR(127 downto 0);
+		-- Restore: load all VDP control registers at once (held one cycle while ss_regs_set='1')
+		ss_regs_in     : in  STD_LOGIC_VECTOR(127 downto 0) := (others => '0');
+		ss_regs_set    : in  STD_LOGIC := '0';
+
+		-- CRAM snapshot (32 × 12 bits = 384 bits, combinational)
+		ss_cram_out    : out STD_LOGIC_VECTOR(383 downto 0);
+		-- CRAM restore: write one entry per cycle
+		ss_cram_wr     : in  STD_LOGIC := '0';
+		ss_cram_A      : in  STD_LOGIC_VECTOR(4 downto 0) := (others => '0');
+		ss_cram_D      : in  STD_LOGIC_VECTOR(11 downto 0) := (others => '0');
+
+		-- VRAM DMA read port (for save-state serialisation)
+		-- Present stable address on ss_vram_A for one clk_sys cycle; data is
+		-- available on ss_vram_D two cycles later (dpram latency).
+		ss_vram_en     : in  STD_LOGIC := '0';  -- '1' = port A belongs to DMA FSM
+		ss_vram_A      : in  STD_LOGIC_VECTOR(14 downto 0) := (others => '0');
+		ss_vram_D      : out STD_LOGIC_VECTOR(7 downto 0);
+		-- VRAM DMA write port (for restore)
+		ss_vram_WE     : in  STD_LOGIC := '0';
+		ss_vram_WA     : in  STD_LOGIC_VECTOR(14 downto 0) := (others => '0');
+		ss_vram_WD     : in  STD_LOGIC_VECTOR(7 downto 0) := (others => '0')
+	);
 end vdp;
 
 architecture Behavioral of vdp is
@@ -59,10 +126,16 @@ architecture Behavioral of vdp is
 	signal xram_cpu_A:		std_logic_vector(13 downto 0);
 	signal vram_cpu_WE:		std_logic;
 	signal cram_cpu_WE:		std_logic;
-	signal vram_cpu_D_out:	std_logic_vector(7 downto 0);	
+	signal vram_cpu_D_out:	std_logic_vector(7 downto 0);
+	signal vram_cpu_D_out_raw: std_logic_vector(7 downto 0);  -- raw port-A output (shared with SS DMA)
 	signal vram_cpu_D_outl:	std_logic_vector(7 downto 0);	
 	signal xram_cpu_A_incr:	std_logic := '0';
 	signal xram_cpu_read:	std_logic := '0';
+
+	-- internal muxed port-A signals for VRAM DPRAM
+	signal vram_portA_address : std_logic_vector(14 downto 0);
+	signal vram_portA_wren    : std_logic;
+	signal vram_portA_data    : std_logic_vector(7 downto 0);
 	
 	-- vram and cram lines for the video interface
 	signal vram_vdp_A:		std_logic_vector(13 downto 0);
@@ -176,7 +249,14 @@ begin
 		spr_overflow	=> spr_overflow);
 
     
-  vdp_vram_inst : entity work.dpram
+	-- combine/mux port-A signals for DPRAM
+	vram_portA_address <= ss_vram_WA when ss_vram_WE='1' else
+												ss_vram_A  when ss_vram_en='1' else
+												vram_cpu_A;
+	vram_portA_wren    <= ss_vram_WE or (vram_cpu_WE and not ss_vram_en);
+	vram_portA_data    <= ss_vram_WD when ss_vram_WE='1' else D_in;
+
+	vdp_vram_inst : entity work.dpram
     generic map
     (
       widthad_a		=> 15
@@ -184,10 +264,11 @@ begin
     port map
     (
       clock_a			=> clk_sys,
-      address_a		=> vram_cpu_A,
-      wren_a			=> vram_cpu_WE,
-      data_a			=> D_in,
-      q_a				=> vram_cpu_D_out,
+			-- During SS DMA the CPU is frozen; port A is driven by internal mux
+			address_a		=> vram_portA_address,
+			wren_a			=> vram_portA_wren,
+			data_a			=> vram_portA_data,
+      q_a				=> vram_cpu_D_out_raw,
 
       clock_b			=> clk_sys,
       address_b		=> se_bank & vram_vdp_A,
@@ -195,6 +276,10 @@ begin
       data_b			=> (others => '0'),
       q_b				=> vram_vdp_D
     );
+
+  -- Route port-A read data: during SS read DMA use it as ss_vram_D
+  ss_vram_D      <= vram_cpu_D_out_raw;
+  vram_cpu_D_out <= vram_cpu_D_out_raw;
 
 	vdp_cram_inst: entity work.vdp_cram
 	port map (
@@ -204,7 +289,11 @@ begin
 		cpu_D				=> cram_vdp_D_in,
 		vdp_clk			=> clk_sys,
 		vdp_A				=> cram_vdp_A,
-		vdp_D				=> cram_vdp_D
+		vdp_D				=> cram_vdp_D,
+		ss_D             => ss_cram_out,
+		ss_wr            => ss_cram_wr,
+		ss_A             => ss_cram_A,
+		ss_wD            => ss_cram_D
 	);
 
 	cram_vdp_A_in <= xram_cpu_A(4 downto 0) when gg='0' else xram_cpu_A(5 downto 1);
@@ -213,12 +302,55 @@ begin
 	cram_cpu_WE <= data_write when to_cram and ((gg='0') or (xram_cpu_A(0)='1')) and WR_direct='0' else '0';
 	vram_cpu_WE <= data_write when (WR_direct='1' or not to_cram) else '0';
 	vram_cpu_A <= not se_bank & A_direct & A when WR_direct='1' else se_bank & xram_cpu_A;
-	
+
+	-- ----------------------------------------------------------------
+	-- Save-state: VDP register snapshot (combinational)
+	-- ----------------------------------------------------------------
+	ss_regs_out(0)           	<= disable_hscroll;
+	ss_regs_out(1)           	<= disable_vscroll;
+	ss_regs_out(2)           	<= mask_column0;
+	ss_regs_out(3)           	<= irq_line_en;
+	ss_regs_out(4)           	<= spr_shift;
+	ss_regs_out(5)           	<= mode_M4;
+	ss_regs_out(6)           	<= mode_M2;
+	ss_regs_out(7)           	<= display_on;
+	ss_regs_out(8)           	<= irq_frame_en;
+	ss_regs_out(9)           	<= mode_M1;
+	ss_regs_out(10)          	<= mode_M3;
+	ss_regs_out(11)          	<= spr_tall;
+	ss_regs_out(12)          	<= spr_wide;
+	ss_regs_out(16 downto 13)	<= bg_address;
+	ss_regs_out(19 downto 17)	<= m2mg_address;
+	ss_regs_out(27 downto 20)	<= m2ct_address;
+	ss_regs_out(35 downto 28)	<= bg_scroll_x;
+	ss_regs_out(43 downto 36)	<= bg_scroll_y;
+	ss_regs_out(50 downto 44)	<= spr_address;
+	ss_regs_out(53 downto 51)	<= spr_high_bits;
+	ss_regs_out(57 downto 54)	<= legacy_fg_color;
+	ss_regs_out(61 downto 58)	<= overscan;
+	ss_regs_out(69 downto 62)	<= irq_line_count;
+	ss_regs_out(83 downto 70)	<= xram_cpu_A;
+	ss_regs_out(84)          	<= address_ff;
+	ss_regs_out(85)          	<= '1' when to_cram else '0';
+	ss_regs_out(93 downto 86) 	<= vram_cpu_D_outl;
+	ss_regs_out(101 downto 94)	<= cram_latch;
+	ss_regs_out(102)         	<= xram_cpu_read;
+	ss_regs_out(103)         	<= '1' when reset_flags else '0';
+	ss_regs_out(111 downto 104)	<= hbl_counter;
+	ss_regs_out(114 downto 112)	<= irq_delay;
+	ss_regs_out(115)         	<= vbl_irq;
+	ss_regs_out(116)         	<= hbl_irq;
+	ss_regs_out(117)         	<= collide_flag;
+	ss_regs_out(118)         	<= overflow_flag;
+	ss_regs_out(119)         	<= line_overflow;
+	ss_regs_out(120)         	<= last_x0;
+	ss_regs_out(127 downto 121)	<= (others => '0');
+
 	smode_M1 <= mode_M1 and mode_M2 ;
 	smode_M2 <= mode_M2;
 	smode_M3 <= mode_M3 and mode_M2 ;
 	smode_M4 <= mode_M4;
-	
+
 	process (clk_sys, reset_n)
 	variable reset_set: boolean ;
 	begin
@@ -251,6 +383,51 @@ begin
 		elsif rising_edge(clk_sys) then
 			data_write <= '0';
 			reset_set := false ;
+
+			-- Save-state register restore
+			if ss_regs_set = '1' then
+				disable_hscroll <= ss_regs_in(0);
+				disable_vscroll <= ss_regs_in(1);
+				mask_column0    <= ss_regs_in(2);
+				irq_line_en     <= ss_regs_in(3);
+				spr_shift       <= ss_regs_in(4);
+				mode_M4         <= ss_regs_in(5);
+				mode_M2         <= ss_regs_in(6);
+				display_on      <= ss_regs_in(7);
+				irq_frame_en    <= ss_regs_in(8);
+				mode_M1         <= ss_regs_in(9);
+				mode_M3         <= ss_regs_in(10);
+				spr_tall        <= ss_regs_in(11);
+				spr_wide        <= ss_regs_in(12);
+				bg_address      <= ss_regs_in(16 downto 13);
+				m2mg_address    <= ss_regs_in(19 downto 17);
+				m2ct_address    <= ss_regs_in(27 downto 20);
+				bg_scroll_x     <= ss_regs_in(35 downto 28);
+				bg_scroll_y     <= ss_regs_in(43 downto 36);
+				spr_address     <= ss_regs_in(50 downto 44);
+				spr_high_bits   <= ss_regs_in(53 downto 51);
+				legacy_fg_color <= ss_regs_in(57 downto 54);
+				overscan        <= ss_regs_in(61 downto 58);
+				irq_line_count  <= ss_regs_in(69 downto 62);
+				xram_cpu_A      <= ss_regs_in(83 downto 70);
+				address_ff      <= ss_regs_in(84);
+				to_cram         <= (ss_regs_in(85) = '1');
+				vram_cpu_D_outl <= ss_regs_in(93 downto 86);
+				cram_latch      <= ss_regs_in(101 downto 94);
+				xram_cpu_read   <= ss_regs_in(102);
+				-- reset_flags is a one-cycle side-effect of status-port reads.
+				-- Restoring it as '1' can clear freshly restored IRQ/status latches
+				-- on the first ce_vdp after unfreeze.
+				reset_flags     <= false;
+				-- Re-prime edge detectors to the live bus levels so the first
+				-- ce_vdp after unfreeze does not see a phantom RD/WR transition.
+				old_WR_n        <= WR_n;
+				old_RD_n        <= RD_n;
+				old_WR_direct   <= WR_direct;
+				old_HL          <= HL;
+				data_write      <= '0';
+				xram_cpu_A_incr <= '0';
+			end if;
 
 			old_HL <= HL;
 			if old_HL = '0' and HL = '1' then
@@ -366,7 +543,11 @@ begin
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
-			if ce_vdp = '1' then
+			if ss_regs_set = '1' then
+				-- vbl_irq is transient; starting from asserted state can trigger
+				-- immediate post-restore interrupts on rapid consecutive loads.
+				vbl_irq <= '0';
+			elsif ce_vdp = '1' then
 --				485 instead of 487 to please VDPTEST 
 				if	x=485 and ((y=224 and xmode_M1='1') 
 					  or (y=240 and xmode_M3='1') 
@@ -383,7 +564,16 @@ begin
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
-			if ce_vdp = '1' then
+			if ss_regs_set = '1' then
+				last_x0 <= ss_regs_in(120);
+				-- Restore hbl_counter to irq_line_count, not the mid-frame save-time value.
+				-- We always unfreeze at VBlank end (y=0), where hbl_counter must equal
+				-- irq_line_count (reloaded from it every VBlank by the normal logic).
+				-- Restoring the save-time countdown would cause the first post-restore
+				-- line IRQ to fire at the wrong scanline → garbled scroll effects.
+				hbl_counter <= ss_regs_in(69 downto 62); -- irq_line_count
+				hbl_irq <= '0';
+			elsif ce_vdp = '1' then
 				last_x0 <= std_logic(x(0));
 				if x=486 and not (last_x0=std_logic(x(0))) then
 					if y<192 or (y<240 and xmode_M3='1') or (y<224 and xmode_M1='1') or y=511 then
@@ -406,51 +596,58 @@ begin
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
-		   -- using the other phase of ce_vdp permits to please VDPTEST ovr HCounter
-			-- very tight condition; 
-		   if ce_vdp = '0' then
-				if  (x<256 or x>485) and (y<234 or y>=496) then
-					if spr_overflow='1' and line_overflow='0' then
-						overflow_flag <= '1';
-						line_overflow <= '1';
-					end if ;
-				else	
-					line_overflow <= '0' ;
-				end if;
-			end if ;
-			
-			if ce_vdp = '1' then
-				xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0) ;
-				if (x<=256) then
-					xspr_collide_shift(0) <= spr_collide ;
-				else
-					xspr_collide_shift(0) <= '0' ;
-				end if;
-				if xspr_collide_shift(13)='1'  and 
-					display_on='1' and
-					(y<234 or (xmode_M1='0' and xmode_M3='0' and y>=496)) 
-				then
-					collide_flag <= '1' ;
-				end if;
-
-				if reset_flags then
-					collide_flag <= '0' ;
-					overflow_flag <= '0';
-					line_overflow <= '1'; -- Spr over many lines   
-				end if;
-
-				if ((vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1'))
-					and not reset_flags then
-					if irq_delay = "000" then
-						IRQ_n <= '0';
+			if ss_regs_set = '1' then
+				irq_delay     <= "111";
+				collide_flag  <= ss_regs_in(117);
+				overflow_flag <= ss_regs_in(118);
+				line_overflow <= ss_regs_in(119);
+				IRQ_n         <= '1';
+			else
+				-- using the other phase of ce_vdp permits to please VDPTEST ovr HCounter
+				-- very tight condition;
+				if ce_vdp = '0' then
+					if (x<256 or x>485) and (y<234 or y>=496) then
+						if spr_overflow='1' and line_overflow='0' then
+							overflow_flag <= '1';
+							line_overflow <= '1';
+						end if;
 					else
-						irq_delay <= irq_delay - 1;
+						line_overflow <= '0';
 					end if;
-				else
-					IRQ_n <= '1';
-					irq_delay <= "111";
 				end if;
 
+				if ce_vdp = '1' then
+					xspr_collide_shift(13 downto 1) <= xspr_collide_shift(12 downto 0);
+					if (x<=256) then
+						xspr_collide_shift(0) <= spr_collide;
+					else
+						xspr_collide_shift(0) <= '0';
+					end if;
+					if xspr_collide_shift(13)='1' and
+						display_on='1' and
+						(y<234 or (xmode_M1='0' and xmode_M3='0' and y>=496))
+					then
+						collide_flag <= '1';
+					end if;
+
+					if reset_flags then
+						collide_flag <= '0';
+						overflow_flag <= '0';
+						line_overflow <= '1'; -- Spr over many lines
+					end if;
+
+					if ((vbl_irq='1' and irq_frame_en='1') or (hbl_irq='1' and irq_line_en='1'))
+						and not reset_flags then
+						if irq_delay = "000" then
+							IRQ_n <= '0';
+						else
+							irq_delay <= irq_delay - 1;
+						end if;
+					else
+						IRQ_n <= '1';
+						irq_delay <= "111";
+					end if;
+				end if;
 			end if;
 		end if;
 	end process;

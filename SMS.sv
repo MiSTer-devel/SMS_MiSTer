@@ -190,7 +190,8 @@ assign LED_POWER = 0;
 assign BUTTONS   = osd_btn;
 assign VGA_SCALER= 0;
 assign VGA_DISABLE = 0;
-assign HDMI_FREEZE = 0;
+wire ss_freeze;
+assign HDMI_FREEZE = ss_freeze;
 assign HDMI_BLACKOUT = 0;
 assign HDMI_BOB_DEINT = 0;
 assign FB_FORCE_BLANK = 0;
@@ -208,7 +209,7 @@ end
 wire video_rotated;
 wire no_rotate = ~status[41];
 wire flip = status[42];
-wire rotate_ccw = 0;
+wire rotate_ccw = 1'b0;
 wire [5:0] arx, ary;
 
 always_comb begin
@@ -238,7 +239,36 @@ end
 
 wire [1:0] ar = status[27:26];
 wire vga_de;
-screen_rotate screen_rotate (.*);
+screen_rotate screen_rotate (
+	.CLK_VIDEO     (CLK_VIDEO),
+	.CE_PIXEL      (CE_PIXEL),
+	.VGA_R         (VGA_R),
+	.VGA_G         (VGA_G),
+	.VGA_B         (VGA_B),
+	.VGA_HS        (VGA_HS),
+	.VGA_VS        (VGA_VS),
+	.VGA_DE        (VGA_DE),
+	.rotate_ccw    (rotate_ccw),
+	.no_rotate     (no_rotate),
+	.flip          (flip),
+	.video_rotated (video_rotated),
+	.FB_EN         (FB_EN),
+	.FB_FORMAT     (FB_FORMAT),
+	.FB_WIDTH      (FB_WIDTH),
+	.FB_HEIGHT     (FB_HEIGHT),
+	.FB_BASE       (FB_BASE),
+	.FB_STRIDE     (FB_STRIDE),
+	.FB_VBL        (FB_VBL),
+	.FB_LL         (FB_LL),
+	.DDRAM_CLK     (sr_ddram_clk),
+	.DDRAM_BUSY    (DDRAM_BUSY),
+	.DDRAM_BURSTCNT(sr_ddram_burstcnt),
+	.DDRAM_ADDR    (sr_ddram_addr),
+	.DDRAM_DIN     (sr_ddram_din),
+	.DDRAM_BE      (sr_ddram_be),
+	.DDRAM_WE      (sr_ddram_we),
+	.DDRAM_RD      (sr_ddram_rd)
+);
 video_freak video_freak
 (
 	.*,
@@ -260,10 +290,14 @@ video_freak video_freak
 
 `include "build_id.v"
 parameter CONF_STR = {
-	"SMS;;",
+	"SMS;SS3E000000:10000;",
 	"-;",
 	"H8FS1,SMSSG SC ;",
 	"H8FS2,GG;",
+	"-;",
+	"H8O[16:15],SaveState Slot,1,2,3,4;",
+	"H8R[61],Save State (Alt+F1);",
+	"H8R[62],Load State (F1);",
 	"DIP;",
 	"-;",
 	"C,Cheats;",
@@ -276,7 +310,7 @@ parameter CONF_STR = {
 
 	"H8OA,Region,US/EU,Japan;",
 	"H8oBC,BIOS,Disable,Internal,Ext. File;",
-	"H8FS3,BINSMS,Load Ext. BIOS;",
+	"H8F3,BINSMS,Load Ext. BIOS;",
 	"H8O[48:45],Mapper,Auto,Sega,Codemasters,Dahjee A,Linear,Zemina/MSX;",
 	"H8o8,Z80 Speed,Normal,Turbo;",
 	"H8-;",
@@ -484,6 +518,7 @@ wire  [8:0] sd_buff_addr;
 wire  [7:0] sd_buff_dout;
 wire  [7:0] sd_buff_din;
 wire        sd_buff_wr;
+
 wire        img_mounted;
 wire        img_readonly;
 wire [63:0] img_size;
@@ -842,6 +877,51 @@ wire        ram_we;
 wire  [7:0] ram_d;
 wire  [7:0] ram_q;
 
+// Save-state wires
+wire [7:0]  ss_ddram_burstcnt;
+wire [28:0] ss_ddram_addr;
+wire [63:0] ss_ddram_din;
+wire [7:0]  ss_ddram_be;
+wire        ss_ddram_we;
+wire        ss_ddram_rd;
+wire [211:0] ss_z80_reg, ss_z80_dir;
+wire         ss_z80_set;
+wire         ss_z80_m1_n;
+wire         ss_z80_mreq_n;   // low = normal opcode fetch, high = interrupt ack
+wire   [1:0] ss_z80_iset;     // "00" = clean instruction boundary (no prefix)
+wire [127:0] ss_vdp_regs, ss_vdp_regs_in;
+wire         ss_vdp_regs_set;
+wire [383:0] ss_vdp_cram;
+wire  [4:0]  ss_cram_A;
+wire [11:0]  ss_cram_D;
+wire         ss_cram_wr;
+wire         ss_vram_en;
+wire [14:0]  ss_vram_A, ss_vram_WA;
+wire  [7:0]  ss_vram_D, ss_vram_WD;
+wire         ss_vram_WE;
+wire [55:0]  ss_psg_out, ss_psg_in;
+wire         ss_psg_set;
+wire [63:0]  ss_mapper_out, ss_mapper_in;
+wire         ss_mapper_set;
+wire [13:0]  ss_wram_A, ss_wram_WA;
+wire  [7:0]  ss_wram_WD;
+wire         ss_wram_WE;
+wire [1:0]   ss_slot;
+wire         ss_save_raw, ss_load_raw;
+wire         ss_save, ss_load;
+wire         ss_bios_mode = bios_en & ~dbr;
+wire         ss_state_allowed = dbr | ss_bios_mode;
+assign ss_save = ss_save_raw & ss_state_allowed;
+assign ss_load = ss_load_raw & ss_state_allowed;
+
+wire        sr_ddram_clk;
+wire [7:0]  sr_ddram_burstcnt;
+wire [28:0] sr_ddram_addr;
+wire [63:0] sr_ddram_din;
+wire [7:0]  sr_ddram_be;
+wire        sr_ddram_we;
+wire        sr_ddram_rd;
+
 wire [3:0] mapper_sel = status[48:45];
 wire mapper_force_sega      = (mapper_sel == 4'd1) & ~systeme;
 wire mapper_force_codies    = (mapper_sel == 4'd2);
@@ -854,13 +934,20 @@ wire        nvram_we;
 wire  [7:0] nvram_d;
 wire  [7:0] nvram_q;
 
+// NVRAM DMA wires (savestates → nvram_inst during ss_freeze)
+wire [12:0] ss_nvram_A;    // DMA read address
+wire        ss_nvram_WE;   // DMA write enable
+wire [12:0] ss_nvram_WA;   // DMA write address
+wire  [7:0] ss_nvram_WD;   // DMA write data
+// nvram_q feeds ss_nvram_D directly (read data back to savestates)
+
 system #(63) system
 (
 	.clk_sys(clk_sys),
-	.ce_cpu(ce_cpu),
-	.ce_vdp(ce_vdp),
-	.ce_pix(ce_pix),
-	.ce_sp(ce_sp),
+	.ce_cpu(ce_cpu & ~ss_freeze),
+	.ce_vdp(ce_vdp & ~ss_freeze),
+	.ce_pix(ce_pix & ~ss_freeze),
+	.ce_sp(ce_sp  & ~ss_freeze),
 	.turbo(turbo),
 	.gg(gg),
 	.ggres(ggres),
@@ -977,8 +1064,118 @@ system #(63) system
 	.ROMAD(ioctl_addr),
 	.ROMDT(ioctl_dout),
 	.ROMEN(ioctl_wr & ((ioctl_index[4:0]==1) || (ioctl_index[4:0]==2))),
-	.BIOSWEN(ioctl_wr & (ioctl_index[4:0]==3))
+	.BIOSWEN(ioctl_wr & (ioctl_index[4:0]==3)),
+
+	// Save-state interface
+	.z80_reg_out (ss_z80_reg),
+	.z80_dir     (ss_z80_dir),
+	.z80_set     (ss_z80_set),
+	.vdp_regs_out(ss_vdp_regs),
+	.vdp_regs_in (ss_vdp_regs_in),
+	.vdp_regs_set(ss_vdp_regs_set),
+	.vdp_cram_out(ss_vdp_cram),
+	.ss_cram_wr  (ss_cram_wr),
+	.ss_cram_A   (ss_cram_A),
+	.ss_cram_D   (ss_cram_D),
+	.ss_vram_en  (ss_vram_en),
+	.ss_vram_A   (ss_vram_A),
+	.ss_vram_D   (ss_vram_D),
+	.ss_vram_WE  (ss_vram_WE),
+	.ss_vram_WA  (ss_vram_WA),
+	.ss_vram_WD  (ss_vram_WD),
+	.psg_out     (ss_psg_out),
+	.psg_in      (ss_psg_in),
+	.psg_set     (ss_psg_set),
+	.mapper_out  (ss_mapper_out),
+	.mapper_in   (ss_mapper_in),
+	.mapper_set  (ss_mapper_set),
+	.z80_m1_n    (ss_z80_m1_n),
+	.z80_mreq_n  (ss_z80_mreq_n),
+	.z80_iset    (ss_z80_iset)
 );
+
+savestate_ui savestate_ui_inst (
+	.clk    (clk_sys),
+	.status (status),
+	.ps2_key(ps2_key),
+	.ss_slot(ss_slot),
+	.ss_save(ss_save_raw),
+	.ss_load(ss_load_raw)
+);
+
+savestates savestates_inst (
+	.clk             (clk_sys),
+	.reset_n         (~reset_active),
+	.ss_save         (ss_save),
+	.ss_load         (ss_load),
+	.ss_slot         (ss_slot),
+	.ss_bios_mode    (ss_bios_mode),
+	.ss_freeze       (ss_freeze),
+	.vblank          (VBlank),
+	// Z80
+	.z80_reg         (ss_z80_reg),
+	.z80_dir         (ss_z80_dir),
+	.z80_set         (ss_z80_set),
+	.z80_m1_n        (ss_z80_m1_n),
+	.z80_mreq_n      (ss_z80_mreq_n),
+	.z80_iset        (ss_z80_iset),
+	.cpu_ce          (ce_cpu),
+	.vdp_ce          (ce_vdp),
+	// VDP registers
+	.vdp_regs        (ss_vdp_regs),
+	.vdp_regs_in     (ss_vdp_regs_in),
+	.vdp_regs_set    (ss_vdp_regs_set),
+	// CRAM
+	.cram_out        (ss_vdp_cram),
+	.cram_A          (ss_cram_A),
+	.cram_D          (ss_cram_D),
+	.cram_wr         (ss_cram_wr),
+	// VRAM DMA
+	.vram_en         (ss_vram_en),
+	.vram_A          (ss_vram_A),
+	.vram_D          (ss_vram_D),
+	.vram_WE         (ss_vram_WE),
+	.vram_WA         (ss_vram_WA),
+	.vram_WD         (ss_vram_WD),
+	// PSG
+	.psg_out         (ss_psg_out),
+	.psg_in          (ss_psg_in),
+	.psg_set         (ss_psg_set),
+	// Mapper
+	.mapper_out      (ss_mapper_out),
+	.mapper_in       (ss_mapper_in),
+	.mapper_set      (ss_mapper_set),
+	// WRAM DMA
+	.wram_A          (ss_wram_A),
+	.wram_D          (ram_q),
+	.wram_WE         (ss_wram_WE),
+	.wram_WA         (ss_wram_WA),
+	.wram_WD         (ss_wram_WD),
+	// NVRAM DMA (Dahjee A expansion RAM)
+	.nvram_A         (ss_nvram_A),
+	.nvram_D         (nvram_q),
+	.nvram_WE        (ss_nvram_WE),
+	.nvram_WA        (ss_nvram_WA),
+	.nvram_WD        (ss_nvram_WD),
+	// DDRAM
+	.DDRAM_ADDR      (ss_ddram_addr),
+	.DDRAM_DIN       (ss_ddram_din),
+	.DDRAM_BE        (ss_ddram_be),
+	.DDRAM_WE        (ss_ddram_we),
+	.DDRAM_DOUT      (DDRAM_DOUT),
+	.DDRAM_DOUT_READY(DDRAM_DOUT_READY),
+	.DDRAM_RD        (ss_ddram_rd),
+	.DDRAM_BURSTCNT  (ss_ddram_burstcnt),
+	.DDRAM_BUSY      (DDRAM_BUSY)
+);
+
+assign DDRAM_CLK      = clk_sys; // always stable; sr_ddram_clk (CLK_VIDEO) would glitch on ss_freeze toggle
+assign DDRAM_BURSTCNT = ss_freeze ? ss_ddram_burstcnt : sr_ddram_burstcnt;
+assign DDRAM_ADDR     = ss_freeze ? ss_ddram_addr     : sr_ddram_addr;
+assign DDRAM_DIN      = ss_freeze ? ss_ddram_din      : sr_ddram_din;
+assign DDRAM_BE       = ss_freeze ? ss_ddram_be       : sr_ddram_be;
+assign DDRAM_WE       = ss_freeze ? ss_ddram_we       : sr_ddram_we;
+assign DDRAM_RD       = ss_freeze ? ss_ddram_rd       : sr_ddram_rd;
 
 wire [12:0] key_a;
 wire [7:0] key_d;
@@ -1131,9 +1328,10 @@ end
 spram #(.widthad_a(14)) ram_inst
 (
 	.clock     (clk_sys),
-	.address   (ram_clr_run ? ram_clr_addr : (systeme ? ram_a : {1'b0,ram_a[12:0]})),
-	.wren      (ram_clr_run | ram_we),
-	.data      (ram_clr_run ? 8'h00 : ram_d),
+	.address   (ss_freeze ? (ss_wram_WE ? ss_wram_WA : ss_wram_A) :
+	             (ram_clr_run ? ram_clr_addr : (systeme ? ram_a : {1'b0,ram_a[12:0]}))),
+	.wren      (ss_freeze ? ss_wram_WE : (ram_clr_run | ram_we)),
+	.data      (ss_freeze ? ss_wram_WD : (ram_clr_run ? 8'h00 : ram_d)),
 	.q         (ram_q)
 );
 
@@ -1258,12 +1456,12 @@ end
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
-	.address_a   (nvram_a),
-	.wren_a      (nvram_we),
-	.data_a      (nvram_d),
+	.address_a   (ss_freeze ? (ss_nvram_WE ? {2'b00, ss_nvram_WA} : {2'b00, ss_nvram_A}) : nvram_a),
+	.wren_a      (ss_freeze ? ss_nvram_WE : nvram_we),
+	.data_a      (ss_freeze ? ss_nvram_WD : nvram_d),
 	.q_a         (nvram_q),
 	.clock_b     (clk_sys),
-	.address_b   ({sd_lba[5:0],sd_buff_addr}),
+	.address_b   ({sd_lba[5:0],sd_buff_addr[8:0]}),
 	.wren_b      (sd_buff_wr & sd_ack),
 	.data_b      (sd_buff_dout),
 	.q_b         (sd_buff_din)
@@ -1275,6 +1473,7 @@ reg bk_ena = 0;
 always @(posedge clk_sys) begin
 
 	old_downloading <= downloading;
+	if (eject_rom) bk_ena <= 0;
 	if(~old_downloading & downloading) bk_ena <= 0;
 
 	//Save file always mounted in the end of downloading state.

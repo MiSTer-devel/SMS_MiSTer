@@ -23,3 +23,5 @@ set_global_assignment -name VHDL_FILE rtl/system.vhd
 set_global_assignment -name VHDL_FILE rtl/io.vhd
 set_global_assignment -name VHDL_FILE rtl/AudioMix.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE SMS.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate_ui.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestates.sv

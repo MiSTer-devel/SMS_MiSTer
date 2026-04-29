@@ -121,7 +121,9 @@ entity T80 is
 		REG        : out std_logic_vector(211 downto 0); -- IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
 
 		DIRSet     : in  std_logic := '0';
-		DIR        : in  std_logic_vector(211 downto 0) := (others => '0') -- IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
+		DIR        : in  std_logic_vector(211 downto 0) := (others => '0'); -- IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
+		-- Prefix/instruction-set state: '00'=no prefix (clean save point)
+		ISet_out   : out std_logic_vector(1 downto 0)
 	);
 end T80;
 
@@ -257,6 +259,8 @@ architecture rtl of T80 is
 	signal DOR                  : std_logic_vector(127 downto 0);
 
 begin
+
+	ISet_out <= ISet;
 
 	REG <= IntE_FF2 & IntE_FF1 & IStatus & DOR & std_logic_vector(PC) & std_logic_vector(SP) & std_logic_vector(R) & I & Fp & Ap & F & ACC when Alternate = '0'
 			 else IntE_FF2 & IntE_FF1 & IStatus & DOR(127 downto 112) & DOR(47 downto 0) & DOR(63 downto 48) & DOR(111 downto 64) &
@@ -415,6 +419,10 @@ begin
 				PC  <= unsigned(DIR(79 downto 64));
 				A   <= DIR(79 downto 64);
 				IStatus <= DIR(209 downto 208);
+				ISet <= "00";
+				XY_State <= "00";
+				XY_Ind <= '0';
+				Alternate <= '0';
 
 			elsif ClkEn = '1' then
 				ALU_Op_r <= "0000";
@@ -1079,6 +1087,22 @@ begin
 			if DIRSet = '1' then
 				IntE_FF2 <= DIR(211);
 				IntE_FF1 <= DIR(210);
+				Halt_FF <= '0';
+				-- Restart from a clean opcode-fetch cycle after state restore.
+				-- Without this, stale MCycle/TState/IR context from pre-load execution
+				-- can continue with restored registers and cause immediate divergence.
+				MCycle <= "001";
+				TState <= "001";
+				M1_n <= '0';
+				IntCycle <= '0';
+				NMICycle <= '0';
+				Pre_XY_F_M <= "000";
+				No_BTR <= '0';
+				Auto_Wait_t1 <= '0';
+				Auto_Wait_t2 <= '0';
+				BusAck <= '0';
+				BusReq_s <= '0';
+				NMI_s <= '0';
 			else
 				if NMI_n = '0' and OldNMI_n = '1' then
 					NMI_s <= '1';

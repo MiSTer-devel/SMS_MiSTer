@@ -135,7 +135,37 @@ entity system is
 		ROMAD  : IN STD_LOGIC_VECTOR(24 downto 0);
 		ROMDT  : IN STD_LOGIC_VECTOR(7 downto 0);
 		ROMEN  : IN  STD_LOGIC;
-		BIOSWEN: IN  STD_LOGIC
+		BIOSWEN: IN  STD_LOGIC;
+
+		-- Save-state interface
+		z80_reg_out  : out STD_LOGIC_VECTOR(211 downto 0);
+		z80_dir      : in  STD_LOGIC_VECTOR(211 downto 0) := (others => '0');
+		z80_set      : in  STD_LOGIC := '0';
+		vdp_regs_out : out STD_LOGIC_VECTOR(127 downto 0);
+		vdp_regs_in  : in  STD_LOGIC_VECTOR(127 downto 0) := (others => '0');
+		vdp_regs_set : in  STD_LOGIC := '0';
+		vdp_cram_out : out STD_LOGIC_VECTOR(383 downto 0);
+		ss_cram_wr   : in  STD_LOGIC := '0';
+		ss_cram_A    : in  STD_LOGIC_VECTOR(4 downto 0)  := (others => '0');
+		ss_cram_D    : in  STD_LOGIC_VECTOR(11 downto 0) := (others => '0');
+		ss_vram_en   : in  STD_LOGIC := '0';
+		ss_vram_A    : in  STD_LOGIC_VECTOR(14 downto 0) := (others => '0');
+		ss_vram_D    : out STD_LOGIC_VECTOR(7 downto 0);
+		ss_vram_WE   : in  STD_LOGIC := '0';
+		ss_vram_WA   : in  STD_LOGIC_VECTOR(14 downto 0) := (others => '0');
+		ss_vram_WD   : in  STD_LOGIC_VECTOR(7 downto 0)  := (others => '0');
+		psg_out      : out STD_LOGIC_VECTOR(55 downto 0);
+		psg_in       : in  STD_LOGIC_VECTOR(55 downto 0) := (others => '0');
+		psg_set      : in  STD_LOGIC := '0';
+		mapper_out   : out STD_LOGIC_VECTOR(63 downto 0);
+		mapper_in    : in  STD_LOGIC_VECTOR(63 downto 0) := (others => '0');
+		mapper_set   : in  STD_LOGIC := '0';
+		-- Z80 instruction boundary detection (M1 cycle = opcode fetch)
+		z80_m1_n     : out STD_LOGIC;
+		-- MREQ_n: low = normal opcode fetch, high = interrupt acknowledge
+		z80_mreq_n   : out STD_LOGIC;
+		-- ISet: "00" = no prefix active (clean instruction boundary)
+		z80_iset     : out STD_LOGIC_VECTOR(1 downto 0)
 	);
 end system;
 
@@ -147,6 +177,7 @@ architecture Behavioral of system is
 	signal IORQ_n:				std_logic;
 	signal M1_n:				std_logic;
 	signal MREQ_n:				std_logic;
+	signal z80_iset_int:		std_logic_vector(1 downto 0);
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
 	signal D_out:				std_logic_vector(7 downto 0);
@@ -435,7 +466,11 @@ begin
 		WR_n		=> WR_n,
 		A			=> A,
 		DI			=> GENIE_DI,
-		DO			=> D_in
+		DO			=> D_in,
+		REG    => z80_reg_out,
+		DIRSet => z80_set,
+		DIR    => z80_dir,
+		ISet_out => z80_iset_int
 	);
 
 	vdp_inst: entity work.vdp
@@ -473,7 +508,20 @@ begin
 		ysj_quirk	=> ysj_quirk,
 		mask_column => mask_column,
 		black_column => black_column,
-		reset_n  => RESET_n
+		reset_n  => RESET_n,
+		ss_regs_out => vdp_regs_out,
+		ss_regs_in  => vdp_regs_in,
+		ss_regs_set => vdp_regs_set,
+		ss_cram_out => vdp_cram_out,
+		ss_cram_wr  => ss_cram_wr,
+		ss_cram_A   => ss_cram_A,
+		ss_cram_D   => ss_cram_D,
+		ss_vram_en  => ss_vram_en,
+		ss_vram_A   => ss_vram_A,
+		ss_vram_D   => ss_vram_D,
+		ss_vram_WE  => ss_vram_WE,
+		ss_vram_WA  => ss_vram_WA,
+		ss_vram_WD  => ss_vram_WD
 	);
 
 	vdp2_inst: entity work.vdp
@@ -526,7 +574,10 @@ begin
 		soundL	=> PSG_outL,
 		soundR	=> PSG_outR,
 
-		rst		=> not RESET_n
+		rst		=> not RESET_n,
+		ss_out => psg_out,
+		ss_set => psg_set,
+		ss_in  => psg_in
 	);
 	
 	psg2_inst: jt89
@@ -679,6 +730,9 @@ port map(
 	
 	ce_z80 <= ce_pix when (systeme = '1' or turbo='1') else ce_cpu;
 	io_cycle <= '1' when IORQ_n='0' and M1_n='1' else '0';
+	z80_m1_n   <= M1_n;
+	z80_mreq_n <= MREQ_n;
+	z80_iset   <= z80_iset_int;
 	io_upper_port <= '1' when A(7 downto 6)="11" else '0';
 	io_sms_port <= '1' when A(7 downto 6)="00" and (A(0)='1' or (gg='1' and A(5 downto 3)="000")) else '0';
 	io_gg_port <= '1' when gg='1' and A(7 downto 3)="00000" and A(2 downto 1)/="11" else '0';
@@ -826,6 +880,12 @@ port map(
 		if rising_edge(clk_sys) then
 			if RESET_n='0' then 
 				bootloader_n <= not bios_en;
+			elsif mapper_set='1' then
+				-- Save-state restore: recover exact bootloader_n captured at save time.
+				-- Without this, restoring a cart game saved while BIOS was active but
+				-- disabled (bootloader_n=1) would leave bootloader_n=0 (reset default)
+				-- so the Z80 would read BIOS ROM instead of cart ROM → instant crash.
+				bootloader_n <= mapper_in(54);
 			elsif ctl_WR_n='0' then
 				if ext_bios_sel='1' and ext_bios_loaded='1' then
 					-- For external BIOS: honour port $3E bit 3 (active low BIOS enable)
@@ -980,6 +1040,24 @@ port map(
 
 		else
 			if rising_edge(clk_sys) then
+				if mapper_set = '1' then
+					bank0              <= mapper_in(7 downto 0);
+					bank1              <= mapper_in(15 downto 8);
+					bank2              <= mapper_in(23 downto 16);
+					bank3              <= mapper_in(31 downto 24);
+					pak4_reg0          <= mapper_in(7 downto 0);
+					pak4_reg2          <= mapper_in(39 downto 32);
+					nem_bank0          <= mapper_in(47 downto 40);
+					nvram_e            <= mapper_in(50);
+					nvram_ex           <= mapper_in(51);
+					nvram_p            <= mapper_in(52);
+					nvram_cme          <= mapper_in(53);
+					mapper_zemina_det  <= mapper_in(56);
+					mapper_4pak        <= mapper_in(57);
+					mapper_codies      <= mapper_in(58);
+					lock_mapper_B      <= mapper_in(59);
+					mapper_codies_lock <= mapper_in(60);
+				else
 				if bootloader_n = '0' and mapper_manual_force = '0' then
 					lock_mapper_B <= '0';
 					mapper_codies <= '0';
@@ -1174,6 +1252,7 @@ port map(
 						end case ;
 					end if;
 				end if;
+				end if; -- mapper_set
 			end if;
 		end if;
 	end process;
@@ -1248,6 +1327,18 @@ port map(
 	                            ((rom_page0_byte0 = x"FF" and rom_page0_byte1 = x"FF" and rom_last_byte0 /= x"FF") or
 								 (rom_page0_byte0 = x"00" and rom_page0_byte1 = x"00" and rom_last_byte0 = x"F3")) else
 	                      '0';
+
+	-- Save-state: pack all mapper state into one 64-bit word.
+	-- [63]detect_linear [62]detect_wonderkid [61]detect_castle [60]mapper_codies_lock
+	-- [59]lock_mapper_B [58]mapper_codies [57]mapper_4pak [56]mapper_zemina_det
+	-- [55]spare [54]bootloader_n [53]nvram_cme [52]nvram_p [51]nvram_ex [50]nvram_e
+	-- [49]detect_sega_locked [48]detect_dahjee_a [47:40]nem_bank0 [39:32]pak4_reg2
+	-- [31:24]bank3 [23:16]bank2 [15:8]bank1 [7:0]bank0
+	mapper_out <= detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
+	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_zemina_det &
+	              '0' & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
+	              detect_sega_locked & detect_dahjee_a &
+	              nem_bank0 & pak4_reg2 & bank3 & bank2 & bank1 & bank0;
 
 	-- Nemesis I/II split is heuristic-only.
 	-- detect_nemesis1: Zemina writes + page0 appears blank while last page has code.
@@ -1359,6 +1450,12 @@ port map(
 				wonderkid_write_seen <= '0';
 				wonderkid_write_count <= 0;
 				sega_mapper_write_seen <= '0';
+			elsif mapper_set = '1' then
+				detect_castle      <= mapper_in(61);
+				detect_wonderkid   <= mapper_in(62);
+				detect_linear      <= mapper_in(63);
+				detect_dahjee_a    <= mapper_in(48);
+				detect_sega_locked <= mapper_in(49);
 			else
 				if bootloader_n = '0' then
 					mapper_detect_ticks <= (others => '0');

@@ -39,7 +39,12 @@ module jt89(
     input    [7:0] mux,
     output  signed [10:0] soundL,
     output  signed [10:0] soundR,
-    output         ready
+    output         ready,
+    // Save-state snapshot (combinational)
+    output [55:0]  ss_out,   // tone0[9:0], tone1[9:0], tone2[9:0], vol0-3[3:0], ctrl3[2:0], regn[2:0]
+    // Save-state restore (synchronous, held one cycle)
+    input          ss_set,
+    input  [55:0]  ss_in
 );
 
 wire signed [ 8:0] ch0, ch1, ch2, noise;
@@ -82,6 +87,9 @@ always @(posedge clk )
     else if( clk_en )
         clk_div <= clk_div + 1'b1;
 
+// Save-state snapshot: {regn[2:0], ctrl3[2:0], vol3[3:0], vol2[3:0], vol1[3:0], vol0[3:0], tone2[9:0], tone1[9:0], tone0[9:0]}
+assign ss_out = { regn, ctrl3, vol3, vol2, vol1, vol0, tone2, tone1, tone0 };
+
 reg clr_noise, last_wr;
 wire [2:0] reg_sel = din[7] ? din[6:4] : regn;
 
@@ -90,6 +98,18 @@ always @(posedge clk)
         { vol0, vol1, vol2, vol3 } <= {16{1'b1}};
         { tone0, tone1, tone2 } <= 30'd0;
         ctrl3 <= 3'b100;
+        regn  <= 3'd0;
+    end
+    else if( ss_set ) begin
+        tone0 <= ss_in[9:0];
+        tone1 <= ss_in[19:10];
+        tone2 <= ss_in[29:20];
+        vol0  <= ss_in[33:30];
+        vol1  <= ss_in[37:34];
+        vol2  <= ss_in[41:38];
+        vol3  <= ss_in[45:42];
+        ctrl3 <= ss_in[48:46];
+        regn  <= ss_in[51:49];
     end
     else begin
         last_wr <= wr_n;

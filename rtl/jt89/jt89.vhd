@@ -14,7 +14,11 @@ port
     ready      : out std_logic;
     mux        : in  std_logic_vector(7 downto 0);
     soundL     : out std_logic_vector(10 downto 0); -- signed
-    soundR     : out std_logic_vector(10 downto 0) -- signed
+    soundR     : out std_logic_vector(10 downto 0); -- signed
+    -- Save-state ports
+    ss_out     : out std_logic_vector(55 downto 0);
+    ss_set     : in  std_logic := '0';
+    ss_in      : in  std_logic_vector(55 downto 0) := (others => '0')
 );
 end component;
 
