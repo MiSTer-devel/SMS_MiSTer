@@ -256,7 +256,7 @@ video_freak video_freak
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXX       XXXXXX XXXX
+// XXXXXXXXXXXXXXXX XXXXXXXXXXXXXXX XXXXXXXXXXX       XXXXXXX XXXX
 
 `include "build_id.v"
 parameter CONF_STR = {
@@ -307,8 +307,7 @@ parameter CONF_STR = {
 	"P2-;",
 	"P2O1,Swap Joysticks,No,Yes;",
 	"P2OE,Multitap,Disabled,Port1;",
-	"P2OG,SNAC,Off,On;",
-	"P2oN,Gear-to-Gear,Off,USERIO;",
+	"P2oNO,USERIO,Off,SNAC,Gear2Gear;",
 	"D3P2OH,Pause Btn Combo,No,Yes;",
 	"P2-;",
 	"D2P2OIJ,Gun Control,Disabled,Joy1,Joy2,Mouse;",
@@ -991,11 +990,13 @@ assign joy[1] = status[1] ? joy_0[7:0] : joy_1[7:0];
 assign joy[2] = joy_2[7:0];
 assign joy[3] = joy_3[7:0];
 
-wire       gg_link = status[55] & gg;
+wire [1:0] userio_mode = status[56:55];
+wire       userio_snac = userio_mode == 2'd1;
+wire       gg_link = (userio_mode == 2'd2) & gg;
 wire [6:0] gg_link_in;
 wire [6:0] gg_link_out;
 wire [6:0] gg_user_out;
-wire       raw_serial = status[16] & ~gg_link;
+wire       raw_serial = userio_snac & ~gg_link;
 wire pause_combo = status[17];
 wire swap = status[1];
 wire sk1100_en = status[57];
