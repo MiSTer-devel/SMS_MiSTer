@@ -1221,7 +1221,9 @@ wire bk_save_write = nvram_we;
 reg bk_pending;
 
 always @(posedge clk_sys) begin
-	if (bk_ena && ~OSD_STATUS && bk_save_write)
+	if (~old_downloading & downloading)
+		bk_pending <= 1'b0;
+	else if (bk_ena && ~OSD_STATUS && bk_save_write)
 		bk_pending <= 1'b1;
 	else if (bk_state)
 		bk_pending <= 1'b0;
