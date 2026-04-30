@@ -5,6 +5,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity io is
     Port(
 		clk:		in	 STD_LOGIC;
+		ce_cpu:	in	 STD_LOGIC;
 		WR_n:		in	 STD_LOGIC;
 		RD_n:		in	 STD_LOGIC;
 		A:			in	 STD_LOGIC_VECTOR (7 downto 0);
@@ -62,6 +63,10 @@ entity io is
 		sk1100_row_data:in STD_LOGIC_VECTOR(11 downto 0);
 		pal:		in	 STD_LOGIC;
 		gg:		in  STD_LOGIC;
+		gg_link_en:	in  STD_LOGIC;
+		gg_link_in:	in  STD_LOGIC_VECTOR(6 downto 0);
+		gg_link_out:	out STD_LOGIC_VECTOR(6 downto 0);
+		gg_link_nmi_n:	out STD_LOGIC;
 		systeme:	in  STD_LOGIC;
 		region:	in	 STD_LOGIC;
 		RESET_n:	in  STD_LOGIC);
@@ -74,6 +79,29 @@ architecture rtl of io is
 	signal gg_txd:	std_logic_vector(7 downto 0) := (others=>'0');
 	signal gg_rxd:	std_logic_vector(7 downto 0) := (others=>'1');
 	signal gg_pdr:	std_logic_vector(7 downto 0) := (others=>'0');
+	signal gg_sctrl:	std_logic_vector(7 downto 3) := (others=>'0');
+	signal gg_pc_in_mux:	std_logic_vector(6 downto 0);
+	signal gg_pc_drive_en:	std_logic_vector(6 downto 0);
+	signal gg_pc_drive_val:	std_logic_vector(6 downto 0);
+	signal gg_pc_read:	std_logic_vector(6 downto 0);
+	signal gg_tx_line:	std_logic := '1';
+	signal gg_tx_busy:	std_logic := '0';
+	signal gg_tx_shift:	std_logic_vector(9 downto 0) := (others=>'1');
+	signal gg_tx_cnt:	unsigned(13 downto 0) := (others=>'0');
+	signal gg_tx_bits:	unsigned(3 downto 0) := (others=>'0');
+	signal gg_rx_sync:	std_logic_vector(2 downto 0) := (others=>'1');
+	signal gg_pc6_sync:	std_logic_vector(2 downto 0) := (others=>'1');
+	signal gg_pc6_prev:	std_logic := '1';
+	signal gg_rx_state:	unsigned(1 downto 0) := (others=>'0');
+	signal gg_rx_cnt:	unsigned(13 downto 0) := (others=>'0');
+	signal gg_rx_bits:	unsigned(2 downto 0) := (others=>'0');
+	signal gg_rx_shift:	std_logic_vector(7 downto 0) := (others=>'1');
+	signal gg_rx_ready:	std_logic := '0';
+	signal gg_rx_frame_err:	std_logic := '0';
+	signal gg_nmi_serial:	std_logic := '0';
+	signal gg_nmi_pc6:	std_logic := '0';
+	signal gg_baud_div:	unsigned(13 downto 0);
+	signal gg_baud_half:	unsigned(13 downto 0);
 	signal j1_th_dir: std_logic := '0';
 	signal j2_th_dir: std_logic := '0';
 	signal sg_mode: std_logic;
@@ -85,9 +113,53 @@ architecture rtl of io is
 	signal analog_select: std_logic;
 	signal analog_player: std_logic;
 	signal analog_upper: std_logic;
-	-- signal gg_sctrl:	std_logic_vector(7 downto 3) := "00111";
 
 begin
+
+	gg_pc_in_mux <= gg_link_in when gg_link_en='1' else "1111111";
+
+	with gg_sctrl(7 downto 6) select gg_baud_div <=
+		to_unsigned(745,  14) when "00", -- 4800 bps at the GG CPU clock
+		to_unsigned(1491, 14) when "01", -- 2400 bps
+		to_unsigned(2982, 14) when "10", -- 1200 bps
+		to_unsigned(11931,14) when others; -- 300 bps
+
+	with gg_sctrl(7 downto 6) select gg_baud_half <=
+		to_unsigned(372,  14) when "00",
+		to_unsigned(745,  14) when "01",
+		to_unsigned(1491, 14) when "10",
+		to_unsigned(5965, 14) when others;
+
+	process (gg_ddr, gg_pdr, gg_sctrl, gg_tx_line)
+	begin
+		gg_pc_drive_en <= not gg_ddr(6 downto 0);
+		gg_pc_drive_val <= gg_pdr(6 downto 0);
+
+		if gg_sctrl(4)='1' then
+			gg_pc_drive_en(4) <= '1';
+			gg_pc_drive_val(4) <= gg_tx_line;
+		end if;
+
+		if gg_sctrl(5)='1' then
+			gg_pc_drive_en(5) <= '0';
+		end if;
+	end process;
+
+	process (gg_pc_in_mux, gg_pc_drive_en, gg_pc_drive_val)
+	begin
+		for i in 0 to 6 loop
+			if gg_pc_drive_en(i)='1' and gg_pc_drive_val(i)='0' then
+				gg_pc_read(i) <= '0';
+			else
+				gg_pc_read(i) <= gg_pc_in_mux(i);
+			end if;
+		end loop;
+	end process;
+	gg_link_nmi_n <= '0' when gg='1' and gg_link_en='1' and (gg_nmi_serial='1' or gg_nmi_pc6='1') else '1';
+
+	pc_out: for i in 0 to 6 generate
+		gg_link_out(i) <= '0' when gg='1' and gg_link_en='1' and gg_pc_drive_en(i)='1' and gg_pc_drive_val(i)='0' else '1';
+	end generate;
 
 	sg_mode <= '1' when (palettemode='1' or sc3000_en='1' or sk1100_en='1') and gg='0' and systeme='0' else '0';
 	sk1100_active <= '1' when (sc3000_en='1' or sk1100_en='1') and sg_mode='1' else '0';
@@ -108,21 +180,159 @@ begin
 			gg_ddr <= x"FF";
 			gg_txd <= x"00" ;
 			gg_rxd <= x"FF";
-			gg_pdr <= x"00";
+			gg_pdr <= x"7F";
+			gg_sctrl <= (others=>'0');
+			gg_tx_line <= '1';
+			gg_tx_busy <= '0';
+			gg_tx_shift <= (others=>'1');
+			gg_tx_cnt <= (others=>'0');
+			gg_tx_bits <= (others=>'0');
+			gg_rx_sync <= (others=>'1');
+			gg_pc6_sync <= (others=>'1');
+			gg_pc6_prev <= '1';
+			gg_rx_state <= (others=>'0');
+			gg_rx_cnt <= (others=>'0');
+			gg_rx_bits <= (others=>'0');
+			gg_rx_shift <= (others=>'1');
+			gg_rx_ready <= '0';
+			gg_rx_frame_err <= '0';
+			gg_nmi_serial <= '0';
+			gg_nmi_pc6 <= '0';
 			sc_multicart_latch <= x"FF";
 			sk1100_port_c <= x"FF";
 			analog_select <= '0';
 			analog_player <= '0';
-			-- gg_sctrl <= "00111" ;
+			analog_upper <= '0';
 		elsif rising_edge(clk) then
+			if gg='0' or gg_link_en='0' then
+				gg_tx_line <= '1';
+				gg_tx_busy <= '0';
+				gg_rx_state <= (others=>'0');
+				gg_rx_ready <= '0';
+				gg_rx_frame_err <= '0';
+				gg_nmi_serial <= '0';
+				gg_nmi_pc6 <= '0';
+				gg_rx_sync <= (others=>'1');
+				gg_pc6_sync <= (others=>'1');
+				gg_pc6_prev <= '1';
+			elsif ce_cpu='1' then
+				gg_rx_sync <= gg_rx_sync(1 downto 0) & gg_pc_in_mux(5);
+				gg_pc6_sync <= gg_pc6_sync(1 downto 0) & gg_pc_in_mux(6);
+
+				if gg_tx_busy='1' then
+					if gg_tx_cnt=to_unsigned(0, gg_tx_cnt'length) then
+						if gg_tx_bits=to_unsigned(0, gg_tx_bits'length) then
+							gg_tx_busy <= '0';
+							gg_tx_line <= '1';
+						else
+							gg_tx_line <= gg_tx_shift(1);
+							gg_tx_shift <= '1' & gg_tx_shift(9 downto 1);
+							gg_tx_bits <= gg_tx_bits - 1;
+							gg_tx_cnt <= gg_baud_div;
+						end if;
+					else
+						gg_tx_cnt <= gg_tx_cnt - 1;
+					end if;
+				end if;
+
+				if gg_sctrl(5)='0' then
+					gg_rx_state <= (others=>'0');
+				else
+					case gg_rx_state is
+						when "00" =>
+							if gg_rx_sync(2)='1' and gg_rx_sync(1)='0' then
+								gg_rx_state <= "01";
+								gg_rx_cnt <= gg_baud_half;
+							end if;
+						when "01" =>
+							if gg_rx_cnt=to_unsigned(0, gg_rx_cnt'length) then
+								if gg_rx_sync(2)='0' then
+									gg_rx_state <= "10";
+									gg_rx_bits <= (others=>'0');
+									gg_rx_cnt <= gg_baud_div;
+								else
+									gg_rx_state <= "00";
+								end if;
+							else
+								gg_rx_cnt <= gg_rx_cnt - 1;
+							end if;
+						when "10" =>
+							if gg_rx_cnt=to_unsigned(0, gg_rx_cnt'length) then
+								gg_rx_shift <= gg_rx_sync(2) & gg_rx_shift(7 downto 1);
+								gg_rx_cnt <= gg_baud_div;
+								if gg_rx_bits="111" then
+									gg_rx_state <= "11";
+								else
+									gg_rx_bits <= gg_rx_bits + 1;
+								end if;
+							else
+								gg_rx_cnt <= gg_rx_cnt - 1;
+							end if;
+						when others =>
+							if gg_rx_cnt=to_unsigned(0, gg_rx_cnt'length) then
+								if gg_rx_sync(2)='1' then
+									gg_rxd <= gg_rx_shift;
+									gg_rx_ready <= '1';
+									gg_rx_frame_err <= '0';
+								else
+									gg_rx_frame_err <= '1';
+								end if;
+								if gg_sctrl(3)='1' then
+									gg_nmi_serial <= '1';
+								end if;
+								gg_rx_state <= "00";
+							else
+								gg_rx_cnt <= gg_rx_cnt - 1;
+							end if;
+					end case;
+				end if;
+
+				if gg_ddr(7)='0' and gg_ddr(6)='1' and gg_pc6_prev='1' and gg_pc6_sync(2)='0' then
+					gg_nmi_pc6 <= '1';
+				end if;
+				gg_pc6_prev <= gg_pc6_sync(2);
+			end if;
+
+			if gg='1' and A(7 downto 3)="00000" and RD_n='0' and A(2 downto 0)="100" then
+				gg_rx_ready <= '0';
+				gg_rx_frame_err <= '0';
+				gg_nmi_serial <= '0';
+			end if;
+
 			if gg='1' and A(7 downto 3) = "00000" then
 				if WR_n='0' then
 					case A(2 downto 0) is
 						when "001" => gg_pdr <= D_in ;
-						when "010" => gg_ddr <= D_in ;
-						when "011" => gg_txd <= D_in ;
+						when "010" =>
+							gg_ddr <= D_in ;
+							if D_in(7)='1' then
+								gg_nmi_pc6 <= '0';
+							end if;
+						when "011" =>
+							gg_txd <= D_in ;
+							if gg_link_en='1' and gg_sctrl(4)='1' and gg_tx_busy='0' then
+								gg_tx_shift <= '1' & D_in & '0';
+								gg_tx_line <= '0';
+								gg_tx_bits <= to_unsigned(9, gg_tx_bits'length);
+								gg_tx_cnt <= gg_baud_div;
+								gg_tx_busy <= '1';
+							end if;
 						-- when "100" => gg_rxd <= D_in ;
-						-- when "101" => gg_sctrl <= D_in(7 downto 3) ; --sio.sctrl = data & 0xF8;
+						when "101" =>
+							gg_sctrl <= D_in(7 downto 3);
+							if D_in(3)='0' then
+								gg_nmi_serial <= '0';
+							end if;
+							if D_in(4)='0' then
+								gg_tx_line <= '1';
+								gg_tx_busy <= '0';
+							end if;
+							if D_in(5)='0' then
+								gg_rx_state <= (others=>'0');
+								gg_rx_ready <= '0';
+								gg_rx_frame_err <= '0';
+								gg_nmi_serial <= '0';
+							end if;
 						when others => null ;
 					end case;
 				end if;
@@ -188,12 +398,16 @@ begin
 							else
 								D_out(6 downto 0) <= "0000000";
 							end if;
-						-- when "001" => D_out <= gg_pdr(7)&(gg_ddr(6 downto 0) or gg_pdr(6 downto 0)) ;
-						when "001" => D_out <= gg_pdr(7)&(not gg_ddr(6 downto 0) and gg_pdr(6 downto 0)) ;
+						when "001" => D_out <= gg_pdr(7)&gg_pc_read ;
 						when "010" => D_out <= gg_ddr ; -- bit7 controls NMI ?
 						when "011" => D_out <= gg_txd ;
 						when "100" => D_out <= gg_rxd ;
-						when "101" => D_out <= "00111000"; -- gg_sctrl & "000" ;
+						when "101" =>
+							if gg_link_en='1' then
+								D_out <= gg_sctrl & gg_rx_frame_err & gg_rx_ready & gg_tx_busy;
+							else
+								D_out <= "00111000";
+							end if;
 						when "110" => D_out <= (others => '1');
 						when others => null ;
 					end case;

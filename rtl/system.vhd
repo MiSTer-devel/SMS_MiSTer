@@ -29,6 +29,9 @@ entity system is
 		GG_CODE		: in std_logic_vector(128 downto 0); -- game genie code
 		GG_RESET	: in std_logic;
 		GG_AVAIL	: out std_logic;
+		gg_link_en	: in  STD_LOGIC;
+		gg_link_in	: in  STD_LOGIC_VECTOR(6 downto 0);
+		gg_link_out	: out STD_LOGIC_VECTOR(6 downto 0);
 
 		RESET_n:		in	 STD_LOGIC;
 
@@ -291,6 +294,7 @@ architecture Behavioral of system is
 	signal GENIE		: boolean;
 	signal GENIE_DO	: std_logic_vector(7 downto 0);
 	signal GENIE_DI   : std_logic_vector(7 downto 0);
+	signal gg_link_nmi_n: std_logic;
 
 	component CODES is
 		generic(
@@ -388,7 +392,7 @@ begin
 		CLK		=> clk_sys,
 		CEN		=> ce_z80,
 		INT_n		=> IRQ_n,
-		NMI_n		=> pause or gg,
+		NMI_n		=> (pause or gg) and gg_link_nmi_n,
 		MREQ_n	=> MREQ_n,
 		IORQ_n	=> IORQ_n,
 		M1_n		=> M1_n,
@@ -571,6 +575,7 @@ port map(
 	port map
 	(
 		clk		=> clk_sys,
+		ce_cpu	=> ce_cpu,
 		WR_n		=> io_WR_n,
 		RD_n		=> io_RD_n,
 		A			=> A(7 downto 0),
@@ -628,6 +633,10 @@ port map(
 		sk1100_row_data => sk1100_row_data,
 		pal		=> pal,
 		gg			=> gg,
+		gg_link_en => gg_link_en,
+		gg_link_in => gg_link_in,
+		gg_link_out => gg_link_out,
+		gg_link_nmi_n => gg_link_nmi_n,
 		systeme	=> systeme,
 		region	=> region,
 		RESET_n	=> RESET_n
