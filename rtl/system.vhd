@@ -265,6 +265,7 @@ architecture Behavioral of system is
 	-- 4-PAK All Action mapper signals (HES 4 PAK All Action)
 	-- References: MAME sega8_4pak_device (src/devices/bus/sega8/rom.cpp)
 	signal mapper_4pak :		std_logic := '0';
+	signal mapper_4pak_crc :	std_logic;              -- 4-PAK CRC match (0x73ED)
 	signal pak4_reg0 :		std_logic_vector(7 downto 0) := "00000000"; -- written at $3FFE
 	signal pak4_reg2 :		std_logic_vector(7 downto 0) := "00000000"; -- written at $BFFF
 
@@ -285,6 +286,9 @@ architecture Behavioral of system is
 	signal mapper_zemina_crc    : std_logic;  -- '1' for other Zemina CRC matches - plain Zemina
 	signal mapper_castle        : std_logic := '0'; -- The Castle (Japan): 32KB RAM at 0x8000-0xFFFF
 	signal mapper_wonderkid     : std_logic;         -- Wonder Kid [Proto]: Codemasters-style 16KB, all banks init 0
+	signal mapper_linear        : std_logic;         -- No mapper, linear ROM up to 48KB (MEKA type 11)
+	signal mapper_sega_locked   : std_logic := '0';  -- Sega mapper path + all bank writes blocked (for 48KB dahjee_typeb games)
+	signal mapper_dahjee_a      : std_logic;         -- Dahjee Type A: linear ROM + 8KB RAM at 0x2000-0x3FFF
 	signal reset_n_prev         : std_logic := '0';  -- for synchronous rising-edge detection of RESET_n
 	signal bootloader_n_prev    : std_logic := '1';  -- for rising-edge detection of bootloader_n (BIOS->cart handoff)
 
@@ -674,6 +678,7 @@ port map(
 	nvram_a <= "0000" & A(10 downto 0) when sc3000_en = '1' and sc_cart_ram = "01" else
 	           '0' & A(13 downto 0) when sc3000_en = '1' and sc_cart_ram = "10" else
 	           A(14 downto 0) when (sc3000_en = '1' and sc_cart_ram = "11") or mapper_castle = '1' else
+	           "00" & A(12 downto 0) when mapper_dahjee_a = '1' else
 	           (nvram_p and not A(14)) & A(13 downto 0);
 	nvram_we <= nvram_WR;
 	nvram_d <= D_in;
@@ -778,9 +783,11 @@ port map(
 						or (A(15 downto 14)="11" and nvram_ex = '1') 
 						or (A(15 downto 13)="101" and nvram_cme = '1'))
 						or sc_cart_ram_low='1'
-						or sc_cart_ram_high='1') else '0';
+						or sc_cart_ram_high='1'
+						or (mapper_dahjee_a='1' and A(15 downto 13)="001")) else '0';
 	rom_RD   <= not RD_n when MREQ_n='0' and A(15 downto 14)/="11" and sc_multicart_upper='0'
-	                     and not (mapper_castle='1' and A(15)='1') else '0';
+	                     and not (mapper_castle='1' and A(15)='1')
+	                     and not (mapper_dahjee_a='1' and A(15 downto 13)="001") else '0';
 	color    <= vdp2_color when (vdp2_y1='1' and systeme='1' and vdp_enables(1)='0') else vdp_color when vdp_enables(0)='0' else x"000";
 
 	process (clk_sys)
@@ -841,7 +848,7 @@ port map(
 	
 	process (IORQ_n,A,vdp_D_out,vdp2_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
 					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena,bootloader_n,systeme,io_upper_port,io_gg_data_port,
-					sc_cart_ram_rd,sc_multicart_open)
+					sc_cart_ram_rd,sc_multicart_open,mapper_dahjee_a)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' and systeme='0' then
@@ -871,6 +878,9 @@ port map(
 			elsif A(15 downto 13)="101" and nvram_cme  = '1' then
 				D_out <= nvram_D_out;
 			elsif A(15 downto 14)="10" and nvram_e  = '1' then
+				D_out <= nvram_D_out;
+			elsif mapper_dahjee_a = '1' and A(15 downto 13) = "001" then
+				-- Dahjee Type A: RAM at 0x2000-0x3FFF reads from nvram block
 				D_out <= nvram_D_out;
 			else
 				D_out <= irom_D_out;
@@ -943,6 +953,9 @@ port map(
 				if RESET_n = '1' and reset_n_prev = '0' then
 					if mapper_nemesis_auto = '1' then
 						nem_bank0 <= std_logic_vector(unsigned(rom_size_pages) - 1);
+					elsif mapper_4pak_crc = '1' then
+						-- Enable 4-PAK only for known CRC instead of write-based auto-detect.
+						mapper_4pak <= '1';
 					elsif mapper_wonderkid = '1' then
 						-- All slots start at page 0; pre-lock to prevent 4-PAK misdetection
 						bank1         <= "00000000";
@@ -956,8 +969,8 @@ port map(
 					last_read_addr <= A; -- gyurco anti-ldir patch
 				end if;
 
-				if systeme = '1' or sc3000_en = '1' or mapper_castle = '1' then
-					-- no System E, SC-3000, or Castle (32KB RAM) mappers
+				if systeme = '1' or sc3000_en = '1' or mapper_castle = '1' or mapper_linear = '1' or mapper_dahjee_a = '1' or mapper_sega_locked = '1' then
+					-- no System E, SC-3000, Castle (32KB RAM), linear, Dahjee Type A, or Sega-locked mappers
 				elsif mapper_4pak = '1' then
 					-- 4-PAK All Action mapper (per MAME sega8_4pak_device):
 					-- $3FFE: reg0=D; bank0=D; bank2=(reg0[5:4]+reg2)
@@ -1000,7 +1013,7 @@ port map(
 					pak4_reg0 <= D_in;
 					pak4_reg2 <= "00000000";
 					bank0 <= D_in;
-					bank1 <= "00000001"; -- will be set by first $7FFF write
+					bank1 <= "00000001";
 					bank2 <= std_logic_vector(
 						("00" & unsigned(D_in(5 downto 4)) & "0000") +
 						to_unsigned(0, 8)); -- reg2=0 initially
@@ -1091,6 +1104,50 @@ port map(
 	-- CRC16-CCITT of last 8KB block: 0x8613
 	mapper_wonderkid <= '1' when rom_crc16_run = x"8613" else '0';
 
+	-- MEKA mapper type 11: no mapper, linear ROM (MAME dahjee_typeb).
+	-- Pure linear ROM with system RAM at 0xC000-0xFFFF, no banking.
+	-- mapper_linear uses A[15:13] directly for rom_a_i (bypasses all bank registers).
+	-- Works correctly for these 32KB games on the physical FPGA.
+	-- 48KB dahjee_typeb games that need bank-write protection but NOT the mapper_linear
+	-- rom_a_i branch are handled separately by mapper_sega_locked (see below).
+	-- CRC16 of last 8KB block:
+	--   FA Tetris (Korea) (Unl)                          0x890A  [linear, 32KB]
+	--   Flashpoint (Korea) (Unl)                         0x4742  [linear, 32KB]
+	--   Rally-X (Taiwan) (English Logo) (Unl)            0x8D9A  [dahjee_typeb, 32KB]
+	--   Road Fighter (Taiwan) (English Logo) (Unl)       0x24BE  [dahjee_typeb, 32KB]
+	mapper_linear <= '1' when (
+		rom_crc16_run = x"890A" or  -- FA Tetris (Korea)
+		rom_crc16_run = x"4742" or  -- Flashpoint (Korea)
+		rom_crc16_run = x"8D9A" or  -- Rally-X (English Logo)
+		rom_crc16_run = x"24BE"     -- Road Fighter (English Logo)
+	) else '0';
+
+	-- 48KB dahjee_typeb games: Sega mapper code path (bank registers 0,1,2 never updated)
+	-- with ALL mapper register writes blocked to prevent bank corruption.
+	-- These must NOT use the mapper_linear branch of rom_a_i: that path (using A[15:13]
+	-- directly from the combinational address bus) fails to boot on the physical Cyclone V
+	-- FPGA due to different routing/timing vs the Sega mapper's registered-bank path.
+	-- Keeping them on the Sega mapper path (same SDRAM addresses for banks 0,1,2 on 48KB)
+	-- while blocking all write detection fixes both the boot failure and the logo loop.
+	mapper_sega_locked <= '0';
+
+	-- Dahjee Type A expansion: linear ROM + 8KB RAM at 0x2000-0x3FFF.
+	-- MSX conversions published by DahJee/Jumbo that require the Type A
+	-- RAM expansion cart (which adds 9KB total: 8KB at 0x2000-0x3FFF +
+	-- 1KB at 0xC000 merged with the system WRAM).
+	-- (MAME devices: sega8_dahjee_typea_device)
+	-- CRC16 of last 8KB block:
+	--   Rally-X (Taiwan) (Chinese Logo) (Unl)            0xD6ED  [32KB] (confirmed working)
+	--   Road Fighter (Taiwan) (Chinese Logo) (Unl)       0x7B1C  [32KB] (confirmed working)
+	mapper_dahjee_a <= '1' when (
+		rom_crc16_run = x"D6ED" or  -- Rally-X (Taiwan) (Chinese Logo)
+		rom_crc16_run = x"7B1C"     -- Road Fighter (Taiwan) (Chinese Logo)
+	) else '0';
+
+	-- 4-PAK All Action (Australia) (Unl)
+	-- CRC16-CCITT of last 8KB block: 0x73ED
+	mapper_4pak_crc <= '1' when rom_crc16_run = x"73ED" else '0';
+
 	-- Nemesis I  (0xEE05): Zemina banking with $0000-$1FFF = last 8KB page at startup
 	mapper_nemesis_auto <= '1' when rom_crc16_run = x"EE05" else '0';
 	-- Plain Zemina (nem_bank0=0): Nemesis II (0x9136), F-1 Spirit (0x599E),
@@ -1101,14 +1158,15 @@ port map(
 	                                  rom_crc16_run = x"880E") else '0';
 
 	-- Active for any Zemina-family mapper.
-	-- mapper_zemina_force (OSD Zemina) overrides auto-detection.
-	-- mapper_lock (OSD Sega) disables all auto-detection but NOT the force.
+	-- mapper_zemina_force (OSD): user explicitly selected Zemina mapper.
+	-- mapper_lock (OSD): user explicitly selected Sega mapper, disables all auto-detection.
+	-- Both are mutually exclusive (same 2-bit OSD status field).
 	use_zem <= mapper_zemina_force
 	        or (not mapper_lock and (mapper_msx or mapper_zemina_det
 	                                 or mapper_nemesis_auto or mapper_zemina_crc));
 
 	rom_a_i(12 downto 0) <= A(12 downto 0);
-	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n)
+	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a)
 	begin
 		if systeme = '1' then
 			case A(15 downto 14) is
@@ -1120,9 +1178,9 @@ port map(
 		elsif sc_multicart_en = '1' then
 			rom_a_i(21 downto 15) <= sc_multicart_page;
 			rom_a_i(14 downto 13) <= A(14 downto 13);
-		elsif sc3000_en = '1' then
-			-- SC-3000 cartridges are linear, unbanked images in the $0000-$BFFF space.
-			-- Keep the full CPU address so 32K BASIC/Music carts don't mirror every 16K.
+		elsif sc3000_en = '1' or mapper_linear = '1' or mapper_dahjee_a = '1' then
+			-- SC-3000, no-mapper (MEKA type 11), and Dahjee Type A cartridges: linear, unbanked.
+			-- Keep the full CPU address so ROM pages don't mirror.
 			rom_a_i(21 downto 16) <= (others=>'0');
 			rom_a_i(15 downto 13) <= A(15 downto 13);
 		-- Zemina/Nemesis mapper is suppressed while the BIOS is running (bootloader_n='0').
