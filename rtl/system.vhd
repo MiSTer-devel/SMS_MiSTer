@@ -1113,11 +1113,15 @@ port map(
 	-- CRC16 of last 8KB block:
 	--   FA Tetris (Korea) (Unl)                          0x890A  [linear, 32KB]
 	--   Flashpoint (Korea) (Unl)                         0x4742  [linear, 32KB]
+	--   The Castle (Taiwan) (Unl)                        0xF6EE  [linear/type 11]
+	--   Magical Kid Wiz (Taiwan) (Unl)                   0xD935  [linear/type 11]
 	--   Rally-X (Taiwan) (English Logo) (Unl)            0x8D9A  [dahjee_typeb, 32KB]
 	--   Road Fighter (Taiwan) (English Logo) (Unl)       0x24BE  [dahjee_typeb, 32KB]
 	mapper_linear <= '1' when (
 		rom_crc16_run = x"890A" or  -- FA Tetris (Korea)
 		rom_crc16_run = x"4742" or  -- Flashpoint (Korea)
+		rom_crc16_run = x"F6EE" or  -- The Castle (Taiwan)
+		rom_crc16_run = x"D935" or  -- Magical Kid Wiz (Taiwan)
 		rom_crc16_run = x"8D9A" or  -- Rally-X (English Logo)
 		rom_crc16_run = x"24BE"     -- Road Fighter (English Logo)
 	) else '0';
@@ -1139,9 +1143,11 @@ port map(
 	-- CRC16 of last 8KB block:
 	--   Rally-X (Taiwan) (Chinese Logo) (Unl)            0xD6ED  [32KB] (confirmed working)
 	--   Road Fighter (Taiwan) (Chinese Logo) (Unl)       0x7B1C  [32KB] (confirmed working)
+	--   Bomberman Special (Taiwan) (Chinese Logo)         0x683D
 	mapper_dahjee_a <= '1' when (
 		rom_crc16_run = x"D6ED" or  -- Rally-X (Taiwan) (Chinese Logo)
-		rom_crc16_run = x"7B1C"     -- Road Fighter (Taiwan) (Chinese Logo)
+		rom_crc16_run = x"7B1C" or  -- Road Fighter (Taiwan) (Chinese Logo)
+		rom_crc16_run = x"683D"     -- Bomberman Special (Taiwan, Chinese Logo)
 	) else '0';
 
 	-- 4-PAK All Action (Australia) (Unl)

@@ -803,7 +803,7 @@ always @(posedge clk_sys) begin
 			systeme <= 1'b0;
 		load_sc <= sc_file;
 		load_sg <= sg_file;
-		// Large .sg/.sc images use the Survivors paging latch family:
+		// Large .sc images may use the Survivors paging latch family:
 		// >32KB = multicart-style banking, >2MB = 128-slot megacart banking.
 		load_sc_multicart <= load_sc_multicart | (sgsc_file & (ioctl_addr > 25'h07FFF));
 		load_sc_megacart <= load_sc_megacart | (sgsc_file & (ioctl_addr > 25'h1FFFFF));
@@ -811,8 +811,9 @@ always @(posedge clk_sys) begin
 	end;
 	if (old_download & ~cart_download) begin
 		sc3000_auto <= load_sc;
-		sc_multicart_auto <= (load_sc | load_sg) & load_sc_multicart;
-		sc_megacart_auto <= (load_sc | load_sg) & load_sc_megacart;
+		// Restrict Survivors paging auto-detection to explicit .sc loads.
+		sc_multicart_auto <= load_sc & load_sc_multicart;
+		sc_megacart_auto <= load_sc & load_sc_megacart;
 		palettemode <= load_sg;
 		if (load_sc) begin
 			if (!status[58]) begin
