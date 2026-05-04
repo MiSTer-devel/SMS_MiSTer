@@ -277,7 +277,7 @@ parameter CONF_STR = {
 	"H8OA,Region,US/EU,Japan;",
 	"H8oBC,BIOS,Disable,Internal,Ext. File;",
 	"H8FS3,BINSMS,Load Ext. BIOS;",
-	"H8oDE,Mapper,Auto,Sega,Zemina;",
+	"H8O[48:45],Mapper,Auto,Sega,4-PAK,Castle,Codemasters,Dahjee A,Linear,MSX,Nemesis I,Nemesis II+,Wonder Kid,Zemina;",
 	"H8o8,Z80 Speed,Normal,Turbo;",
 	"H8-;",
 	"H7o12,VDPs,Both,2,1,None;",
@@ -842,6 +842,19 @@ wire        ram_we;
 wire  [7:0] ram_d;
 wire  [7:0] ram_q;
 
+wire [3:0] mapper_sel = status[48:45];
+wire mapper_force_sega      = (mapper_sel == 4'd1) & ~systeme;
+wire mapper_force_4pak      = (mapper_sel == 4'd2);
+wire mapper_force_castle    = (mapper_sel == 4'd3);
+wire mapper_force_codies    = (mapper_sel == 4'd4);
+wire mapper_force_dahjee_a  = (mapper_sel == 4'd5);
+wire mapper_force_linear    = (mapper_sel == 4'd6);
+wire mapper_force_msx       = (mapper_sel == 4'd7);
+wire mapper_force_nemesis1  = (mapper_sel == 4'd8);
+wire mapper_force_nemesis2  = (mapper_sel == 4'd9);
+wire mapper_force_wonderkid = (mapper_sel == 4'd10);
+wire mapper_force_zemina    = (mapper_sel == 4'd11);
+
 wire [14:0] nvram_a;
 wire        nvram_we;
 wire  [7:0] nvram_d;
@@ -938,8 +951,17 @@ system #(63) system
 	.ysj_quirk(ysj_quirk),
 	.pal(pal),
 	.region(status[10]),
-	.mapper_lock((status[46:45] == 2'b01) && ~systeme),
-	.mapper_zemina_force(status[46:45] == 2'b10),
+	.mapper_lock(mapper_force_sega),
+	.mapper_4pak_force(mapper_force_4pak),
+	.mapper_castle_force(mapper_force_castle),
+	.mapper_codies_force(mapper_force_codies),
+	.mapper_dahjee_a_force(mapper_force_dahjee_a),
+	.mapper_linear_force(mapper_force_linear),
+	.mapper_msx_force(mapper_force_msx),
+	.mapper_nemesis1_force(mapper_force_nemesis1),
+	.mapper_nemesis2_force(mapper_force_nemesis2),
+	.mapper_wonderkid_force(mapper_force_wonderkid),
+	.mapper_zemina_force(mapper_force_zemina),
 	.vdp_enables(dbg_menu ? status[34:33] : 2'b00),
 	.psg_enables(dbg_menu ? status[36:35] : 2'b00),
 

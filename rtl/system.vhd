@@ -100,6 +100,15 @@ entity system is
 		pal:				in STD_LOGIC;
 		region:			in	STD_LOGIC;
 		mapper_lock:	in STD_LOGIC;
+		mapper_4pak_force : in STD_LOGIC;
+		mapper_castle_force : in STD_LOGIC;
+		mapper_codies_force : in STD_LOGIC;
+		mapper_dahjee_a_force : in STD_LOGIC;
+		mapper_linear_force : in STD_LOGIC;
+		mapper_msx_force : in STD_LOGIC;
+		mapper_nemesis1_force : in STD_LOGIC;
+		mapper_nemesis2_force : in STD_LOGIC;
+		mapper_wonderkid_force : in STD_LOGIC;
 		mapper_zemina_force : in STD_LOGIC;   -- Force Zemina mapper (OSD override)
 		vdp_enables:	in STD_LOGIC_VECTOR(1 downto 0);
 		psg_enables:	in STD_LOGIC_VECTOR(1 downto 0);
@@ -284,6 +293,7 @@ architecture Behavioral of system is
 	-- Nemesis II+ (other CRCs): plain Zemina banking ($0000-$1FFF = page 0), no special startup page
 	signal mapper_nemesis_auto  : std_logic;  -- '1' for Nemesis I (CRC 0xEE05) - needs last-page boot
 	signal mapper_zemina_crc    : std_logic;  -- '1' for other Zemina CRC matches - plain Zemina
+	signal mapper_manual_force  : std_logic;
 	signal mapper_castle        : std_logic := '0'; -- The Castle (Japan): 32KB RAM at 0x8000-0xFFFF
 	signal mapper_wonderkid     : std_logic;         -- Wonder Kid [Proto]: Codemasters-style 16KB, all banks init 0
 	signal mapper_linear        : std_logic;         -- No mapper, linear ROM up to 48KB (MEKA type 11)
@@ -951,15 +961,22 @@ port map(
 				-- rom_crc16_run and rom_size_pages are stable at this point because
 				-- cart_download holds RESET_n low throughout the entire ROM transfer.
 				if RESET_n = '1' and reset_n_prev = '0' then
-					if mapper_nemesis_auto = '1' then
+					if mapper_nemesis1_force = '1' then
 						nem_bank0 <= std_logic_vector(unsigned(rom_size_pages) - 1);
-					elsif mapper_4pak_crc = '1' then
+					elsif mapper_nemesis2_force = '1' or mapper_zemina_force = '1' or mapper_msx_force = '1' then
+						nem_bank0 <= (others => '0');
+					elsif mapper_nemesis_auto = '1' then
+						nem_bank0 <= std_logic_vector(unsigned(rom_size_pages) - 1);
+					elsif mapper_4pak_force = '1' or mapper_4pak_crc = '1' then
 						-- Enable 4-PAK only for known CRC instead of write-based auto-detect.
 						mapper_4pak <= '1';
-					elsif mapper_wonderkid = '1' then
+					elsif mapper_wonderkid_force = '1' or mapper_wonderkid = '1' then
 						-- All slots start at page 0; pre-lock to prevent 4-PAK misdetection
 						bank1         <= "00000000";
 						bank2         <= "00000000";
+						lock_mapper_B <= '1';
+					elsif mapper_codies_force = '1' then
+						mapper_codies <= '1';
 						lock_mapper_B <= '1';
 					end if;
 				end if;
@@ -1007,7 +1024,7 @@ port map(
 							when "11" => bank1 <= D_in;
 						end case;
 					end if ;
-				elsif bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" then
+				elsif mapper_manual_force = '0' and bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" then
 					-- 4-PAK All Action: first write to $3FFE when no mapper active
 					mapper_4pak <= '1';
 					pak4_reg0 <= D_in;
@@ -1031,7 +1048,9 @@ port map(
 						end if;
 					end if;
 					if WR_n='0' and A(15 downto 2)="11111111111111" then
-						mapper_codies <= '0' ;
+						if mapper_codies_force = '0' then
+							mapper_codies <= '0' ;
+						end if;
 						case A(1 downto 0) is
 							when "00" => 
 								nvram_ex <= D_in(4);
@@ -1093,16 +1112,21 @@ port map(
 		end if;
 	end process;
 
+	mapper_manual_force <= mapper_lock or mapper_4pak_force or mapper_castle_force or
+	                       mapper_codies_force or mapper_dahjee_a_force or mapper_linear_force or
+	                       mapper_msx_force or mapper_nemesis1_force or mapper_nemesis2_force or
+	                       mapper_wonderkid_force or mapper_zemina_force;
+
 	-- The Castle (Japan) [SG-1000]: 32KB ROM, 32KB RAM at 0x8000-0xFFFF
 	-- CRC16-CCITT of last 8KB block: 0xEF38
-	mapper_castle <= '1' when rom_crc16_run = x"EF38" else '0';
+	mapper_castle <= '1' when mapper_castle_force = '1' or rom_crc16_run = x"EF38" else '0';
 
 	-- Wonder Kid [Proto] [SMS-GG]: MAPPER_MSX_Generic16_8000
 	-- Codemasters-style 16KB banking, register at $8000, all slots init at page 0.
 	-- ROM starts with 0x41 0x42 which would normally trigger MSX/Zemina mapper;
 	-- suppressed here by CRC. Banks initialised to 0/0/0 at RESET_n rise.
 	-- CRC16-CCITT of last 8KB block: 0x8613
-	mapper_wonderkid <= '1' when rom_crc16_run = x"8613" else '0';
+	mapper_wonderkid <= '1' when mapper_wonderkid_force = '1' or rom_crc16_run = x"8613" else '0';
 
 	-- MEKA mapper type 11: no mapper, linear ROM (MAME dahjee_typeb).
 	-- Pure linear ROM with system RAM at 0xC000-0xFFFF, no banking.
@@ -1117,7 +1141,7 @@ port map(
 	--   Magical Kid Wiz (Taiwan) (Unl)                   0xD935  [linear/type 11]
 	--   Rally-X (Taiwan) (English Logo) (Unl)            0x8D9A  [dahjee_typeb, 32KB]
 	--   Road Fighter (Taiwan) (English Logo) (Unl)       0x24BE  [dahjee_typeb, 32KB]
-	mapper_linear <= '1' when (
+	mapper_linear <= '1' when mapper_linear_force = '1' or (
 		rom_crc16_run = x"890A" or  -- FA Tetris (Korea)
 		rom_crc16_run = x"4742" or  -- Flashpoint (Korea)
 		rom_crc16_run = x"F6EE" or  -- The Castle (Taiwan)
@@ -1144,7 +1168,7 @@ port map(
 	--   Rally-X (Taiwan) (Chinese Logo) (Unl)            0xD6ED  [32KB] (confirmed working)
 	--   Road Fighter (Taiwan) (Chinese Logo) (Unl)       0x7B1C  [32KB] (confirmed working)
 	--   Bomberman Special (Taiwan) (Chinese Logo)         0x683D
-	mapper_dahjee_a <= '1' when (
+	mapper_dahjee_a <= '1' when mapper_dahjee_a_force = '1' or (
 		rom_crc16_run = x"D6ED" or  -- Rally-X (Taiwan) (Chinese Logo)
 		rom_crc16_run = x"7B1C" or  -- Road Fighter (Taiwan) (Chinese Logo)
 		rom_crc16_run = x"683D"     -- Bomberman Special (Taiwan, Chinese Logo)
@@ -1166,10 +1190,12 @@ port map(
 	-- Active for any Zemina-family mapper.
 	-- mapper_zemina_force (OSD): user explicitly selected Zemina mapper.
 	-- mapper_lock (OSD): user explicitly selected Sega mapper, disables all auto-detection.
-	-- Both are mutually exclusive (same 2-bit OSD status field).
-	use_zem <= mapper_zemina_force
-	        or (not mapper_lock and (mapper_msx or mapper_zemina_det
-	                                 or mapper_nemesis_auto or mapper_zemina_crc));
+	use_zem <= '1' when (mapper_msx_force = '1' or mapper_zemina_force = '1' or
+	                    mapper_nemesis1_force = '1' or mapper_nemesis2_force = '1') else
+	           '0' when mapper_manual_force = '1' else
+	           '1' when (mapper_msx = '1' or mapper_zemina_det = '1' or
+	                    mapper_nemesis_auto = '1' or mapper_zemina_crc = '1') else
+	           '0';
 
 	rom_a_i(12 downto 0) <= A(12 downto 0);
 	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a)
