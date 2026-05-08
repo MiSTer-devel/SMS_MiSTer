@@ -988,7 +988,7 @@ system #(63) system
 	.ROMCL(clk_sys),
 	.ROMAD(ioctl_addr),
 	.ROMDT(ioctl_dout),
-	.ROMEN(ioctl_wr & (ioctl_index[4:0]==1)),
+	.ROMEN(ioctl_wr & ((ioctl_index[4:0]==1) || (ioctl_index[4:0]==2))),
 	.BIOSWEN(ioctl_wr & (ioctl_index[4:0]==3))
 );
 
