@@ -5,7 +5,7 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity vdp_background is
 port (
-	clk_sys:				in  STD_LOGIC;
+	clk_sys:			in  STD_LOGIC;
 	ce_pix:				in  STD_LOGIC;
 	reset:				in  std_logic;
 	screen_x:			in  std_logic_vector(8 downto 0);
@@ -18,11 +18,10 @@ port (
 	mode_M2_raw:		in  std_logic;
 	mode_M3_raw:		in  std_logic;
 	smode_M1:			in  std_logic;
-	smode_M2:			in  std_logic;
 	smode_M3:			in  std_logic;
 	smode_M4:			in  std_logic;
 	ysj_quirk:			in  std_logic;
-	y:						in  std_logic_vector(7 downto 0);
+	y:					in  std_logic_vector(7 downto 0);
 	screen_y:			in  std_logic_vector(8 downto 0);
 	text_fg_color:		in  std_logic_vector(3 downto 0);
 	overscan:			in  std_logic_vector(3 downto 0);
@@ -38,51 +37,60 @@ end entity;
 architecture rtl of vdp_background is
 
 	signal tile_index		: std_logic_vector (8 downto 0);
-	signal x					: std_logic_vector (7 downto 0);
+	signal x				: std_logic_vector (7 downto 0);
 	signal tile_y			: std_logic_vector (2 downto 0);
 	signal palette			: std_logic;
 	signal palette_shift	: std_logic;
-	signal priority_latch: std_logic;
+	signal priority_latch	: std_logic;
 	signal flip_x			: std_logic;
 
-	signal datap			: std_logic_vector(7 downto 0);
+	-- datac holds the pattern byte in the legacy pipeline (captured at "011",
+	-- one cycle after the pattern address is issued at "010"). The color byte
+	-- arrives on vram_D at "100" and is consumed directly there — no extra
+	-- register needed. datap is intentionally absent; it was the source of the
+	-- Codemasters regression introduced in commit 3e39e1a.
 	signal datac			: std_logic_vector(7 downto 0);
 	signal data0			: std_logic_vector(7 downto 0);
 	signal data1			: std_logic_vector(7 downto 0);
 	signal data2			: std_logic_vector(7 downto 0);
 	signal data3			: std_logic_vector(7 downto 0);
-	
+
 	signal shift0			: std_logic_vector(7 downto 0);
 	signal shift1			: std_logic_vector(7 downto 0);
 	signal shift2			: std_logic_vector(7 downto 0);
 	signal shift3			: std_logic_vector(7 downto 0);
+
 	signal text_shift		: std_logic_vector(5 downto 0) := (others=>'0');
-	signal text_tile_index: std_logic_vector(7 downto 0) := (others=>'0');
-	signal text_pattern	: std_logic_vector(7 downto 0) := (others=>'0');
+	signal text_tile_index	: std_logic_vector(7 downto 0) := (others=>'0');
+	signal text_pattern		: std_logic_vector(7 downto 0) := (others=>'0');
 	signal text_phase		: std_logic_vector(2 downto 0) := (others=>'0');
-	signal text_column	: std_logic_vector(5 downto 0) := (others=>'0');
+	signal text_column		: std_logic_vector(5 downto 0) := (others=>'0');
+
 	signal text_mode		: std_logic;
 	signal gfx1_mode		: std_logic;
-	
+
 begin
 
 	text_mode <= '1' when smode_M4='0' and mode_M1_raw='1' and mode_M2_raw='0' and mode_M3_raw='0' else '0';
 	gfx1_mode <= '1' when smode_M4='0' and mode_M1_raw='0' and mode_M2_raw='0' and mode_M3_raw='0' else '0';
-	
+
+	-- -------------------------------------------------------------------------
+	-- Horizontal pixel counter
+	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
 				if (reset='1') then
 					if smode_M4='0' then
 						x <= "11110000" ; -- 240
-		--
-		-- if you want to fix the last HScroll test of VDPTest, you'll need to 
-		-- change the values below 233=232+1 by half a pixel and make the
-		-- same change in vdp_main around line 79 (line_reset)
-		--
+					--
+					-- if you want to fix the last HScroll test of VDPTest, you'll need to
+					-- change the values below 233=232+1 by half a pixel and make the
+					-- same change in vdp_main around line 79 (line_reset)
+					--
 					elsif disable_hscroll='0' or screen_y>=16 then
-													-- if you mess with this check Sangokushi3 scroll during
-													-- the presentation + scroll of the top line during fight
+						-- if you mess with this check Sangokushi3 scroll during
+						-- the presentation + scroll of the top line during fight
 						x <= 232-scroll_x;   -- temporary workaround of 1pix roll - needs better fix!
 					else
 						x <= "11101000"; -- 256-24=232
@@ -94,30 +102,36 @@ begin
 		end if;
 	end process;
 
+	-- -------------------------------------------------------------------------
+	-- Text mode phase/column counter
+	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
 				if reset='1' or text_mode='0' then
-					text_phase <= (others=>'0');
+					text_phase  <= (others=>'0');
 					text_column <= (others=>'0');
 				elsif conv_integer(screen_x)=7 then
-					text_phase <= "000";
+					text_phase  <= "000";
 					text_column <= (others=>'0');
 				elsif conv_integer(screen_x)>=8 and conv_integer(screen_x)<247 then
 					if text_phase="101" then
-						text_phase <= "000";
+						text_phase  <= "000";
 						text_column <= text_column + 1;
 					else
 						text_phase <= text_phase + 1;
 					end if;
 				else
-					text_phase <= (others=>'0');
+					text_phase  <= (others=>'0');
 					text_column <= (others=>'0');
 				end if;
 			end if;
 		end if;
 	end process;
 
+	-- -------------------------------------------------------------------------
+	-- VRAM address generation
+	-- -------------------------------------------------------------------------
 	process (clk_sys)
 		variable char_address	: std_logic_vector(12 downto 0);
 		variable data_address	: std_logic_vector(11 downto 0);
@@ -128,6 +142,7 @@ begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
 				sx := conv_integer(screen_x);
+
 				if text_mode='1' then
 					text_row := conv_integer(y(7 downto 3));
 					if sx < 8 then
@@ -154,11 +169,12 @@ begin
 							null;
 						end case;
 					end if;
+
 				elsif smode_M4='1' then
 					if (smode_M1='1' or smode_M3='1') then
 						char_address(12 downto 5) := table_address(13 downto 12) & ("011100" + y(7 downto 3));
 					else
-						char_address(12 downto 10)	:= table_address(13 downto 11);
+						char_address(12 downto 10) := table_address(13 downto 11);
 						if ysj_quirk = '1' then -- Enable VDP version 1 for Ys (Japan)
 							char_address(9) := table_address(10) and y(7);
 							char_address(8 downto 5) := y(6 downto 3);
@@ -167,9 +183,9 @@ begin
 							char_address(8 downto 5) := y(6 downto 3);
 						end if;
 					end if;
-					char_address(4 downto 0)	:= x(7 downto 3) + 1;
-					data_address					:= tile_index & tile_y;
-				
+					char_address(4 downto 0) := x(7 downto 3) + 1;
+					data_address              := tile_index & tile_y;
+
 					case x(2 downto 0) is
 					when "000" => vram_A <= char_address & "0";
 					when "001" => vram_A <= char_address & "1";
@@ -178,32 +194,45 @@ begin
 					when "101" => vram_A <= data_address & "10";
 					when "110" => vram_A <= data_address & "11";
 					when others =>
-					end case;	
-				else 
+					end case;
+
+				else
+					-- Legacy TMS9918 modes (Graphics I, Graphics II)
+					-- Address pipeline:
+					--   "000" -> name table  (tile_index captured at "001")
+					--   "010" -> pattern table (pattern byte captured at "011" into datac)
+					--   "011" -> color table  (color byte available on vram_D at "100")
 					case x(2 downto 0) is
 					when "000" => vram_A <= table_address & y(7 downto 3) & x(7 downto 3);
 					when "010" =>
 						if gfx1_mode='1' then
+							-- Graphics I: flat pattern table
 							vram_A <= pt_address & tile_index(7 downto 0) & y(2 downto 0);
 						else
-							vram_A <= pt_address(13) & ( y(7 downto 6) and pt_address(12 downto 11) )&
-										tile_index(7 downto 0) & y(2 downto 0);
+							-- Graphics II (Mode 2): banked pattern table
+							vram_A <= pt_address(13) & (y(7 downto 6) and pt_address(12 downto 11)) &
+									  tile_index(7 downto 0) & y(2 downto 0);
 						end if;
 					when "011" =>
 						if gfx1_mode='1' then
+							-- Graphics I: flat color table (one byte per 8 tiles)
 							vram_A <= ct_address(13 downto 6) & '0' & tile_index(7 downto 3);
 						else
-							vram_A <= ct_address(13) & ( y(7 downto 6) and ct_address(12 downto 11) )&
-									   tile_index(7 downto 0) &
-										y(2 downto 0);
+							-- Graphics II (Mode 2): banked color table
+							vram_A <= ct_address(13) &
+									  ((y(7 downto 6) & tile_index(7 downto 3)) and ct_address(12 downto 6)) &
+									  tile_index(2 downto 0) & y(2 downto 0);
 						end if;
 					when others =>
-					end case;	
-				end if ;
+					end case;
+				end if;
 			end if;
 		end if;
 	end process;
-	
+
+	-- -------------------------------------------------------------------------
+	-- VRAM data capture
+	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
@@ -226,45 +255,56 @@ begin
 							null;
 						end case;
 					end if;
+
 				elsif smode_M4='1' then
 					case x(2 downto 0) is
 					when "001" =>
 						tile_index(7 downto 0) <= vram_D;
 					when "010" =>
 						tile_index(8) <= vram_D(0);
-						flip_x <= vram_D(1);
-						tile_y(0) <= y(0) xor vram_D(2);
-						tile_y(1) <= y(1) xor vram_D(2);
-						tile_y(2) <= y(2) xor vram_D(2);
-						palette <= vram_D(3);
-						priority_latch <= vram_D(4);
+						flip_x        <= vram_D(1);
+						tile_y(0)     <= y(0) xor vram_D(2);
+						tile_y(1)     <= y(1) xor vram_D(2);
+						tile_y(2)     <= y(2) xor vram_D(2);
+						palette       <= vram_D(3);
+						priority_latch<= vram_D(4);
 					when "100" =>
 						data0 <= vram_D;
 					when "101" =>
 						data1 <= vram_D;
 					when "110" =>
 						data2 <= vram_D;
-	--				when "111" =>
-	--					data3 <= vram_D;
+				--	when "111" =>
+				--		data3 <= vram_D;
 					when others =>
 					end case;
-				else -- mode 2 and msx compat
+
+				else
+					-- Legacy TMS9918 modes
+					-- Data pipeline (one cycle behind address pipeline):
+					--   "001" -> tile_index  <- name table byte   (addr issued at "000")
+					--   "011" -> datac       <- pattern byte       (addr issued at "010")
+					--   "100" -> render      <- color byte on vram_D (addr issued at "011")
+					--
+					-- The color byte nibbles: [7:4] = foreground color, [3:0] = background color.
+					-- datac bit = 1 -> pixel is foreground; = 0 -> pixel is background.
 					case x(2 downto 0) is
 					when "001" =>
 						tile_index(7 downto 0) <= vram_D;
 					when "011" =>
-					datap <= vram_D;
-				when "101" =>
-					datac <= vram_D;
-				when "110" =>
-					flip_x <= '0' ;
-					palette <='0' ;
-					priority_latch <= '0' ;
-					for i in 0 to 7 loop
-						data0(i) <= (datap(i) and datac(4)) or (not datap(i) and datac(0)); 
-						data1(i) <= (datap(i) and datac(5)) or (not datap(i) and datac(1)); 
-						data2(i) <= (datap(i) and datac(6)) or (not datap(i) and datac(2)); 
-						data3(i) <= (datap(i) and datac(7)) or (not datap(i) and datac(3)); 
+						-- Capture pattern byte; color byte will be on vram_D next cycle ("100")
+						datac <= vram_D;
+					when "100" =>
+						-- vram_D is now the color byte; datac is the pattern byte.
+						-- Expand into four bitplanes for the shift process.
+						flip_x        <= '0';
+						palette       <= '0';
+						priority_latch<= '0';
+						for i in 0 to 7 loop
+							data0(i) <= (datac(i) and vram_D(4)) or (not datac(i) and vram_D(0));
+							data1(i) <= (datac(i) and vram_D(5)) or (not datac(i) and vram_D(1));
+							data2(i) <= (datac(i) and vram_D(6)) or (not datac(i) and vram_D(2));
+							data3(i) <= (datac(i) and vram_D(7)) or (not datac(i) and vram_D(3));
 						end loop;
 					when others =>
 					end case;
@@ -272,61 +312,64 @@ begin
 			end if;
 		end if;
 	end process;
-	
+
+	-- -------------------------------------------------------------------------
+	-- Shift registers and output
+	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
 			if ce_pix = '1' then
 				if text_mode='1' then
 					if conv_integer(screen_x)=7 then
 						text_shift <= text_pattern(7 downto 2);
-						priority <= '0';
+						priority   <= '0';
 					elsif conv_integer(screen_x)>=8 and conv_integer(screen_x)<248 then
 						if text_phase="101" then
 							text_shift <= text_pattern(7 downto 2);
-							priority <= '0';
+							priority   <= '0';
 						else
 							text_shift(5 downto 1) <= text_shift(4 downto 0);
-							text_shift(0) <= '0';
+							text_shift(0)          <= '0';
 						end if;
 					else
 						text_shift <= (others=>'0');
-						priority <= '0';
+						priority   <= '0';
 					end if;
 				else
 					case x(2 downto 0) is
 					when "111" =>
 						if flip_x='0' then
-							shift0	<= data0;
-							shift1	<= data1;
-							shift2	<= data2;
+							shift0 <= data0;
+							shift1 <= data1;
+							shift2 <= data2;
 							if smode_M4='1' then
-								shift3	<= vram_D;
+								shift3 <= vram_D;
 							else
 								shift3 <= data3;
 							end if;
 						else
-							shift0	<= data0(0)&data0(1)&data0(2)&data0(3)&data0(4)&data0(5)&data0(6)&data0(7);
-							shift1	<= data1(0)&data1(1)&data1(2)&data1(3)&data1(4)&data1(5)&data1(6)&data1(7);
-							shift2	<= data2(0)&data2(1)&data2(2)&data2(3)&data2(4)&data2(5)&data2(6)&data2(7);
-							shift3	<= vram_D(0)&vram_D(1)&vram_D(2)&vram_D(3)&vram_D(4)&vram_D(5)&vram_D(6)&vram_D(7);
+							shift0 <= data0(0)&data0(1)&data0(2)&data0(3)&data0(4)&data0(5)&data0(6)&data0(7);
+							shift1 <= data1(0)&data1(1)&data1(2)&data1(3)&data1(4)&data1(5)&data1(6)&data1(7);
+							shift2 <= data2(0)&data2(1)&data2(2)&data2(3)&data2(4)&data2(5)&data2(6)&data2(7);
+							shift3 <= vram_D(0)&vram_D(1)&vram_D(2)&vram_D(3)&vram_D(4)&vram_D(5)&vram_D(6)&vram_D(7);
 						end if;
 						palette_shift <= palette;
-						priority	<= priority_latch;
+						priority      <= priority_latch;
 					when others =>
-						shift0(7 downto 1) <= shift0(6 downto 0) ;
-						shift1(7 downto 1) <= shift1(6 downto 0) ;
-						shift2(7 downto 1) <= shift2(6 downto 0) ;
-						shift3(7 downto 1) <= shift3(6 downto 0) ;
+						shift0(7 downto 1) <= shift0(6 downto 0);
+						shift1(7 downto 1) <= shift1(6 downto 0);
+						shift2(7 downto 1) <= shift2(6 downto 0);
+						shift3(7 downto 1) <= shift3(6 downto 0);
 					end case;
 				end if;
 			end if;
 		end if;
 	end process;
-	
+
 	color(0) <= shift0(7) when text_mode='0' else text_fg_color(0) when text_shift(5)='1' else overscan(0);
 	color(1) <= shift1(7) when text_mode='0' else text_fg_color(1) when text_shift(5)='1' else overscan(1);
 	color(2) <= shift2(7) when text_mode='0' else text_fg_color(2) when text_shift(5)='1' else overscan(2);
 	color(3) <= shift3(7) when text_mode='0' else text_fg_color(3) when text_shift(5)='1' else overscan(3);
 	color(4) <= '0' when text_mode='1' else palette_shift;
-end architecture;
 
+end architecture;

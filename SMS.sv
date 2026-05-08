@@ -1181,6 +1181,7 @@ video video
 	.mask_column(mask_column),
 	.cut_mask(status[29]),
 	.smode_M1(smode_M1),
+	.smode_M2(smode_M2),
 	.smode_M3(smode_M3),
 	.x(x),
 	.y(y),
