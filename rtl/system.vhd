@@ -1004,7 +1004,7 @@ port map(
 					nvram_ex <= '0';
 					nvram_p  <= '0';
 					nvram_cme <= '0';
-					if mapper_wonderkid_force = '1' then
+					if mapper_wonderkid_force = '1' or mapper_wonderkid = '1' then
 						bank1 <= "00000000";
 						bank2 <= "00000000";
 						lock_mapper_B <= '1';
