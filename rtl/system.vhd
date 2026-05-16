@@ -307,7 +307,7 @@ architecture Behavioral of system is
 	signal castle_write_count  : integer range 0 to 15 := 0;
 	signal bank_write_seen     : std_logic := '0';
 	signal sega_mapper_write_seen : std_logic := '0';
-	signal mapper_detect_ticks : unsigned(11 downto 0) := (others => '0'); -- detection window timer
+	signal mapper_detect_ticks : unsigned(15 downto 0) := (others => '0'); -- detection window timer (16-bit: ~1.2ms at 53.6MHz, needed for external BIOS handoff)
 	-- Simple ROM-edge signature captured during download, used by Nemesis heuristics.
 	signal rom_page0_byte0     : std_logic_vector(7 downto 0) := x"FF";
 	signal rom_page0_byte1     : std_logic_vector(7 downto 0) := x"FF";
@@ -1376,11 +1376,11 @@ port map(
 					wonderkid_write_count <= 0;
 					sega_mapper_write_seen <= '0';
 				-- run a limited detection window while bootloader is active
-				elsif mapper_detect_ticks /= to_unsigned(4095, mapper_detect_ticks'length) then
+				elsif mapper_detect_ticks /= to_unsigned(65535, mapper_detect_ticks'length) then
 					mapper_detect_ticks <= mapper_detect_ticks + 1;
 				end if;
 
-				if bootloader_n = '1' and mapper_manual_force = '0' and mapper_detect_ticks < to_unsigned(4095, mapper_detect_ticks'length) then
+				if bootloader_n = '1' and mapper_manual_force = '0' and mapper_detect_ticks < to_unsigned(65535, mapper_detect_ticks'length) then
 					if WR_n = '0' and MREQ_n = '0' then
 						-- 4-PAK register write pattern.
 						if A = x"3FFE" then
@@ -1451,7 +1451,7 @@ port map(
 				end if;
 
 				-- after detection window:
-				if mapper_manual_force = '0' and mapper_detect_ticks = to_unsigned(4094, mapper_detect_ticks'length) then
+				if mapper_manual_force = '0' and mapper_detect_ticks = to_unsigned(65534, mapper_detect_ticks'length) then
 					-- Nemesis split heuristic inside Zemina-family writes.
 					if mapper_zemina_det = '1' then
 						if rom_page0_byte0 = x"FF" and rom_page0_byte1 = x"FF" and rom_last_byte0 /= x"FF" then
