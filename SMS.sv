@@ -277,7 +277,7 @@ parameter CONF_STR = {
 	"H8OA,Region,US/EU,Japan;",
 	"H8oBC,BIOS,Disable,Internal,Ext. File;",
 	"H8FS3,BINSMS,Load Ext. BIOS;",
-	"H8O[48:45],Mapper,Auto,Sega,Codemasters,Dahjee A,Linear,MSX,Nemesis II+,Zemina;",
+	"H8O[48:45],Mapper,Auto,Sega,Codemasters,Dahjee A,Linear,Zemina/MSX;",
 	"H8o8,Z80 Speed,Normal,Turbo;",
 	"H8-;",
 	"H7o12,VDPs,Both,2,1,None;",
@@ -847,13 +847,7 @@ wire mapper_force_sega      = (mapper_sel == 4'd1) & ~systeme;
 wire mapper_force_codies    = (mapper_sel == 4'd2);
 wire mapper_force_dahjee_a  = (mapper_sel == 4'd3);
 wire mapper_force_linear    = (mapper_sel == 4'd4);
-wire mapper_force_msx       = (mapper_sel == 4'd5);
-wire mapper_force_nemesis2  = (mapper_sel == 4'd6);
-wire mapper_force_zemina    = (mapper_sel == 4'd7);
-wire mapper_force_4pak      = 1'b0;  // removed from OSD (1 known game, auto-detected)
-wire mapper_force_castle    = 1'b0;  // removed from OSD (3-4 known games, auto-detected)
-wire mapper_force_nemesis1  = 1'b0;  // removed from OSD (2 known games, auto-detected)
-wire mapper_force_wonderkid = 1'b0;  // removed from OSD (1 known game, auto-detected)
+wire mapper_force_zemina    = (mapper_sel == 4'd5);  // covers MSX, Nemesis II+ and Zemina (all identical)
 
 wire [14:0] nvram_a;
 wire        nvram_we;
@@ -952,15 +946,9 @@ system #(63) system
 	.pal(pal),
 	.region(status[10]),
 	.mapper_lock(mapper_force_sega),
-	.mapper_4pak_force(mapper_force_4pak),
-	.mapper_castle_force(mapper_force_castle),
 	.mapper_codies_force(mapper_force_codies),
 	.mapper_dahjee_a_force(mapper_force_dahjee_a),
 	.mapper_linear_force(mapper_force_linear),
-	.mapper_msx_force(mapper_force_msx),
-	.mapper_nemesis1_force(mapper_force_nemesis1),
-	.mapper_nemesis2_force(mapper_force_nemesis2),
-	.mapper_wonderkid_force(mapper_force_wonderkid),
 	.mapper_zemina_force(mapper_force_zemina),
 	.vdp_enables(dbg_menu ? status[34:33] : 2'b00),
 	.psg_enables(dbg_menu ? status[36:35] : 2'b00),

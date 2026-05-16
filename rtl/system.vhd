@@ -100,15 +100,9 @@ entity system is
 		pal:				in STD_LOGIC;
 		region:			in	STD_LOGIC;
 		mapper_lock:	in STD_LOGIC;
-		mapper_4pak_force : in STD_LOGIC;
-		mapper_castle_force : in STD_LOGIC;
 		mapper_codies_force : in STD_LOGIC;
 		mapper_dahjee_a_force : in STD_LOGIC;
 		mapper_linear_force : in STD_LOGIC;
-		mapper_msx_force : in STD_LOGIC;
-		mapper_nemesis1_force : in STD_LOGIC;
-		mapper_nemesis2_force : in STD_LOGIC;
-		mapper_wonderkid_force : in STD_LOGIC;
 		mapper_zemina_force : in STD_LOGIC;   -- Force Zemina mapper (OSD override)
 		vdp_enables:	in STD_LOGIC_VECTOR(1 downto 0);
 		psg_enables:	in STD_LOGIC_VECTOR(1 downto 0);
@@ -1004,7 +998,7 @@ port map(
 					nvram_ex <= '0';
 					nvram_p  <= '0';
 					nvram_cme <= '0';
-					if mapper_wonderkid_force = '1' or mapper_wonderkid = '1' then
+					if mapper_wonderkid = '1' then
 						bank1 <= "00000000";
 						bank2 <= "00000000";
 						lock_mapper_B <= '1';
@@ -1014,9 +1008,7 @@ port map(
 				-- rom_size_pages / rom_page0_byte0 / rom_last_byte0 are stable here because
 				-- cart_download holds RESET_n low throughout the entire ROM transfer.
 				if RESET_n = '1' and reset_n_prev = '0' then
-					if mapper_nemesis1_force = '1' then
-						nem_bank0 <= std_logic_vector(rom_last_page_idx);
-					elsif mapper_nemesis2_force = '1' or mapper_zemina_force = '1' or mapper_msx_force = '1' then
+					if mapper_zemina_force = '1' then
 						nem_bank0 <= (others => '0');
 					elsif auto_nemesis1_boot = '1' then
 						-- ROM page 0 is blank (all $FF) but the last page carries code
@@ -1025,10 +1017,7 @@ port map(
 						-- ($0000) reaches the game's actual entry code instead of $FF.
 						mapper_zemina_det <= '1';
 						nem_bank0 <= std_logic_vector(rom_last_page_idx);
-					elsif mapper_4pak_force = '1' then
-						-- Force-enable 4-PAK via OSD override.
-						mapper_4pak <= '1';
-					elsif mapper_wonderkid_force = '1' or mapper_wonderkid = '1' then
+					elsif mapper_wonderkid = '1' then
 						-- All slots start at page 0; pre-lock to prevent 4-PAK misdetection
 						bank1         <= "00000000";
 						bank2         <= "00000000";
@@ -1189,14 +1178,11 @@ port map(
 		end if;
 	end process;
 
-	mapper_manual_force <= mapper_lock or mapper_4pak_force or mapper_castle_force or
-	                       mapper_codies_force or mapper_dahjee_a_force or mapper_linear_force or
-	                       mapper_msx_force or mapper_nemesis1_force or mapper_nemesis2_force or
-	                       mapper_wonderkid_force or mapper_zemina_force;
+	mapper_manual_force <= mapper_lock or mapper_codies_force or mapper_dahjee_a_force or
+	                       mapper_linear_force or mapper_zemina_force;
 
 	-- Castle mapper heuristic + OSD force.
-	mapper_castle <= '1' when mapper_castle_force = '1' else
-	                 '1' when mapper_manual_force = '0' and detect_castle = '1' else
+	mapper_castle <= '1' when mapper_manual_force = '0' and detect_castle = '1' else
 	                 '0';
 
 	-- Wonder Kid [Proto] [SMS-GG]: MAPPER_MSX_Generic16_8000
@@ -1220,8 +1206,7 @@ port map(
 	                              rom_crc16_run = x"599E" else  -- F-1 Spirit (Korea): writes only $0000
 	                     '0';
 
-	mapper_wonderkid <= '1' when mapper_wonderkid_force = '1' else
-	                    '1' when mapper_manual_force = '0' and
+	mapper_wonderkid <= '1' when mapper_manual_force = '0' and
 	                             (detect_wonderkid = '1' or rom_crc16_run = x"8613") else
 	                    '0';
 
@@ -1271,8 +1256,7 @@ port map(
 	-- Active for any Zemina-family mapper.
 	-- mapper_zemina_force (OSD): user explicitly selected Zemina mapper.
 	-- mapper_lock (OSD): user explicitly selected Sega mapper, disables all auto-detection.
-	use_zem <= '1' when (mapper_msx_force = '1' or mapper_zemina_force = '1' or
-	                    mapper_nemesis1_force = '1' or mapper_nemesis2_force = '1') else
+	use_zem <= '1' when mapper_zemina_force = '1' else
 	           '0' when mapper_manual_force = '1' else
 	           '0' when mapper_wonderkid = '1' else  -- $8000 writes are incompatible with Zemina/MSX
 	           '1' when (mapper_msx = '1' or mapper_zemina_det = '1' or mapper_zemina_crc = '1' or
@@ -1281,7 +1265,7 @@ port map(
 	           '0';
 
 	rom_a_i(12 downto 0) <= A(12 downto 0);
-	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a,auto_nemesis1_boot,rom_last_page_idx,detect_nemesis1,mapper_nemesis1_force)
+	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a,auto_nemesis1_boot,rom_last_page_idx,detect_nemesis1)
 	begin
 		if systeme = '1' then
 			case A(15 downto 14) is
@@ -1305,7 +1289,7 @@ port map(
 			case A(15 downto 13) is
 			when "000" =>
 				-- $0000-$1FFF: fixed (Nemesis: last 8KB page; Zemina/MSX: page 0)
-				if mapper_nemesis1_force = '1' or detect_nemesis1 = '1' or auto_nemesis1_boot = '1' then
+				if detect_nemesis1 = '1' or auto_nemesis1_boot = '1' then
 					rom_a_i(21 downto 13) <= '0' & std_logic_vector(rom_last_page_idx);
 				else
 					rom_a_i(21 downto 13) <= '0' & nem_bank0;
