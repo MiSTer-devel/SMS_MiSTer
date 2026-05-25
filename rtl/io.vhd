@@ -89,6 +89,8 @@ architecture rtl of io is
 	signal gg_tx_shift:	std_logic_vector(9 downto 0) := (others=>'1');
 	signal gg_tx_cnt:	unsigned(13 downto 0) := (others=>'0');
 	signal gg_tx_bits:	unsigned(3 downto 0) := (others=>'0');
+	signal gg_tx_pending:	std_logic := '0';
+	signal gg_tx_pending_data:	std_logic_vector(7 downto 0) := (others=>'0');
 	signal gg_rx_sync:	std_logic_vector(2 downto 0) := (others=>'1');
 	signal gg_pc6_sync:	std_logic_vector(2 downto 0) := (others=>'1');
 	signal gg_pc6_prev:	std_logic := '1';
@@ -100,6 +102,8 @@ architecture rtl of io is
 	signal gg_rx_frame_err:	std_logic := '0';
 	signal gg_nmi_serial:	std_logic := '0';
 	signal gg_nmi_pc6:	std_logic := '0';
+	signal gg_status:	std_logic_vector(7 downto 0);
+	signal gg_tx_wr_d:	std_logic := '0';
 	signal gg_baud_div:	unsigned(13 downto 0);
 	signal gg_baud_half:	unsigned(13 downto 0);
 	signal j1_th_dir: std_logic := '0';
@@ -156,6 +160,7 @@ begin
 		end loop;
 	end process;
 	gg_link_nmi_n <= '0' when gg='1' and gg_link_en='1' and (gg_nmi_serial='1' or gg_nmi_pc6='1') else '1';
+	gg_status <= gg_sctrl & gg_rx_frame_err & gg_rx_ready & gg_tx_busy;
 
 	pc_out: for i in 0 to 6 generate
 		gg_link_out(i) <= '0' when gg='1' and gg_link_en='1' and gg_pc_drive_en(i)='1' and gg_pc_drive_val(i)='0' else '1';
@@ -187,6 +192,8 @@ begin
 			gg_tx_shift <= (others=>'1');
 			gg_tx_cnt <= (others=>'0');
 			gg_tx_bits <= (others=>'0');
+			gg_tx_pending <= '0';
+			gg_tx_pending_data <= x"00";
 			gg_rx_sync <= (others=>'1');
 			gg_pc6_sync <= (others=>'1');
 			gg_pc6_prev <= '1';
@@ -198,6 +205,7 @@ begin
 			gg_rx_frame_err <= '0';
 			gg_nmi_serial <= '0';
 			gg_nmi_pc6 <= '0';
+			gg_tx_wr_d <= '0';
 			sc_multicart_latch <= x"FF";
 			sk1100_port_c <= x"FF";
 			analog_select <= '0';
@@ -207,11 +215,13 @@ begin
 			if gg='0' or gg_link_en='0' then
 				gg_tx_line <= '1';
 				gg_tx_busy <= '0';
+				gg_tx_pending <= '0';
 				gg_rx_state <= (others=>'0');
 				gg_rx_ready <= '0';
 				gg_rx_frame_err <= '0';
 				gg_nmi_serial <= '0';
 				gg_nmi_pc6 <= '0';
+				gg_tx_wr_d <= '0';
 				gg_rx_sync <= (others=>'1');
 				gg_pc6_sync <= (others=>'1');
 				gg_pc6_prev <= '1';
@@ -222,8 +232,18 @@ begin
 				if gg_tx_busy='1' then
 					if gg_tx_cnt=to_unsigned(0, gg_tx_cnt'length) then
 						if gg_tx_bits=to_unsigned(0, gg_tx_bits'length) then
-							gg_tx_busy <= '0';
-							gg_tx_line <= '1';
+							if gg_tx_pending='1' and gg_sctrl(4)='1' and gg_link_en='1' then
+								gg_txd <= gg_tx_pending_data;
+								gg_tx_shift <= '1' & gg_tx_pending_data & '0';
+								gg_tx_line <= '0';
+								gg_tx_bits <= to_unsigned(9, gg_tx_bits'length);
+								gg_tx_cnt <= gg_baud_div;
+								gg_tx_pending <= '0';
+							else
+								gg_tx_busy <= '0';
+								gg_tx_line <= '1';
+								gg_tx_pending <= '0';
+							end if;
 						else
 							gg_tx_line <= gg_tx_shift(1);
 							gg_tx_shift <= '1' & gg_tx_shift(9 downto 1);
@@ -302,20 +322,26 @@ begin
 			if gg='1' and A(7 downto 3) = "00000" then
 				if WR_n='0' then
 					case A(2 downto 0) is
-						when "001" => gg_pdr <= D_in ;
+						when "001" =>
+							gg_pdr <= D_in ;
 						when "010" =>
 							gg_ddr <= D_in ;
 							if D_in(7)='1' then
 								gg_nmi_pc6 <= '0';
 							end if;
 						when "011" =>
-							gg_txd <= D_in ;
-							if gg_link_en='1' and gg_sctrl(4)='1' and gg_tx_busy='0' then
-								gg_tx_shift <= '1' & D_in & '0';
-								gg_tx_line <= '0';
-								gg_tx_bits <= to_unsigned(9, gg_tx_bits'length);
-								gg_tx_cnt <= gg_baud_div;
-								gg_tx_busy <= '1';
+							if gg_tx_wr_d='0' then
+								gg_txd <= D_in ;
+								if gg_link_en='1' and gg_sctrl(4)='1' and gg_tx_busy='0' then
+									gg_tx_shift <= '1' & D_in & '0';
+									gg_tx_line <= '0';
+									gg_tx_bits <= to_unsigned(9, gg_tx_bits'length);
+									gg_tx_cnt <= gg_baud_div;
+									gg_tx_busy <= '1';
+								elsif gg_link_en='1' and gg_sctrl(4)='1' then
+									gg_tx_pending <= '1';
+									gg_tx_pending_data <= D_in;
+								end if;
 							end if;
 						-- when "100" => gg_rxd <= D_in ;
 						when "101" =>
@@ -326,6 +352,7 @@ begin
 							if D_in(4)='0' then
 								gg_tx_line <= '1';
 								gg_tx_busy <= '0';
+								gg_tx_pending <= '0';
 							end if;
 							if D_in(5)='0' then
 								gg_rx_state <= (others=>'0');
@@ -376,6 +403,11 @@ begin
 					ctrl <= D_in;
 				end if ;
 			end if;
+			if gg='1' and A(7 downto 3)="00000" and WR_n='0' and A(2 downto 0)="011" then
+				gg_tx_wr_d <= '1';
+			else
+				gg_tx_wr_d <= '0';
+			end if;
 		end if;
 	end process;
 
@@ -404,7 +436,7 @@ begin
 						when "100" => D_out <= gg_rxd ;
 						when "101" =>
 							if gg_link_en='1' then
-								D_out <= gg_sctrl & gg_rx_frame_err & gg_rx_ready & gg_tx_busy;
+								D_out <= gg_status;
 							else
 								D_out <= "00111000";
 							end if;
