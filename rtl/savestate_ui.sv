@@ -1,49 +1,84 @@
-// savestate_ui.sv
-// Translates OSD status bits and PS/2 keyboard shortcuts into
-// one-cycle ss_save / ss_load pulses and slot selection.
+// savestate_ui.sv  (SMS_MiSTer)
 //
-// Slot OSD bits (status[16:15]):  0→slot 1, 1→slot 2, 2→slot 3, 3→slot 4
-// Save trigger  (status[61]):     rising edge → ss_save pulse
-// Load trigger  (status[62]):     rising edge → ss_load pulse
+// Translates OSD status bits, PS/2 keyboard shortcuts, and gamepad button
+// combos into one-cycle ss_save / ss_load pulses and slot selection.
 //
-// Keyboard shortcuts (via MiSTer ps2_key interface):
-//   F1          → load state  (keycode 0x05, not extended)
-//   Alt + F1    → save state  (Left-Alt = 0x11 non-ext, Right-Alt = 0x11 ext)
-// ps2_key[10] = toggle strobe (changes on every key event)
-// ps2_key[9]  = 1 when key pressed, 0 when released
-// ps2_key[8]  = extended key flag
-// ps2_key[7:0]= PS/2 scan-code set 2 key code
+// Info message indices for hps_io (1-based; 0 = no display):
+//   1    : hint message ("Slot=LR|Save=Pause+Down|Load=Pause+Up")
+//   2-5  : "Active Slot 1..4"
+//   6,8,10,12 : "Save to state 1..4"
+//   7,9,11,13 : "Restore state 1..4"
+//
+// Slot OSD bits (status[16:15]): 0→slot 1, 1→slot 2, 2→slot 3, 3→slot 4
+// OSD save  (status[61]):  rising edge → ss_save
+// OSD load  (status[62]):  rising edge → ss_load
+//
+// Gamepad combos (SaveState button = joy[12]):
+//   SS + Left              → switch to prev slot
+//   SS + Right             → switch to next slot
+//   SS + Pause + Down      → save state
+//   SS + Pause + Up        → load state
+//
+// PS/2 keyboard:  F1 = load state,  Alt+F1 = save state
 
 module savestate_ui (
     input             clk,
-    input      [63:0]  status,        // OSD status word from hps_io
-    input      [10:0]  ps2_key,       // PS/2 key from hps_io
-    output reg  [1:0] ss_slot,        // current slot (0-based)
-    output reg        ss_save,        // one-cycle save pulse
-    output reg        ss_load         // one-cycle load pulse
+    input      [63:0] status,        // OSD status word from hps_io
+    input      [10:0] ps2_key,       // PS/2 key interface from hps_io
+    input             allow_ss,      // 1 when savestates are permitted
+    input             joySS,         // SaveState button  (joy[12])
+    input             joyRight,      // joy[0]
+    input             joyLeft,       // joy[1]
+    input             joyDown,       // joy[2]
+    input             joyUp,         // joy[3]
+    input             joyPause,      // joy[6]
+    input       [1:0] status_slot,   // OSD slot selector  (status[16:15])
+    input       [1:0] OSD_saveload,  // {load_bit, save_bit} = status[62:61]
+    output reg  [1:0] selected_slot, // current slot (0-based), drives savestates
+    output reg        ss_save,       // one-cycle save pulse
+    output reg        ss_load,       // one-cycle load pulse
+    output reg  [7:0] ss_info,       // info message index to display
+    output reg        ss_info_req,   // one-cycle: latch ss_info into hps_io
+    output reg        statusUpdate   // one-cycle: push slot back to OSD
 );
 
-// Slot selection is live from status bits
-always @(posedge clk) begin
-    ss_slot <= status[16:15];
-end
+// Internal slot register
+reg [1:0] slot;
+reg [1:0] old_status_slot;
+
+// Two-stage statusUpdate: fires the cycle after slot changes so that
+// selected_slot has already been updated when SMS.sv reads it.
+reg statusUpdate_pending;
+
+// PS/2 state
+reg ps2_stb;
+reg alt_held;
+reg kbd_save, kbd_load;
+
+// Joystick edge trackers
+reg joyLeft_r, joyRight_r, joyDown_r, joyUp_r, joySS_r;
+
+// SS hold-to-hint timer (~2.5s at 53.693 MHz = clk_sys)
+// bit 27 trips at 2^27 = 134 M cycles
+localparam SS_HINT_BITS = 27;
+reg [SS_HINT_BITS:0] ss_hold_cnt;   // 28-bit up-counter
+reg                  ss_combo_done; // combo or timeout already fired this press
+
+// OSD edge trackers
+reg old_osd_save, old_osd_load;
 
 // -----------------------------------------------------------------------
-// PS/2 keyboard shortcuts: F1 = load, Alt+F1 = save
+// PS/2 keyboard: F1 = load,  Alt+F1 = save
 // -----------------------------------------------------------------------
-reg  ps2_stb;
-reg  alt_held;
-reg  kbd_save, kbd_load;
-
 always @(posedge clk) begin
     ps2_stb  <= ps2_key[10];
     kbd_save <= 0;
     kbd_load <= 0;
 
-    if (ps2_stb ^ ps2_key[10]) begin   // new key event
-        if (ps2_key[7:0] == 8'h11)         // Left-Alt or Right-Alt
+    if (ps2_stb ^ ps2_key[10]) begin
+        if (ps2_key[7:0] == 8'h11)
             alt_held <= ps2_key[9];
-        if (ps2_key[7:0] == 8'h05 && ps2_key[9]) begin  // F1 pressed
+        if (ps2_key[7:0] == 8'h05 && ps2_key[9]) begin
             if (alt_held) kbd_save <= 1;
             else          kbd_load <= 1;
         end
@@ -51,16 +86,115 @@ always @(posedge clk) begin
 end
 
 // -----------------------------------------------------------------------
-// Edge detectors for OSD save / load triggers; OR with keyboard shortcuts
+// Main logic: OSD / keyboard / gamepad
 // -----------------------------------------------------------------------
-reg old_save, old_load;
-
 always @(posedge clk) begin
-    old_save <= status[61];
-    old_load <= status[62];
+    // Defaults
+    ss_save              <= 0;
+    ss_load              <= 0;
+    ss_info_req          <= 0;
+    statusUpdate         <= statusUpdate_pending; // fire 1 cycle after slot change
+    statusUpdate_pending <= 0;
 
-    ss_save <= (~old_save & status[61]) | kbd_save;
-    ss_load <= (~old_load & status[62]) | kbd_load;
+    // Latch joystick edges
+    joySS_r    <= joySS;
+    joyLeft_r  <= joyLeft;
+    joyRight_r <= joyRight;
+    joyDown_r  <= joyDown;
+    joyUp_r    <= joyUp;
+
+    // Rising edge of SS: show current slot; start hold-to-hint timer
+    if (~joySS_r & joySS) begin
+        ss_info_req   <= 1;
+        ss_info       <= 8'd2 + slot;  // "Active Slot N"
+        ss_hold_cnt   <= 0;
+        ss_combo_done <= 0;
+    end
+
+    // SS held without action: count up; show hint after ~2.5s
+    if (joySS & joySS_r & ~ss_combo_done) begin
+        if (ss_hold_cnt[SS_HINT_BITS]) begin
+            ss_info_req   <= 1;
+            ss_info       <= 8'd1;     // hint
+            ss_combo_done <= 1;
+        end else
+            ss_hold_cnt   <= ss_hold_cnt + 1'd1;
+    end
+
+    // Falling edge of SS: show hint only if no combo/timeout occurred
+    if (joySS_r & ~joySS & ~ss_combo_done) begin
+        ss_info_req <= 1;
+        ss_info     <= 8'd1;           // hint
+    end
+
+    // Sync slot when user changes it through the OSD menu
+    old_status_slot <= status_slot;
+    if (status_slot != old_status_slot)
+        slot <= status_slot;
+
+    // selected_slot tracks slot with 1-cycle lag; aligned with statusUpdate
+    selected_slot <= slot;
+
+    // OSD save/load (status[61]=save, status[62]=load)
+    old_osd_save <= OSD_saveload[0];
+    old_osd_load <= OSD_saveload[1];
+
+    if (~old_osd_save & OSD_saveload[0] & allow_ss) begin
+        ss_save     <= 1;
+        ss_info_req <= 1;
+        ss_info     <= 8'd6 + {slot, 1'b0};   // "Save to state N"  (1-based: 6,8,10,12)
+    end
+    if (~old_osd_load & OSD_saveload[1] & allow_ss) begin
+        ss_load     <= 1;
+        ss_info_req <= 1;
+        ss_info     <= 8'd7 + {slot, 1'b0};   // "Restore state N"  (1-based: 7,9,11,13)
+    end
+
+    // PS/2 keyboard shortcuts
+    if (kbd_save & allow_ss) begin
+        ss_save     <= 1;
+        ss_info_req <= 1;
+        ss_info     <= 8'd6 + {slot, 1'b0};
+    end
+    if (kbd_load & allow_ss) begin
+        ss_load     <= 1;
+        ss_info_req <= 1;
+        ss_info     <= 8'd7 + {slot, 1'b0};
+    end
+
+    // Gamepad combos — only when the dedicated SaveState button is held
+    if (joySS) begin
+        // Rising edge of Left (no Pause): previous slot
+        if (~joyLeft_r & joyLeft & ~joyPause) begin
+            slot                 <= (slot == 2'd0) ? 2'd3 : slot - 2'd1;
+            statusUpdate_pending <= 1;
+            ss_info_req          <= 1;
+            ss_info              <= 8'd2 + ((slot == 2'd0) ? 2'd3 : slot - 2'd1);
+            ss_combo_done        <= 1;
+        end
+        // Rising edge of Right (no Pause): next slot
+        if (~joyRight_r & joyRight & ~joyPause) begin
+            slot                 <= (slot == 2'd3) ? 2'd0 : slot + 2'd1;
+            statusUpdate_pending <= 1;
+            ss_info_req          <= 1;
+            ss_info              <= 8'd2 + ((slot == 2'd3) ? 2'd0 : slot + 2'd1);
+            ss_combo_done        <= 1;
+        end
+        // Rising edge of Down while Pause held: save
+        if (joyPause & ~joyDown_r & joyDown & allow_ss) begin
+            ss_save       <= 1;
+            ss_info_req   <= 1;
+            ss_info       <= 8'd6 + {slot, 1'b0};
+            ss_combo_done <= 1;
+        end
+        // Rising edge of Up while Pause held: load
+        if (joyPause & ~joyUp_r & joyUp & allow_ss) begin
+            ss_load       <= 1;
+            ss_info_req   <= 1;
+            ss_info       <= 8'd7 + {slot, 1'b0};
+            ss_combo_done <= 1;
+        end
+    end
 end
 
 endmodule

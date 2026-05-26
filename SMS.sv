@@ -360,9 +360,23 @@ parameter CONF_STR = {
 	"H8RB,Soft Reset;",
 	"H8R9,Eject ROM;",
 	"R0,Reset;",
-	"J1,Fire 1,Fire 2,Pause,Coin,Arcade 3,Soft Reset;",
+	"J1,Fire 1,Fire 2,Pause,Coin,Arcade 3,Soft Reset,-,-,SaveState;",
 	"jn,A|P,B,Start,Coin,X,Select;",
 	"jp,Y|P,A,Start,Coin,X,Select;",
+	"I,",
+	"Slot=DPAD|Save/Load=Pause+DPAD,",
+	"Active Slot 1,",
+	"Active Slot 2,",
+	"Active Slot 3,",
+	"Active Slot 4,",
+	"Save to state 1,",
+	"Restore state 1,",
+	"Save to state 2,",
+	"Restore state 2,",
+	"Save to state 3,",
+	"Restore state 3,",
+	"Save to state 4,",
+	"Restore state 4;",
 	"V,v",`BUILD_DATE
 };
 
@@ -551,6 +565,9 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(0)) hps_io
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(pal),
 	.gamma_bus(gamma_bus),
+
+	.info_req(ss_info_req),
+	.info(ss_info),
 
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0),
@@ -870,6 +887,12 @@ always @(posedge clk_sys) begin
 	if (ioctl_wr & (ioctl_index==4)) begin
 		systeme <= 1'b1;
 	end;
+	// Joystick combo changed the slot — push new value back to OSD
+	if (ss_status) begin
+		status_in        <= {64'd0, status};
+		status_in[16:15] <= ss_slot;
+		status_set       <= 1'b1;
+	end;
 end
 
 wire [13:0] ram_a;
@@ -913,6 +936,10 @@ wire         ss_bios_mode = bios_en & ~dbr;
 wire         ss_state_allowed = dbr | ss_bios_mode;
 assign ss_save = ss_save_raw & ss_state_allowed;
 assign ss_load = ss_load_raw & ss_state_allowed;
+
+wire  [7:0]  ss_info;
+wire         ss_info_req;
+wire         ss_status;    // one-cycle pulse: push new slot to OSD
 
 wire        sr_ddram_clk;
 wire [7:0]  sr_ddram_burstcnt;
@@ -1095,12 +1122,24 @@ system #(63) system
 );
 
 savestate_ui savestate_ui_inst (
-	.clk    (clk_sys),
-	.status (status),
-	.ps2_key(ps2_key),
-	.ss_slot(ss_slot),
-	.ss_save(ss_save_raw),
-	.ss_load(ss_load_raw)
+	.clk         (clk_sys),
+	.status      (status),
+	.ps2_key     (ps2_key),
+	.allow_ss    (ss_state_allowed),
+	.joySS       (swap ? joy_1[12] : joy_0[12]),
+	.joyRight    (swap ? joy_1[0]  : joy_0[0]),
+	.joyLeft     (swap ? joy_1[1]  : joy_0[1]),
+	.joyDown     (swap ? joy_1[2]  : joy_0[2]),
+	.joyUp       (swap ? joy_1[3]  : joy_0[3]),
+	.joyPause    (swap ? joy_1[6]  : joy_0[6]),
+	.status_slot (status[16:15]),
+	.OSD_saveload({status[62], status[61]}),
+	.selected_slot(ss_slot),
+	.ss_save     (ss_save_raw),
+	.ss_load     (ss_load_raw),
+	.ss_info     (ss_info),
+	.ss_info_req (ss_info_req),
+	.statusUpdate(ss_status)
 );
 
 savestates savestates_inst (
