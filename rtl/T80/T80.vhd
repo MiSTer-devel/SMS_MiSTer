@@ -118,10 +118,10 @@ entity T80 is
 		IntE       : out std_logic;
 		Stop       : out std_logic;
 		out0       : in  std_logic := '0';  -- 0 => OUT(C),0, 1 => OUT(C),255
-		REG        : out std_logic_vector(211 downto 0); -- IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
+		REG        : out std_logic_vector(229 downto 0); -- Halt_FF, Alternate, WZ, IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
 
 		DIRSet     : in  std_logic := '0';
-		DIR        : in  std_logic_vector(211 downto 0) := (others => '0'); -- IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
+		DIR        : in  std_logic_vector(229 downto 0) := (others => '0'); -- Halt_FF, Alternate, WZ, IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
 		-- Prefix/instruction-set state: '00'=no prefix (clean save point)
 		ISet_out   : out std_logic_vector(1 downto 0)
 	);
@@ -257,14 +257,25 @@ architecture rtl of T80 is
 	signal Halt                 : std_logic;
 	signal XYbit_undoc          : std_logic;
 	signal DOR                  : std_logic_vector(127 downto 0);
+	signal RegDIR               : std_logic_vector(127 downto 0);
 
 begin
 
 	ISet_out <= ISet;
 
-	REG <= IntE_FF2 & IntE_FF1 & IStatus & DOR & std_logic_vector(PC) & std_logic_vector(SP) & std_logic_vector(R) & I & Fp & Ap & F & ACC when Alternate = '0'
-			 else IntE_FF2 & IntE_FF1 & IStatus & DOR(127 downto 112) & DOR(47 downto 0) & DOR(63 downto 48) & DOR(111 downto 64) &
+	REG <= Halt_FF & Alternate & WZ & IntE_FF2 & IntE_FF1 & IStatus & DOR & std_logic_vector(PC) & std_logic_vector(SP) & std_logic_vector(R) & I & Fp & Ap & F & ACC when Alternate = '0'
+			 else Halt_FF & Alternate & WZ & IntE_FF2 & IntE_FF1 & IStatus & DOR(127 downto 112) & DOR(47 downto 0) & DOR(63 downto 48) & DOR(111 downto 64) &
 						std_logic_vector(PC) & std_logic_vector(SP) & std_logic_vector(R) & I & Fp & Ap & F & ACC;
+
+	RegDIR <= DIR(207 downto 80) when DIR(228) = '0' else
+	          DIR(207 downto 192) & -- IY
+	          DIR(127 downto 112) & -- HL
+	          DIR(111 downto 96)  & -- DE
+	          DIR(95 downto 80)   & -- BC
+	          DIR(143 downto 128) & -- IX
+	          DIR(191 downto 176) & -- HL'
+	          DIR(175 downto 160) & -- DE'
+	          DIR(159 downto 144);  -- BC'
 
 	mcode : work.T80_MCode
 		generic map(
@@ -418,11 +429,23 @@ begin
 				SP  <= unsigned(DIR(63 downto 48));
 				PC  <= unsigned(DIR(79 downto 64));
 				A   <= DIR(79 downto 64);
+				WZ  <= DIR(227 downto 212);
 				IStatus <= DIR(209 downto 208);
 				ISet <= "00";
 				XY_State <= "00";
 				XY_Ind <= '0';
-				Alternate <= '0';
+				Alternate <= DIR(228);
+				IR <= "00000000";
+				MCycles <= "001";
+				DO <= "00000000";
+				Read_To_Reg_r <= "00000";
+				Arith16_r <= '0';
+				BTR_r <= '0';
+				Z16_r <= '0';
+				ALU_Op_r <= "0000";
+				Save_ALU_r <= '0';
+				PreserveC_r <= '0';
+				I_RXDD <= '0';
 
 			elsif ClkEn = '1' then
 				ALU_Op_r <= "0000";
@@ -956,7 +979,7 @@ begin
 			DOCL => RegBusC(7 downto 0),
 			DOR  => DOR,
 			DIRSet => DIRSet,
-			DIR  => DIR(207 downto 80));
+			DIR  => RegDIR);
 
 ---------------------------------------------------------------------------
 --
@@ -1087,7 +1110,7 @@ begin
 			if DIRSet = '1' then
 				IntE_FF2 <= DIR(211);
 				IntE_FF1 <= DIR(210);
-				Halt_FF <= '0';
+				Halt_FF <= DIR(229);
 				-- Restart from a clean opcode-fetch cycle after state restore.
 				-- Without this, stale MCycle/TState/IR context from pre-load execution
 				-- can continue with restored registers and cause immediate divergence.

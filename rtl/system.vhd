@@ -138,8 +138,8 @@ entity system is
 		BIOSWEN: IN  STD_LOGIC;
 
 		-- Save-state interface
-		z80_reg_out  : out STD_LOGIC_VECTOR(211 downto 0);
-		z80_dir      : in  STD_LOGIC_VECTOR(211 downto 0) := (others => '0');
+		z80_reg_out  : out STD_LOGIC_VECTOR(229 downto 0);
+		z80_dir      : in  STD_LOGIC_VECTOR(229 downto 0) := (others => '0');
 		z80_set      : in  STD_LOGIC := '0';
 		vdp_regs_out : out STD_LOGIC_VECTOR(127 downto 0);
 		vdp_regs_in  : in  STD_LOGIC_VECTOR(127 downto 0) := (others => '0');
@@ -165,7 +165,33 @@ entity system is
 		-- MREQ_n: low = normal opcode fetch, high = interrupt acknowledge
 		z80_mreq_n   : out STD_LOGIC;
 		-- ISet: "00" = no prefix active (clean instruction boundary)
-		z80_iset     : out STD_LOGIC_VECTOR(1 downto 0)
+		z80_iset     : out STD_LOGIC_VECTOR(1 downto 0);
+		-- Save-state interface for VDP2 (System E second VDP)
+		vdp2_regs_out : out STD_LOGIC_VECTOR(127 downto 0);
+		vdp2_regs_in  : in  STD_LOGIC_VECTOR(127 downto 0) := (others => '0');
+		vdp2_regs_set : in  STD_LOGIC := '0';
+		vdp2_cram_out : out STD_LOGIC_VECTOR(383 downto 0);
+		ss_cram2_wr   : in  STD_LOGIC := '0';
+		ss_cram2_A    : in  STD_LOGIC_VECTOR(4 downto 0)  := (others => '0');
+		ss_cram2_D    : in  STD_LOGIC_VECTOR(11 downto 0) := (others => '0');
+		ss_vram2_en   : in  STD_LOGIC := '0';
+		ss_vram2_A    : in  STD_LOGIC_VECTOR(14 downto 0) := (others => '0');
+		ss_vram2_D    : out STD_LOGIC_VECTOR(7 downto 0);
+		ss_vram2_WE   : in  STD_LOGIC := '0';
+		ss_vram2_WA   : in  STD_LOGIC_VECTOR(14 downto 0) := (others => '0');
+		ss_vram2_WD   : in  STD_LOGIC_VECTOR(7 downto 0)  := (others => '0');
+		-- Save-state interface for PSG2 (System E second PSG)
+		psg2_out      : out STD_LOGIC_VECTOR(55 downto 0);
+		psg2_in       : in  STD_LOGIC_VECTOR(55 downto 0) := (others => '0');
+		psg2_set      : in  STD_LOGIC := '0';
+		-- Save-state interface for IO registers
+		io_state_out  : out STD_LOGIC_VECTOR(31 downto 0);
+		io_state_in   : in  STD_LOGIC_VECTOR(31 downto 0) := (others => '0');
+		io_state_set  : in  STD_LOGIC := '0';
+		-- System E hardware pause: gates Z80 clock independently of ce_pix
+		-- (ce_pix keeps running so VDP scanout and sync are unaffected)
+		se_pause      : in  STD_LOGIC := '0';
+		ss_freeze     : in  STD_LOGIC := '0'
 	);
 end system;
 
@@ -228,6 +254,13 @@ architecture Behavioral of system is
 	signal vdp_se_bank:		std_logic := '0';
 	signal vdp2_se_bank:		std_logic := '0';
 	signal vdp_cpu_bank:		std_logic := '0';
+
+	-- VDP2 save-state internal wires (System E)
+	signal vdp2_regs_out_i   : std_logic_vector(127 downto 0);
+	signal vdp2_cram_out_i   : std_logic_vector(383 downto 0);
+	signal vdp2_vram_D_i     : std_logic_vector(7 downto 0);
+	-- PSG2 save-state internal wire
+	signal psg2_out_i        : std_logic_vector(55 downto 0);
 	signal rom_bank:			std_logic_vector(3 downto 0) := "0000";
 
 	signal PSG_disable:		std_logic;
@@ -548,7 +581,20 @@ begin
 		ysj_quirk	=> ysj_quirk,
 --		mask_column => mask2_column,
 		black_column => black_column,
-		reset_n  => RESET_n
+		reset_n  => RESET_n,
+		ss_regs_out => vdp2_regs_out_i,
+		ss_regs_in  => vdp2_regs_in,
+		ss_regs_set => vdp2_regs_set,
+		ss_cram_out => vdp2_cram_out_i,
+		ss_cram_wr  => ss_cram2_wr,
+		ss_cram_A   => ss_cram2_A,
+		ss_cram_D   => ss_cram2_D,
+		ss_vram_en  => ss_vram2_en,
+		ss_vram_A   => ss_vram2_A,
+		ss_vram_D   => vdp2_vram_D_i,
+		ss_vram_WE  => ss_vram2_WE,
+		ss_vram_WA  => ss_vram2_WA,
+		ss_vram_WD  => ss_vram2_WD
 	);
 
 	psg_inst: jt89
@@ -581,7 +627,10 @@ begin
 		soundL	=> PSG2_outL,
 		soundR	=> PSG2_outR,
 
-		rst		=> not RESET_n
+		rst		=> not RESET_n,
+		ss_out => psg2_out_i,
+		ss_set => psg2_set,
+		ss_in  => psg2_in
 	);
 	
 	fm: work.opll
@@ -603,7 +652,7 @@ begin
 			if RESET_n='0' then
 				fm_d <= (others => '0');
 				fm_a <= '0';
-			elsif fm_WR_n='0' then
+			elsif ss_freeze = '0' and fm_WR_n='0' then
 				fm_d <= D_in;
 				fm_a <= A(0);
 			end if;
@@ -714,14 +763,28 @@ port map(
 		gg_link_nmi_n => gg_link_nmi_n,
 		systeme	=> systeme,
 		region	=> region,
+		vdp_enables   => vdp_enables,
+		psg_enables   => psg_enables,
+		se_mapper_in  => mapper_in(7 downto 0),
+		se_mapper_set => mapper_set,
+		io_state_out  => io_state_out,
+		io_state_in   => io_state_in,
+		io_state_set  => io_state_set,
+		ss_freeze     => ss_freeze,
 		RESET_n	=> RESET_n
 	);
 	
-	ce_z80 <= ce_pix when (systeme = '1' or turbo='1') else ce_cpu;
+	ce_z80 <= '0' when se_pause='1' else
+	          ce_pix when (systeme = '1' or turbo='1') else ce_cpu;
 	io_cycle <= '1' when IORQ_n='0' and M1_n='1' else '0';
 	z80_m1_n   <= M1_n;
 	z80_mreq_n <= MREQ_n;
 	z80_iset   <= z80_iset_int;
+	-- VDP2 / PSG2 SS output port connections
+	vdp2_regs_out <= vdp2_regs_out_i;
+	vdp2_cram_out <= vdp2_cram_out_i;
+	ss_vram2_D    <= vdp2_vram_D_i;
+	psg2_out      <= psg2_out_i;
 	io_upper_port <= '1' when A(7 downto 6)="11" else '0';
 	io_sms_port <= '1' when A(7 downto 6)="00" and (A(0)='1' or (gg='1' and A(5 downto 3)="000")) else '0';
 	io_gg_port <= '1' when gg='1' and A(7 downto 3)="00000" and A(2 downto 1)/="11" else '0';
@@ -850,10 +913,10 @@ port map(
 	det_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)=x"F2" else '1';
 	IRQ_n <= vdp_IRQ_n when systeme='0' else vdp2_IRQ_n;
 					
-	ram_WR   <= not WR_n when MREQ_n='0' and A(15 downto 14)="11" and sc_cart_ram_32k='0' else '0';
-	vram_WR  <= not WR_n when MREQ_n='0' and A(15 downto 14)="10" and vdp_cpu_bank='1' and systeme='1' else '0';
-	vram2_WR  <= not WR_n when MREQ_n='0' and A(15 downto 14)="10" and vdp_cpu_bank='0' and systeme='1' else '0';
-	nvram_WR <= not WR_n when MREQ_n='0' and (((A(15 downto 14)="10" and nvram_e = '1')
+	ram_WR   <= not WR_n when ss_freeze = '0' and MREQ_n='0' and A(15 downto 14)="11" and sc_cart_ram_32k='0' else '0';
+	vram_WR  <= not WR_n when ss_freeze = '0' and MREQ_n='0' and A(15 downto 14)="10" and vdp_cpu_bank='1' and systeme='1' else '0';
+	vram2_WR  <= not WR_n when ss_freeze = '0' and MREQ_n='0' and A(15 downto 14)="10" and vdp_cpu_bank='0' and systeme='1' else '0';
+	nvram_WR <= not WR_n when ss_freeze = '0' and MREQ_n='0' and (((A(15 downto 14)="10" and nvram_e = '1')
 						or (A(15 downto 14)="11" and nvram_ex = '1') 
 						or (A(15 downto 13)="101" and nvram_cme = '1'))
 						or sc_cart_ram_low='1'
@@ -875,7 +938,7 @@ port map(
 				-- disabled (bootloader_n=1) would leave bootloader_n=0 (reset default)
 				-- so the Z80 would read BIOS ROM instead of cart ROM → instant crash.
 				bootloader_n <= mapper_in(54);
-			elsif ctl_WR_n='0' then
+			elsif ss_freeze = '0' and ctl_WR_n='0' then
 				if ext_bios_sel='1' and ext_bios_loaded='1' then
 					-- For external BIOS: honour port $3E bit 3 (active low BIOS enable)
 					-- bit3=0 -> BIOS ROM enabled -> bootloader_n=0
@@ -918,9 +981,9 @@ port map(
 			if RESET_n='0' then 
 				det_D <= "111";
 				PSG_mux <= x"FF";
-			elsif det_WR_n='0' then
+			elsif ss_freeze = '0' and det_WR_n='0' then
 				det_D <= D_in(2 downto 0);
-			elsif bal_WR_n='0' then
+			elsif ss_freeze = '0' and bal_WR_n='0' then
 				PSG_mux <= D_in;
 			end if;
 		end if;
@@ -979,7 +1042,18 @@ port map(
 			mapper_msx <= '0' ;
 		else
 			if rising_edge(clk_sys) then
-			if bootloader_n='1' and sc3000_en='0' and mapper_wonderkid='0' and not mapper_msx_lock then
+				if mapper_set = '1' then
+					mapper_msx <= mapper_in(56);
+					if mapper_in(56) = '1' then
+						mapper_msx_lock <= true;
+						mapper_msx_lock0 <= true;
+					else
+						mapper_msx_lock <= false;
+						mapper_msx_lock0 <= false;
+						mapper_msx_check0 <= false;
+						mapper_msx_check1 <= false;
+					end if;
+				elsif ss_freeze = '0' and bootloader_n='1' and sc3000_en='0' and mapper_wonderkid='0' and not mapper_msx_lock then
 					if MREQ_n='0' then 
 					-- in this state, A is stable but not D_out
 						if A=x"0000" then
@@ -1029,11 +1103,18 @@ port map(
 		else
 			if rising_edge(clk_sys) then
 				if mapper_set = '1' then
-					bank0              <= mapper_in(7 downto 0);
+					-- For System E, mapper_in(7:0) is IO port 0xF7 state (VDP bank
+					-- selects + rom_bank), NOT bank0.  The IO module restores the
+					-- SE banking via se_mapper_set, so skip bank0/pak4_reg0 here.
+					if systeme = '0' then
+						bank0          <= mapper_in(7 downto 0);
+					end if;
 					bank1              <= mapper_in(15 downto 8);
 					bank2              <= mapper_in(23 downto 16);
 					bank3              <= mapper_in(31 downto 24);
-					pak4_reg0          <= mapper_in(7 downto 0);
+					if systeme = '0' then
+						pak4_reg0      <= mapper_in(7 downto 0);
+					end if;
 					pak4_reg2          <= mapper_in(39 downto 32);
 					nem_bank0          <= mapper_in(47 downto 40);
 					nvram_e            <= mapper_in(50);
@@ -1044,6 +1125,11 @@ port map(
 					mapper_codies      <= mapper_in(58);
 					lock_mapper_B      <= mapper_in(59);
 					mapper_codies_lock <= mapper_in(60);
+					-- Prevent edge detector registers from triggering false transitions
+					-- in the next clock cycle after state restoration.
+					bootloader_n_prev     <= bootloader_n;
+					reset_n_prev          <= RESET_n;
+					mapper_wonderkid_prev <= mapper_wonderkid;
 				else
 				if bootloader_n = '0' and mapper_manual_force = '0' then
 					lock_mapper_B <= '0';
@@ -1098,8 +1184,10 @@ port map(
 				mapper_wonderkid_prev <= mapper_wonderkid;
 				reset_n_prev <= RESET_n;
 				bootloader_n_prev <= bootloader_n;
-				if WR_n='1' and MREQ_n='0' then
-					last_read_addr <= A; -- gyurco anti-ldir patch
+				if ce_z80 = '1' then
+					if WR_n='1' and MREQ_n='0' then
+						last_read_addr <= A; -- gyurco anti-ldir patch
+					end if;
 				end if;
 
 				if systeme = '1' or sc3000_en = '1' or mapper_castle = '1' or mapper_linear = '1' or mapper_dahjee_a = '1' or mapper_sega_locked = '1' then
@@ -1109,7 +1197,7 @@ port map(
 					-- $3FFE: reg0=D; bank0=D; bank2=(reg0[5:4]+reg2)
 					-- $7FFF: bank1=D (independent)
 					-- $BFFF: reg2=D; bank2=(reg0[5:4]+D)
-					if WR_n='0' and MREQ_n='0' then
+					if ss_freeze = '0' and WR_n='0' and MREQ_n='0' then
 						if A=x"3FFE" then
 							pak4_reg0 <= D_in;
 							bank0 <= D_in;
@@ -1132,7 +1220,7 @@ port map(
 					-- $0000-$1FFF is nem_bank0 (fixed at reset); $2000-$3FFF is always page 1.
 					-- Suppressed while BIOS is running (bootloader_n='0') so the BIOS can
 					-- bank-switch its own pages via the standard Sega mapper ($FFFC-$FFFF).
-					if WR_n='0' and A(15 downto 2)="00000000000000" then
+					if ss_freeze = '0' and WR_n='0' and MREQ_n='0' and A(15 downto 2)="00000000000000" then
 						case A(1 downto 0) is
 							when "00" => bank2 <= D_in;
 							when "01" => bank3 <= D_in;
@@ -1140,7 +1228,7 @@ port map(
 							when "11" => bank1 <= D_in;
 						end case;
 					end if ;
-				elsif mapper_manual_force = '0' and bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" then
+				elsif ss_freeze = '0' and mapper_manual_force = '0' and bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" then
 					-- 4-PAK All Action: first write to $3FFE when no mapper active
 					mapper_4pak <= '1';
 					pak4_reg0 <= D_in;
@@ -1153,7 +1241,7 @@ port map(
 				else
 					-- No write-triggered Zemina detection here.
 					-- Zemina mode is selected by header/CRC/OSD; once active, writes are handled in the use_zem branch above.
-					if WR_n='0' and A(15 downto 2)="11111111111111" then
+					if ss_freeze = '0' and WR_n='0' and A(15 downto 2)="11111111111111" then
 						-- A write to $FFFC-$FFFF is a Sega mapper register; disable Codemasters
 						-- detection unless it was already confirmed (mapper_codies_lock='1') or forced.
 						if mapper_codies_force = '0' then
@@ -1169,7 +1257,7 @@ port map(
 							when "11" => bank2 <= D_in ; 
 						end case;
 					end if;
-					if WR_n='0' and nvram_e='0' and mapper_lock='0' then
+					if ss_freeze = '0' and WR_n='0' and nvram_e='0' and mapper_lock='0' then
 						case A(15 downto 0) is
 				-- Codemasters
 				-- do not accept writing in adr $0000 (canary) unless we are sure that Codemasters mapper is in use
@@ -1296,11 +1384,14 @@ port map(
 	-- [55]spare [54]bootloader_n [53]nvram_cme [52]nvram_p [51]nvram_ex [50]nvram_e
 	-- [49]detect_sega_locked [48]detect_dahjee_a [47:40]nem_bank0 [39:32]pak4_reg2
 	-- [31:24]bank3 [23:16]bank2 [15:8]bank1 [7:0]bank0
-	mapper_out <= detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
-	              lock_mapper_B & mapper_codies & mapper_4pak & '0' &
+	-- Note: when systeme='1', bits [7:0] mirror IO port 0xF7:
+	--   [7]=vdp_se_bank [6]=vdp2_se_bank [5]=vdp_cpu_bank [3:0]=rom_bank
+	mapper_out(63 downto 8) <= detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
+	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
 	              '0' & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
 	              detect_sega_locked & detect_dahjee_a &
-	              nem_bank0 & pak4_reg2 & bank3 & bank2 & bank1 & bank0;
+	              nem_bank0 & pak4_reg2 & bank3 & bank2 & bank1;
+	mapper_out(7 downto 0) <= vdp_se_bank & vdp2_se_bank & vdp_cpu_bank & '0' & rom_bank when systeme='1' else bank0;
 
 	-- Active for any Zemina-family mapper.
 	-- mapper_zemina_force (OSD): user explicitly selected Zemina mapper.
@@ -1404,6 +1495,11 @@ port map(
 				detect_linear      <= mapper_in(63);
 				detect_dahjee_a    <= mapper_in(48);
 				detect_sega_locked <= mapper_in(49);
+				mapper_detect_ticks <= to_unsigned(65535, 16);
+				castle_write_count <= 0;
+				bank_write_seen <= '0';
+				sega_mapper_write_seen <= '0';
+				wonderkid_write_count <= 0;
 			else
 				if bootloader_n = '0' then
 					mapper_detect_ticks <= (others => '0');
@@ -1417,11 +1513,11 @@ port map(
 					wonderkid_write_count <= 0;
 					sega_mapper_write_seen <= '0';
 				-- run a limited detection window while bootloader is active
-				elsif mapper_detect_ticks /= to_unsigned(65535, mapper_detect_ticks'length) then
+				elsif ss_freeze = '0' and mapper_detect_ticks /= to_unsigned(65535, mapper_detect_ticks'length) then
 					mapper_detect_ticks <= mapper_detect_ticks + 1;
 				end if;
 
-				if bootloader_n = '1' and mapper_manual_force = '0' and mapper_detect_ticks < to_unsigned(65535, mapper_detect_ticks'length) then
+				if ss_freeze = '0' and bootloader_n = '1' and mapper_manual_force = '0' and mapper_detect_ticks < to_unsigned(65535, mapper_detect_ticks'length) then
 					if WR_n = '0' and MREQ_n = '0' then
 						-- Wonder Kid [Proto]: confirm after two $8000 writes during the detection window.
 						if A = x"8000" and mapper_4pak = '0' and mapper_codies = '0' and detect_castle = '0' and detect_dahjee_a = '0' and sega_mapper_write_seen = '0' then
@@ -1465,7 +1561,7 @@ port map(
 				-- Dahjee Type A: watch for writes to $2000-$3FFF at any point during boot.
 				-- $2000-$3FFF is ROM space; standard Sega games never write here.
 				-- $3FFE is the 4-PAK reg0 address and is explicitly excluded.
-				if bootloader_n = '1' and mapper_manual_force = '0' and WR_n = '0' and MREQ_n = '0' then
+				if ss_freeze = '0' and bootloader_n = '1' and mapper_manual_force = '0' and WR_n = '0' and MREQ_n = '0' then
 					if A(15 downto 13) = "001" and A /= x"3FFE" then
 						detect_dahjee_a <= '1';
 					end if;

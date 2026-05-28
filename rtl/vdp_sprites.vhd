@@ -27,7 +27,10 @@ port (
 	y					: in  STD_LOGIC_VECTOR (8 downto 0);
 	collide			: out std_logic;
 	overflow			: out std_logic;
-	color				: out STD_LOGIC_VECTOR (3 downto 0));
+	color				: out STD_LOGIC_VECTOR (3 downto 0);
+	-- Save-state: reset scanner to clean state when '1' (held one cycle)
+	ss_regs_set		: in  STD_LOGIC := '0';
+	ss_reset		: in  STD_LOGIC := '0');
 end vdp_sprites;
 
 architecture Behavioral of vdp_sprites is
@@ -86,7 +89,8 @@ begin
 			spr_d2=> spr_d2(i),
 			spr_d3=> spr_d3(i),
 			color => spr_color(i),
-			active=> spr_active(i)
+			active=> spr_active(i),
+			ss_regs_set => ss_regs_set or ss_reset
 		);
 
 	end generate;
@@ -117,7 +121,22 @@ begin
 		variable delta : std_logic_vector(8 downto 0);
 	begin
 		if rising_edge(clk_sys) then
-			if ce_spload='1' then
+			-- Save-state restore: reset scanner fully so first frame after load
+			-- uses correct sprite data for y=0 (no stale phantom sprites/state).
+			if ss_regs_set = '1' or ss_reset = '1' then
+				count    <= 0;
+				enable   <= (others => false);
+				state    <= WAITING;
+				index    <= (others => '0');
+				overflow <= '0';
+				for i in 0 to MAX_SPPL loop
+					spr_x(i)  <= (others => '0');
+					spr_d0(i) <= (others => '0');
+					spr_d1(i) <= (others => '0');
+					spr_d2(i) <= (others => '0');
+					spr_d3(i) <= (others => '0');
+				end loop;
+			elsif ce_spload='1' then
 			
 				if x=257 then  -- we need step 256 to display the very last sprite pixel
 									-- and one more pixel because the test here is made sync'ed

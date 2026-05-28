@@ -19,7 +19,8 @@ Port(
 	spr_d2: in  std_logic_vector (7 downto 0);
 	spr_d3: in  std_logic_vector (7 downto 0);
 	color : out std_logic_vector (3 downto 0);
-	active: out std_logic
+	active: out std_logic;
+	ss_regs_set: in std_logic := '0'
 );
 end vpd_sprite_shifter;
 
@@ -34,7 +35,13 @@ begin
 
 	process (clk_sys)	begin
 		if rising_edge(clk_sys) then
-			if ce_pix = '1' then
+			if ss_regs_set = '1' then
+				shift0 <= (others => '0');
+				shift1 <= (others => '0');
+				shift2 <= (others => '0');
+				shift3 <= (others => '0');
+				wideclock <= false;
+			elsif ce_pix = '1' then
 				if (spr_x=x and ((load and (m4 or spr_d3(7)='0')) or 
 									 (x224 and spr_d3(7)='1'))) or 
 					(spr_x=x+8 and x248) then

@@ -23,7 +23,7 @@
 
 	<players>2</players>
 	<joystick>8-way</joystick>
-	<buttons names="Launch/Button1,Button2,Button3,-,-,-,Coin,Start,Pause" default="A,B,L,R,Start,Select" count="1"/>
+	<buttons names="Launch/Button1,Button2,Start,Coin,Pause,-,-,-,SaveState" default="A,B,Start,Select,R" count="1"/>
 	
 	<switches base="24" default="FF,FF,FF">
 		<!-- SWA -->

@@ -53,7 +53,11 @@ entity vdp_main is
 		spr_tall:			in  std_logic;
 		spr_wide:			in  std_logic;
 		spr_collide:		out std_logic;
-		spr_overflow:		out std_logic);	
+		spr_overflow:		out std_logic;
+		-- Save-state: passed through to sprite scanner reset
+		ss_regs_set:		in  STD_LOGIC := '0';
+		ss_line_reset:		in  std_logic := '0';
+		ss_sprite_reset:	in  std_logic := '0');
 end vdp_main;
 
 architecture Behavioral of vdp_main is
@@ -101,7 +105,7 @@ begin
 		table_address	=> bg_address,
 		pt_address		=> m2mg_address,
 		ct_address		=> m2ct_address,
-		reset				=> line_reset,
+		reset				=> line_reset or ss_line_reset,
 		disable_hscroll=> disable_hscroll,
 		scroll_x 		=> bg_scroll_x,
 		y					=> bg_y,
@@ -120,6 +124,7 @@ begin
 		ysj_quirk			=> ysj_quirk,
 		text_fg_color	=> text_fg_color,
 		overscan			=> overscan,
+		ss_restore			=> ss_regs_set,
 		priority			=> bg_priority);
 		
 	vdp_spr_inst: entity work.vdp_sprites
@@ -146,7 +151,9 @@ begin
 		smode_M4			=> smode_M4,
 		vram_A			=> spr_vram_A,
 		vram_D			=> vram_D,		
-		color				=> spr_color);
+		color				=> spr_color,
+		ss_regs_set		=> ss_regs_set,
+		ss_reset		=> ss_sprite_reset);
 
 	process (x, y, mask_column0, bg_priority, spr_color, bg_color, overscan, display_on, ggres, smode_M1, smode_M3, text_mode)
 		variable spr_active	: boolean;

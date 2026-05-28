@@ -96,10 +96,10 @@ entity T80s is
 		DI				: in std_logic_vector(7 downto 0);
 		DO				: out std_logic_vector(7 downto 0);
 		-- Save state: snapshot of all Z80 registers
-		-- IFF2,IFF1,IM,IY,HL',DE',BC',IX,HL,DE,BC,PC,SP,R,I,F',A',F,A
-		REG        : out std_logic_vector(211 downto 0);
+		-- WZ,IFF2,IFF1,IM,IY,HL',DE',BC',IX,HL,DE,BC,PC,SP,R,I,F',A',F,A
+		REG        : out std_logic_vector(229 downto 0);
 		DIRSet     : in  std_logic := '0';
-		DIR        : in  std_logic_vector(211 downto 0) := (others => '0');
+		DIR        : in  std_logic_vector(229 downto 0) := (others => '0');
 		-- Prefix/instruction-set state forwarded from T80
 		ISet_out   : out std_logic_vector(1 downto 0)
 	);
@@ -159,7 +159,12 @@ begin
 			MREQ_n <= '1';
 			DI_Reg <= "00000000";
 		elsif rising_edge(CLK) then
-			if CEN = '1' then
+			if DIRSet = '1' then
+				RD_n <= '1';
+				WR_n <= '1';
+				IORQ_n <= '1';
+				MREQ_n <= '1';
+			elsif CEN = '1' then
 				RD_n <= '1';
 				WR_n <= '1';
 				IORQ_n <= '1';

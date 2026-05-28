@@ -25,6 +25,7 @@ port (
 	screen_y:			in  std_logic_vector(8 downto 0);
 	text_fg_color:		in  std_logic_vector(3 downto 0);
 	overscan:			in  std_logic_vector(3 downto 0);
+	ss_restore:			in  std_logic := '0';
 
 	vram_A:				out std_logic_vector(13 downto 0);
 	vram_D:				in  std_logic_vector(7 downto 0);
@@ -79,7 +80,15 @@ begin
 	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
-			if ce_pix = '1' then
+			if ss_restore = '1' then
+				if smode_M4='0' then
+					x <= "11110000" ; -- 240
+				elsif disable_hscroll='0' or screen_y>=16 then
+					x <= 232-scroll_x;
+				else
+					x <= "11101000"; -- 256-24=232
+				end if;
+			elsif ce_pix = '1' then
 				if (reset='1') then
 					if smode_M4='0' then
 						x <= "11110000" ; -- 240
@@ -107,7 +116,10 @@ begin
 	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
-			if ce_pix = '1' then
+			if ss_restore = '1' then
+				text_phase  <= (others=>'0');
+				text_column <= (others=>'0');
+			elsif ce_pix = '1' then
 				if reset='1' or text_mode='0' then
 					text_phase  <= (others=>'0');
 					text_column <= (others=>'0');
@@ -235,7 +247,20 @@ begin
 	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
-			if ce_pix = '1' then
+			if ss_restore = '1' then
+				text_tile_index <= (others => '0');
+				text_pattern    <= (others => '0');
+				tile_index      <= (others => '0');
+				flip_x          <= '0';
+				tile_y          <= (others => '0');
+				palette         <= '0';
+				priority_latch  <= '0';
+				data0           <= (others => '0');
+				data1           <= (others => '0');
+				data2           <= (others => '0');
+				data3           <= (others => '0');
+				datac           <= (others => '0');
+			elsif ce_pix = '1' then
 				if text_mode='1' then
 					if conv_integer(screen_x)=1 then
 						text_tile_index <= vram_D;
@@ -318,7 +343,15 @@ begin
 	-- -------------------------------------------------------------------------
 	process (clk_sys) begin
 		if rising_edge(clk_sys) then
-			if ce_pix = '1' then
+			if ss_restore = '1' then
+				text_shift    <= (others => '0');
+				shift0        <= (others => '0');
+				shift1        <= (others => '0');
+				shift2        <= (others => '0');
+				shift3        <= (others => '0');
+				palette_shift <= '0';
+				priority      <= '0';
+			elsif ce_pix = '1' then
 				if text_mode='1' then
 					if conv_integer(screen_x)=7 then
 						text_shift <= text_pattern(7 downto 2);
