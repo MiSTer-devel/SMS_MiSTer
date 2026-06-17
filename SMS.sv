@@ -32,7 +32,7 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 
 assign {SD_SCK, SD_MOSI, SD_CS} = '1;
 
-assign LED_USER  = cart_download | bios_download | bk_state | (status[25] & bk_pending);
+assign LED_USER  = cart_download | bios_download | gg_bios_download | bk_state | (status[25] & bk_pending);
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = osd_btn;
@@ -204,8 +204,10 @@ parameter CONF_STR = {
 	"H8-;",
 
 	"H8OA,Region,US/EU,Japan;",
-	"H8oBC,BIOS,Disable,Internal,Ext. File;",
-	"H8F3,BINSMS,Load Ext. BIOS;",
+	"H8oBC,SMS BIOS,Disable,Internal,Ext. File;",
+	"H8F3,BINSMS,Load SMS BIOS;",
+	"H8oH,GG BIOS,Disable,Ext. File;",
+	"H8F4,BINGG,Load GG BIOS;",
 	"H8O[48:45],Mapper,Auto,Sega,Codemasters,Dahjee A,Linear,Zemina/MSX;",
 	"H8o8,Z80 Speed,Normal,Turbo;",
 	"H8-;",
@@ -357,19 +359,31 @@ reg  [1:0] old_sc_cart_ram;
 reg [21:0] reset_timer;
 reg        bios_config_reset;
 
+reg        ext_gg_bios_loaded = 0;
+reg        old_gg_bios_download;
+reg        old_gg_bios_mode;
+
 always_ff @(posedge clk_sys) begin
-	old_bios_download <= bios_download;
-	old_bios_mode     <= status[44:43];
-	old_sc3000_mode   <= status[58];
-	old_sc_cart_ram   <= status[60:59];
+	old_bios_download    <= bios_download;
+	old_bios_mode        <= status[44:43];
+	old_sc3000_mode      <= status[58];
+	old_sc_cart_ram      <= status[60:59];
+	old_gg_bios_download <= gg_bios_download;
+	old_gg_bios_mode     <= status[49];
 
 	// Set ext_bios_loaded ONLY after download completes
 	if (old_bios_download && !bios_download) begin
 		ext_bios_loaded <= 1;
 	end
 
+	// Set ext_gg_bios_loaded ONLY after download completes
+	if (old_gg_bios_download && !gg_bios_download) begin
+		ext_gg_bios_loaded <= 1;
+	end
+
 	// Generate a 40ms pulse (at 50MHz) on BIOS or SC config changes.
 	if ((old_bios_mode != status[44:43]) || (old_bios_download ^ bios_download) ||
+	    (old_gg_bios_mode != status[49]) || (old_gg_bios_download ^ gg_bios_download) ||
 	    (old_sc3000_mode != status[58]) || (old_sc_cart_ram != status[60:59])) begin
 		reset_timer <= 22'd2000000;
 	end else if (reset_timer > 0) begin
@@ -379,7 +393,7 @@ always_ff @(posedge clk_sys) begin
 	bios_config_reset <= (reset_timer > 0);
 end
 
-wire raw_reset = RESET | status[0] | buttons[1] | cart_download | bios_download | bios_config_reset | bk_loading | eject_rom;
+wire raw_reset = RESET | status[0] | buttons[1] | cart_download | bios_download | gg_bios_download | bios_config_reset | bk_loading | eject_rom;
 
 reg [13:0] ram_clr_addr;
 reg        ram_clr_run = 0;
@@ -498,7 +512,8 @@ wire        ram_rd;
 wire code_index = &ioctl_index;
 wire code_download = ioctl_download & code_index;
 wire bios_download = ioctl_download & (ioctl_index[4:0] == 3);
-wire cart_download = ioctl_download & ~code_index & (ioctl_index[4:0]!=3) & (ioctl_index!=4) & (ioctl_index!=254);
+wire gg_bios_download = ioctl_download & (ioctl_index[4:0] == 4);
+wire cart_download = ioctl_download & ~code_index & (ioctl_index[4:0]!=3) & (ioctl_index[4:0]!=4) & (ioctl_index!=254);
 
 // Rolling signature of the currently loaded ROM image.
 // Used by savestates header validation to reject cross-ROM loads.
@@ -513,7 +528,7 @@ always @(posedge clk_sys) begin
 end
 
 // BIOS mode: status[44:43] == 2'b00->Disable, 01->Internal, 10->Ext. File
-wire bios_en      = (status[44:43] != 2'b00) & ~systeme;
+wire bios_en      = (status[44:43] != 2'b00) & ~systeme & ~gg;
 wire ext_bios_sel = (status[44:43] == 2'b10);
 wire eject_rom    = status[9];
 
@@ -684,6 +699,7 @@ end
 // [Handled in unified control block above]
 
 reg        gg          = 0;
+wire       gg_bios_en  = status[49] & gg;
 reg        systeme     = 0;
 reg        palettemode = 0;
 reg        load_sc     = 0;
@@ -931,6 +947,9 @@ system #(63) system
 	.bios_en(bios_en),
 	.ext_bios_sel(ext_bios_sel),
 	.ext_bios_loaded(ext_bios_loaded),
+	.gg_bios_en(gg_bios_en),
+	.ext_gg_bios_loaded(ext_gg_bios_loaded),
+	.GG_BIOSWEN(ioctl_wr & (ioctl_index[4:0]==4)),
 	.dbr(dbr),
 
 	.RESET_n(~reset_active),

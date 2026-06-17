@@ -24,6 +24,9 @@ entity system is
 		bios_en:	in	 STD_LOGIC;
 		ext_bios_sel:    in STD_LOGIC;
 		ext_bios_loaded: in STD_LOGIC;
+		gg_bios_en:      in STD_LOGIC;
+		ext_gg_bios_loaded: in STD_LOGIC;
+		GG_BIOSWEN:      in STD_LOGIC;
 
 		GG_EN		: in std_logic; -- Game Genie not game gear
 		GG_CODE		: in std_logic_vector(128 downto 0); -- game genie code
@@ -240,9 +243,13 @@ architecture Behavioral of system is
 	signal active_bios_D_out: std_logic_vector(7 downto 0);
 	signal ext_bios_addr:   std_logic_vector(17 downto 0);
 	signal ext_bios_wren:   std_logic;
+	signal ext_gg_bios_D_out: std_logic_vector(7 downto 0);
+	signal ext_gg_bios_addr:  std_logic_vector(13 downto 0);
+	signal ext_gg_bios_wren:  std_logic;
 	signal rom_a_i:         std_logic_vector(21 downto 0);
 
 	signal bootloader_n:	std_logic := '0';
+	signal active_bios:     std_logic;
 	signal irom_D_out:		std_logic_vector(7 downto 0);
 	signal irom_RD_n:			std_logic := '1';
 
@@ -857,6 +864,24 @@ port map(
 		data		=> ROMDT,
 		q			=> ext_bios_D_out
 	);	
+
+	ext_gg_bios_wren <= GG_BIOSWEN;
+	ext_gg_bios_addr <= ROMAD(13 downto 0) when GG_BIOSWEN='1' else A(13 downto 0);
+
+
+	ext_gg_bios_inst : entity work.spram
+	generic map
+	(
+		widthad_a => 14
+	)
+	port map
+	(
+		clock   => clk_sys,
+		address => ext_gg_bios_addr,
+		wren    => ext_gg_bios_wren,
+		data    => ROMDT,
+		q       => ext_gg_bios_D_out
+	);
 	mc8123_inst : component MC8123_rom_decrypt
 	port map
 	(
@@ -927,11 +952,13 @@ port map(
 	                     and not (mapper_dahjee_a='1' and A(15 downto 13)="001") else '0';
 	color    <= vdp2_color when (vdp2_y1='1' and systeme='1' and vdp_enables(1)='0') else vdp_color when vdp_enables(0)='0' else x"000";
 
+	active_bios <= '1' when (bios_en = '1' and (ext_bios_sel = '0' or ext_bios_loaded = '1')) or (gg_bios_en = '1' and ext_gg_bios_loaded = '1') else '0';
+
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
 			if RESET_n='0' then 
-				bootloader_n <= not bios_en;
+				bootloader_n <= not active_bios;
 			elsif mapper_set='1' then
 				-- Save-state restore: recover exact bootloader_n captured at save time.
 				-- Without this, restoring a cart game saved while BIOS was active but
@@ -939,11 +966,17 @@ port map(
 				-- so the Z80 would read BIOS ROM instead of cart ROM → instant crash.
 				bootloader_n <= mapper_in(54);
 			elsif ss_freeze = '0' and ctl_WR_n='0' then
-				if ext_bios_sel='1' and ext_bios_loaded='1' then
-					-- For external BIOS: honour port $3E bit 3 (active low BIOS enable)
-					-- bit3=0 -> BIOS ROM enabled -> bootloader_n=0
-					-- bit3=1 -> BIOS ROM disabled (cartridge enabled) -> bootloader_n=1
-					bootloader_n <= D_in(3);
+				if (ext_bios_sel='1' and ext_bios_loaded='1') or
+				   (gg_bios_en='1' and ext_gg_bios_loaded='1') then
+					-- For external BIOS: honour port $3E bit 3 ONLY when the CPU
+					-- actually writes to port $3E (Memory Control).
+					-- ctl_WR_n fires for ALL even-addressed I/O in $00-$3F range,
+					-- including port $02 (GG serial DDR). The GG BIOS writes $FA
+					-- ($FA bit3=1) to port $02 during SMS/GG mode detection, which
+					-- would incorrectly set bootloader_n=1 and corrupt BIOS execution.
+					if A(7 downto 0) = x"3E" then
+						bootloader_n <= D_in(3);
+					end if;
 				elsif bootloader_n='0' then
 					-- Internal BIOS (mboot.mif): any write disables BIOS, original behaviour
 					bootloader_n <= '1';
@@ -965,8 +998,9 @@ port map(
 	-- will fall back into the SPRAM BIOS - giving the correct no-cart loop.
 	active_bios_D_out <= ext_bios_D_out when (ext_bios_sel='1' and ext_bios_loaded='1') else boot_rom_D_out;
 
-	irom_D_out <=	active_bios_D_out when (bootloader_n='0' and A(15 downto 14)="00")
-	               else ext_bios_D_out when (bootloader_n='0' and ext_bios_sel='1' and ext_bios_loaded='1' and A(15 downto 14)/="11")
+	irom_D_out <=	ext_gg_bios_D_out when (bootloader_n='0' and gg_bios_en='1' and ext_gg_bios_loaded='1' and A(15 downto 14)="00")
+	               else active_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and A(15 downto 14)="00")
+	               else ext_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and ext_bios_sel='1' and ext_bios_loaded='1' and A(15 downto 14)/="11")
 	               -- Empty cartridge slot: data lines float high on real hardware.
 	               -- Without this, SDRAM returns stale data from the last loaded ROM,
 	               -- causing BIOSes that check for non-0xFF bytes (Korea) to
