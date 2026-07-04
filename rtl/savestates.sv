@@ -158,6 +158,10 @@ module savestates (
 localparam [31:0] MAGIC = 32'h534D5331; // "SMS1"
 localparam [31:0] MAGIC_BIOS = 32'h534D5342; // "SMSB"
 
+// Word 0 header size field (size in 32-bit words = (slot_bytes - 8) / 4).
+localparam [31:0] OLD_SS_WORDS = 32'd16382; // 0x3FFE, old 64KB slot format (#191)
+localparam [31:0] NEW_SS_WORDS = 32'd24574; // 0x5FFE, current 96KB slot format
+
 // Slot base word address for cartridge savestates (slots 0-3).
 // Slot size 0x3000 words (96KB) to accommodate inline passive VRAM banks.
 function automatic [28:0] slot_base;
@@ -551,7 +555,10 @@ always @(posedge clk or negedge reset_n) begin
             if (!DDRAM_BUSY) begin
                 mapper_in  <= mapper_snap;
                 mapper_set <= 1;
-                if (has_nvram) begin
+                // Old format only ever wrote NVRAM for Dahjee-A (mapper_snap[48]);
+                // reading the broadened has_nvram region for other mappers would
+                // DMA an unwritten slot area over live cartridge SRAM.
+                if (is_old_format ? mapper_snap[48] : has_nvram) begin
                     nvram_load_addr   <= 0;
                     nvram_byte_cnt    <= 0;
                     nvram_load_active <= 0;
@@ -1019,7 +1026,7 @@ always @(posedge clk or negedge reset_n) begin
                 freeze_drain_cnt <= 0;
                 state <= ST_SAVE_SETTLE;
             end else if (!DDRAM_BUSY) begin
-                ddram_write(base_addr + 29'd0, {32'd24574, ss_change_det}, 8'hFF);
+                ddram_write(base_addr + 29'd0, {NEW_SS_WORDS, ss_change_det}, 8'hFF);
                 ss_change_det <= ss_change_det + 32'd1;
                 freeze_drain_cnt <= 0;
                 state <= ST_SAVE_SETTLE;
@@ -1055,7 +1062,7 @@ always @(posedge clk or negedge reset_n) begin
                 dout_expected <= 0;
                 dout_latch    <= DDRAM_DOUT;
             end else if (!dout_expected && !DDRAM_BUSY) begin
-                is_old_format <= (dout_latch[63:32] == 32'h4000);
+                is_old_format <= (dout_latch[63:32] == OLD_SS_WORDS);
                 ddram_read(base_addr + 29'd1);
                 state <= ST_LOAD_HDR_WT2;
             end
@@ -1066,7 +1073,9 @@ always @(posedge clk or negedge reset_n) begin
                 dout_expected <= 0;
                 dout_latch    <= DDRAM_DOUT;
             end else if (!dout_expected && !DDRAM_BUSY) begin
-                if (dout_latch[31:0] == cur_magic && dout_latch[63:32] == cur_game_id) begin
+                if (dout_latch[31:0] == cur_magic &&
+                    (is_old_format || dout_latch[63:32] == cur_game_id)) begin
+                    // Old format stored no game_id in word 1, so skip that check.
                     // Read Z80 words
                     ddram_read(base_addr + 29'd2);
                     cpu_idx <= 0;
