@@ -1262,8 +1262,8 @@ port map(
 							when "11" => bank1 <= D_in;
 						end case;
 					end if ;
-				elsif ss_freeze = '0' and mapper_manual_force = '0' and bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" then
-					-- 4-PAK All Action: first write to $3FFE when no mapper active
+				elsif ss_freeze = '0' and mapper_manual_force = '0' and bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" and sega_mapper_write_seen = '0' then
+					-- 4-PAK All Action: first write to $3FFE when no mapper active (gated by sega_mapper_write_seen='0').
 					mapper_4pak <= '1';
 					pak4_reg0 <= D_in;
 					pak4_reg2 <= "00000000";
@@ -1595,7 +1595,8 @@ port map(
 				-- Dahjee Type A: watch for writes to $2000-$3FFF at any point during boot.
 				-- $2000-$3FFF is ROM space; standard Sega games never write here.
 				-- $3FFE is the 4-PAK reg0 address and is explicitly excluded.
-				if ss_freeze = '0' and bootloader_n = '1' and mapper_manual_force = '0' and WR_n = '0' and MREQ_n = '0' then
+				-- Gated by sega_mapper_write_seen='0' to prevent misdetection after boot.
+				if ss_freeze = '0' and bootloader_n = '1' and mapper_manual_force = '0' and WR_n = '0' and MREQ_n = '0' and sega_mapper_write_seen = '0' then
 					if A(15 downto 13) = "001" and A /= x"3FFE" then
 						detect_dahjee_a <= '1';
 					end if;
