@@ -1176,7 +1176,7 @@ port map(
 					reset_n_prev          <= RESET_n;
 					mapper_wonderkid_prev <= mapper_wonderkid;
 				else
-				if bootloader_n = '0' and mapper_manual_force = '0' then
+				if bootloader_n = '0' and mapper_lock = '0' then
 					lock_mapper_B <= '0';
 					mapper_codies <= '0';
 					mapper_codies_lock <= '0';
@@ -1197,10 +1197,11 @@ port map(
 						bank1 <= "00000000";
 						bank2 <= "00000000";
 						lock_mapper_B <= '1';
-					elsif detect_codies_static = '1' and mapper_codies_force = '0' and mapper_lock = '0' then
+					elsif (detect_codies_static = '1' or mapper_codies_force = '1') and mapper_lock = '0' then
 						lock_mapper_B      <= '1';
 						mapper_codies      <= '1';
 						mapper_codies_lock <= '1';
+						bank2              <= "00000000";
 					end if;
 				end if;
 				-- On the first clock after RESET_n rises, initialise mapper state.
@@ -1220,10 +1221,13 @@ port map(
 						bank1         <= "00000000";
 						bank2         <= "00000000";
 						lock_mapper_B <= '1';
-					elsif detect_codies_static = '1' and mapper_codies_force = '0' and mapper_lock = '0' then
-						lock_mapper_B      <= '1';
-						mapper_codies      <= '1';
-						mapper_codies_lock <= '1';
+					elsif (detect_codies_static = '1' or mapper_codies_force = '1') and mapper_lock = '0' then
+						if bootloader_n = '1' then
+							lock_mapper_B      <= '1';
+							mapper_codies      <= '1';
+							mapper_codies_lock <= '1';
+							bank2              <= "00000000";
+						end if;
 					end if;
 					-- Initialize detection window (ticks run while bootloader active)
 					-- detection window initialization is handled by the detection process
@@ -1300,15 +1304,17 @@ port map(
 						if mapper_codies_force = '0' and mapper_codies_lock = '0' and detect_codies_static = '0' then
 							mapper_codies <= '0' ;
 						end if;
-						case A(1 downto 0) is
-							when "00" => 
-								nvram_ex <= D_in(4);
-								nvram_e  <= D_in(3);
-								nvram_p  <= D_in(2);
-							when "01" => bank0 <= D_in;
-							when "10" => bank1 <= D_in;
-							when "11" => bank2 <= D_in ; 
-						end case;
+						if mapper_codies = '0' and (detect_codies_static = '0' or bootloader_n = '0') then
+							case A(1 downto 0) is
+								when "00" => 
+									nvram_ex <= D_in(4);
+									nvram_e  <= D_in(3);
+									nvram_p  <= D_in(2);
+								when "01" => bank0 <= D_in;
+								when "10" => bank1 <= D_in;
+								when "11" => bank2 <= D_in ; 
+							end case;
+						end if;
 					end if;
 					if ss_freeze = '0' and WR_n='0' and nvram_e='0' and mapper_lock='0' then
 						case A(15 downto 0) is
@@ -1327,7 +1333,7 @@ port map(
 									end if;
 								end if;
 							when x"4000" => 
-								if mapper_codies = '1' or detect_codies_static = '1' or last_read_addr /= x"4000" then -- gyurco anti-ldir patch
+								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or last_read_addr /= x"4000" then -- gyurco anti-ldir patch
 									bank1(6 downto 0) <= D_in(6 downto 0) ;
 									bank1(7) <= '0' ;
 								-- mapper_codies <= mapper_codies or D_in(7) ;
@@ -1339,7 +1345,7 @@ port map(
 									end if;
 								end if ;
 							when x"8000" => 
-								if mapper_codies = '1' or detect_codies_static = '1' or last_read_addr /= x"8000" then -- gyurco anti-ldir patch
+								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or last_read_addr /= x"8000" then -- gyurco anti-ldir patch
 									bank2 <= D_in ; 
 									-- See comment in $4000 handler: avoid locking during BIOS scan
 									if bootloader_n = '1' and bootloader_n_prev = '1' then
@@ -1446,7 +1452,7 @@ port map(
 	use_zem <= '1' when mapper_zemina_force = '1' else
 	           '0' when mapper_manual_force = '1' else
 	           '0' when mapper_wonderkid = '1' else
-	           '0' when mapper_codies = '1' or detect_codies_static = '1' else
+	           '0' when mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' else
 	           '1' when mapper_nemesis_auto = '1' else
 	           '1' when detect_zemina_static = '1'
 	                    and unsigned(rom_size_pages) > 8
