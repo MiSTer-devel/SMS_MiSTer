@@ -851,6 +851,8 @@ wire [63:0]  ss_mapper_out, ss_mapper_in;
 wire         ss_mapper_set;
 wire [31:0]  ss_io_out, ss_io_in;
 wire         ss_io_set;
+wire [63:0]  eeprom_ss_out, eeprom_ss_in;
+wire         eeprom_ss_set;
 reg [1:0] restored_vdp_enables;
 reg [1:0] restored_psg_enables;
 reg       has_restored_enables = 0;
@@ -919,6 +921,8 @@ wire mapper_force_codies    = (mapper_sel == 4'd2);
 wire mapper_force_dahjee_a  = (mapper_sel == 4'd3);
 wire mapper_force_linear    = (mapper_sel == 4'd4);
 wire mapper_force_zemina    = (mapper_sel == 4'd5);  // covers MSX, Nemesis II+ and Zemina (all identical)
+wire mapper_eeprom;
+wire eeprom_active          = mapper_eeprom;
 
 wire [14:0] nvram_a;
 wire        nvram_we;
@@ -1033,6 +1037,10 @@ system #(63) system
 	.mapper_dahjee_a_force(mapper_force_dahjee_a),
 	.mapper_linear_force(mapper_force_linear),
 	.mapper_zemina_force(mapper_force_zemina),
+	.mapper_eeprom_out(mapper_eeprom),
+	.eeprom_ss_out(eeprom_ss_out),
+	.eeprom_ss_in (eeprom_ss_in),
+	.eeprom_ss_set(eeprom_ss_set),
 	.vdp_enables(has_restored_enables ? restored_vdp_enables : (dbg_menu ? status[34:33] : 2'b00)),
 	.psg_enables(has_restored_enables ? restored_psg_enables : (dbg_menu ? status[36:35] : 2'b00)),
 
@@ -1179,6 +1187,10 @@ savestates savestates_inst (
 	.mapper_out      (ss_mapper_out),
 	.mapper_in       (ss_mapper_in),
 	.mapper_set      (ss_mapper_set),
+	// EEPROM
+	.eeprom_out      (eeprom_ss_out),
+	.eeprom_in       (eeprom_ss_in),
+	.eeprom_set      (eeprom_ss_set),
 	.io_out          (ss_io_out),
 	.io_in           (ss_io_in),
 	.io_set          (ss_io_set),
@@ -1524,7 +1536,13 @@ always @(posedge clk_sys) begin
 		bk_pending <= 1'b0;
 end
 
-dpram #(.widthad_a(15)) nvram_inst
+wire downloading = cart_download;
+reg old_downloading = 0;
+reg bk_ena = 0;
+
+
+
+dpram #(.widthad_a(15), .init_file("rtl/nvram_ff.mif")) nvram_inst
 (
 	.clock_a     (clk_sys),
 	.address_a   (ss_freeze ? (ss_nvram_WE ? ss_nvram_WA : ss_nvram_A) : nvram_a),
@@ -1538,17 +1556,16 @@ dpram #(.widthad_a(15)) nvram_inst
 	.q_b         (sd_buff_din)
 );
 
-wire downloading = cart_download;
-reg old_downloading = 0;
-reg bk_ena = 0;
 always @(posedge clk_sys) begin
-
 	old_downloading <= downloading;
 	if (eject_rom) bk_ena <= 0;
 	if(~old_downloading & downloading) bk_ena <= 0;
 
-	//Save file always mounted in the end of downloading state.
+	// Save file always mounted in the end of downloading state.
 	if(downloading && img_mounted && !img_readonly) bk_ena <= 1;
+
+	// After download completes: enable bk for EEPROM games whenever active
+	if(!downloading && eeprom_active) bk_ena <= 1;
 end
 
 wire bk_load    = status[6];

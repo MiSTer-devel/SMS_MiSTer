@@ -89,6 +89,11 @@ module savestates (
     output reg [63:0] mapper_in,
     output reg        mapper_set,
 
+    // ---- EEPROM snapshot / restore ----
+    input      [63:0] eeprom_out,
+    output reg [63:0] eeprom_in,
+    output reg        eeprom_set,
+
     // ---- Work RAM DMA (second port of a dpram) ----
     output reg [13:0] wram_A,          // read address (byte)
     input       [7:0] wram_D,          // read data
@@ -236,6 +241,8 @@ localparam ST_LOAD_VRAM1_PASSIVE = 6'd50; // load/zero-fill VDP1 passive bank (S
 localparam ST_LOAD_VRAM2_PASSIVE = 6'd51; // load/zero-fill VDP2 passive bank (System E)
 localparam ST_SAVE_VRAM1_PASSIVE = 6'd52; // save VDP1 passive bank to DDRAM (System E)
 localparam ST_SAVE_VRAM2_PASSIVE = 6'd53; // save VDP2 passive bank to DDRAM (System E)
+localparam ST_SAVE_EEPROM        = 7'd64; // save 64-bit EEPROM state to DDRAM
+localparam ST_LOAD_EEPROM        = 7'd65; // load 64-bit EEPROM state from DDRAM
 localparam ST_SAVE_IO            = 6'd57;
 localparam ST_LOAD_IO            = 6'd58;
 localparam ST_FLUSH_PIPELINE     = 6'd59;
@@ -258,7 +265,7 @@ wire [14:0] nvram_size_minus_1 = has_nvram_32k ? 15'd32767 :
                                  has_nvram_16k ? 15'd16383 :
                                                  15'd8191;
 
-reg [5:0]  state;
+reg [6:0]  state;
 reg        do_save;     // 1=save, 0=load
 reg [1:0]  cur_slot;
 reg [28:0] base_addr;
@@ -288,6 +295,7 @@ reg [383:0] cram2_snap;
 reg  [55:0] psg2_snap;
 reg  [31:0] io_snap;
 reg  [21:0] video_snap;
+reg  [63:0] eeprom_snap;
 
 // VRAM DMA pipelining: address issued, wait 2 clocks for data
 reg  [2:0]  vram_pipe;
@@ -396,6 +404,7 @@ always @(posedge clk or negedge reset_n) begin
         cram_wr         <= 0;
         psg_set         <= 0;
         mapper_set      <= 0;
+        eeprom_set      <= 0;
         vram_en         <= 0;
         vram_WE         <= 0;
         vram_load_active <= 0;
@@ -434,6 +443,7 @@ always @(posedge clk or negedge reset_n) begin
         cram_wr      <= 0;
         psg_set      <= 0;
         mapper_set   <= 0;
+        eeprom_set   <= 0;
         vram_WE      <= 0;
         wram_WE      <= 0;
         nvram_WE     <= 0;
@@ -519,6 +529,7 @@ always @(posedge clk or negedge reset_n) begin
             end
             io_snap          <= io_out;
             video_snap       <= video_state_out;
+            eeprom_snap      <= eeprom_out;
             
             ss_freeze        <= 1;
             freeze_drain_cnt <= 0;
@@ -555,6 +566,8 @@ always @(posedge clk or negedge reset_n) begin
             if (!DDRAM_BUSY) begin
                 mapper_in  <= mapper_snap;
                 mapper_set <= 1;
+                eeprom_in  <= eeprom_snap;
+                eeprom_set <= 1;
                 // Old format only ever wrote NVRAM for Dahjee-A (mapper_snap[48]);
                 // reading the broadened has_nvram region for other mappers would
                 // DMA an unwritten slot area over live cartridge SRAM.
@@ -658,6 +671,13 @@ always @(posedge clk or negedge reset_n) begin
         ST_SAVE_VIDEO: begin
             if (!DDRAM_BUSY) begin
                 ddram_write(base_addr + 29'h01a, {42'd0, video_snap}, 8'hFF);
+                state <= ST_SAVE_EEPROM;
+            end
+        end
+
+        ST_SAVE_EEPROM: begin
+            if (!DDRAM_BUSY) begin
+                ddram_write(base_addr + 29'h01b, eeprom_snap, 8'hFF);
                 if (systeme) begin
                     // System E: save VDP2/CRAM2/PSG2 before VRAM1
                     cram_idx  <= 0;
@@ -1211,6 +1231,17 @@ always @(posedge clk or negedge reset_n) begin
                 dout_latch    <= DDRAM_DOUT;
             end else if (!dout_expected && !DDRAM_BUSY) begin
                 video_snap       <= dout_latch[21:0];
+                ddram_read(base_addr + 29'h01b);
+                state            <= ST_LOAD_EEPROM;
+            end
+        end
+
+        ST_LOAD_EEPROM: begin
+            if (DDRAM_DOUT_READY && dout_expected) begin
+                dout_expected <= 0;
+                dout_latch    <= DDRAM_DOUT;
+            end else if (!dout_expected && !DDRAM_BUSY) begin
+                eeprom_snap      <= dout_latch;
                 if (systeme) begin
                     // System E: read VDP2/CRAM2/PSG2 before restoring VRAM
                     ddram_read(base_addr + 29'h10);
