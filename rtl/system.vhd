@@ -1183,7 +1183,7 @@ port map(
 				end if;
 				-- BIOS handoff: restore standard cartridge startup banks.
 				-- BIOS bank writes can leave bank0/1/2 in non-default states, which
-				-- breaks canary-based Codemasters detection and forced Codemasters start.
+				-- breaks static Codemasters detection and forced Codemasters start.
 				if bootloader_n = '1' and bootloader_n_prev = '0' then
 					bank0 <= "00000000";
 					bank1 <= "00000001";
@@ -1298,7 +1298,7 @@ port map(
 				else
 					-- No write-triggered Zemina detection here.
 					-- Zemina mode is selected by header/CRC/OSD; once active, writes are handled in the use_zem branch above.
-					if ss_freeze = '0' and WR_n='0' and A(15 downto 2)="11111111111111" then
+					if ss_freeze = '0' and WR_n='0' and MREQ_n='0' and A(15 downto 2)="11111111111111" then
 						-- A write to $FFFC-$FFFF is a Sega mapper register; disable Codemasters
 						-- detection unless it was already confirmed (mapper_codies_lock='1') or forced.
 						if mapper_codies_force = '0' and mapper_codies_lock = '0' and detect_codies_static = '0' then
@@ -1316,43 +1316,24 @@ port map(
 							end case;
 						end if;
 					end if;
-					if ss_freeze = '0' and WR_n='0' and nvram_e='0' and mapper_lock='0' then
+					if ss_freeze = '0' and WR_n='0' and MREQ_n='0' and nvram_e='0' and mapper_lock='0' then
 						case A(15 downto 0) is
-				-- Codemasters
-				-- do not accept writing in adr $0000 (canary) unless we are sure that Codemasters mapper is in use
+							-- Codemasters (active via detect_codies_static or mapper_codies_force)
 							when x"0000" => 
-								if (lock_mapper_B='1') then 
-									bank0 <= D_in ;  
-								-- we need a strong criteria to set mapper_codies, hopefully only Ernie Els Golf
-								-- will have written a zero in $4000 before coming here
-									if mapper_codies_lock = '0' and (D_in /= "00000000" or bank1 = "00000001") then
-										if bank1 = "00000001" then
-											mapper_codies <= '1' ;
-										end if;
-										mapper_codies_lock <= '1' ;
-									end if;
+								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' then
+									bank0 <= D_in ;
 								end if;
 							when x"4000" => 
-								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or last_read_addr /= x"4000" then -- gyurco anti-ldir patch
+								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' then
 									bank1(6 downto 0) <= D_in(6 downto 0) ;
 									bank1(7) <= '0' ;
-								-- mapper_codies <= mapper_codies or D_in(7) ;
 									nvram_cme <= D_in(7) ;
-									-- Do not set lock during BIOS scan/hand-off. Only set lock when
-									-- cartridge mode was already active (bootloader_n_prev='1').
-									if bootloader_n = '1' and bootloader_n_prev = '1' then
-										lock_mapper_B <= '1' ;
-									end if;
 								end if ;
 							when x"8000" => 
-								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or last_read_addr /= x"8000" then -- gyurco anti-ldir patch
+								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' then
 									bank2 <= D_in ; 
-									-- See comment in $4000 handler: avoid locking during BIOS scan
-									if bootloader_n = '1' and bootloader_n_prev = '1' then
-										lock_mapper_B <= '1' ;
-									end if;
 								end if;
-					-- Korean mapper (Sangokushi 3, Dodgeball King)
+							-- Korean mapper (Sangokushi 3, Dodgeball King (Dallyeora Pigu-Wang), Jang Pung II, Jang Pung 3)
 							when x"A000" => 
 								if last_read_addr /= x"A000" then -- gyurco anti-ldir patch
 									if mapper_codies='0' then
