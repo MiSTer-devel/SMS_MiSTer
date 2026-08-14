@@ -22,6 +22,9 @@ set_global_assignment -name VHDL_FILE rtl/vdp_cram.vhd
 set_global_assignment -name VHDL_FILE rtl/vdp_background.vhd
 set_global_assignment -name VHDL_FILE rtl/vdp.vhd
 set_global_assignment -name VHDL_FILE rtl/system.vhd
+set_global_assignment -name VHDL_FILE rtl/eeprom_93c46.vhd
+set_global_assignment -name MIF_FILE rtl/nvram_ff.mif
+set_global_assignment -name VHDL_FILE rtl/cart_eeprom.vhd
 set_global_assignment -name VHDL_FILE rtl/io.vhd
 set_global_assignment -name VHDL_FILE rtl/AudioMix.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE SMS.sv
