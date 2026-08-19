@@ -107,7 +107,7 @@ begin
 		ct_address		=> m2ct_address,
 		reset				=> line_reset or ss_line_reset,
 		disable_hscroll=> disable_hscroll,
-		scroll_x 		=> bg_scroll_x,
+		scroll_x_latched 		=> bg_scroll_x,
 		y					=> bg_y,
 		screen_y			=> y,
 		screen_x			=> x,

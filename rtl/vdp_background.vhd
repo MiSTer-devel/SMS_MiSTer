@@ -12,7 +12,7 @@ port (
 	table_address:		in  std_logic_vector(13 downto 10);
 	pt_address:			in  std_logic_vector(13 downto 11);
 	ct_address:			in  std_logic_vector(13 downto 6);
-	scroll_x:			in  std_logic_vector(7 downto 0);
+	scroll_x_latched:	in  std_logic_vector(7 downto 0);
 	disable_hscroll:	in  std_logic;
 	mode_M1_raw:		in  std_logic;
 	mode_M2_raw:		in  std_logic;
@@ -84,7 +84,7 @@ begin
 				if smode_M4='0' then
 					x <= "11110000" ; -- 240
 				elsif disable_hscroll='0' or screen_y>=16 then
-					x <= 232-scroll_x;
+					x <= 232-scroll_x_latched;
 				else
 					x <= "11101000"; -- 256-24=232
 				end if;
@@ -100,7 +100,7 @@ begin
 					elsif disable_hscroll='0' or screen_y>=16 then
 						-- if you mess with this check Sangokushi3 scroll during
 						-- the presentation + scroll of the top line during fight
-						x <= 232-scroll_x;   -- temporary workaround of 1pix roll - needs better fix!
+						x <= 232-scroll_x_latched;   -- temporary workaround of 1pix roll - needs better fix!
 					else
 						x <= "11101000"; -- 256-24=232
 					end if;

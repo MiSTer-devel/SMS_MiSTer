@@ -80,8 +80,8 @@ entity vdp is
 		--  [117]          collide_flag
 		--  [118]          overflow_flag
 		--  [119]          line_overflow
-		--  [120]          last_x0
-		-- Total: 121 bits -> packed into ss_regs[127:0] (16 bytes, 2 DDRAM words)
+		--  [127:120]      bg_scroll_x_latched
+		-- Total: 128 bits -> packed into ss_regs[127:0] (16 bytes, 2 DDRAM words)
 		ss_regs_out    : out STD_LOGIC_VECTOR(127 downto 0);
 		-- Restore: load all VDP control registers at once (held one cycle while ss_regs_set='1')
 		ss_regs_in     : in  STD_LOGIC_VECTOR(127 downto 0) := (others => '0');
@@ -158,6 +158,7 @@ architecture Behavioral of vdp is
 	signal m2mg_address:		std_logic_vector (2 downto 0) := (others=>'0');
 	signal m2ct_address:		std_logic_vector (7 downto 0) := (others=>'1');
 	signal bg_scroll_x:		std_logic_vector(7 downto 0) := (others=>'0');
+	signal bg_scroll_x_latched : std_logic_vector(7 downto 0) := (others => '0');
 	signal bg_scroll_y:		std_logic_vector(7 downto 0) := (others=>'0');
 	signal spr_address:		std_logic_vector (6 downto 0) := (others=>'0');
 	signal spr_shift:			std_logic := '0';
@@ -238,7 +239,7 @@ begin
 		bg_address		=> bg_address,
 		m2mg_address	=> m2mg_address,
 		m2ct_address	=> m2ct_address,
-		bg_scroll_x		=> bg_scroll_x,
+		bg_scroll_x		=> bg_scroll_x_latched,
 		bg_scroll_y		=> bg_scroll_y,
 		disable_hscroll=>disable_hscroll,
 		disable_vscroll => disable_vscroll,
@@ -346,8 +347,7 @@ begin
 	ss_regs_out(117)         	<= collide_flag;
 	ss_regs_out(118)         	<= overflow_flag;
 	ss_regs_out(119)         	<= line_overflow;
-	ss_regs_out(120)         	<= last_x0;
-	ss_regs_out(127 downto 121)	<= (others => '0');
+	ss_regs_out(127 downto 120)	<= bg_scroll_x_latched;
 
 	smode_M1 <= mode_M1 and mode_M2 ;
 	smode_M2 <= mode_M2;
@@ -567,7 +567,7 @@ begin
 	begin
 		if rising_edge(clk_sys) then
 			if ss_regs_set = '1' then
-				last_x0 <= ss_regs_in(120);
+				last_x0 <= std_logic(x(0));
 				-- Restore hbl_counter to the actual saved value from ss_regs_in(111 downto 104).
 				hbl_counter <= ss_regs_in(111 downto 104);
 				hbl_irq <= ss_regs_in(116);
@@ -660,4 +660,23 @@ begin
 		end if;
 	end process;
 	
+	-- YM2602 / Nuked-SMS-FPGA latches R8 at horizontal count 488.
+	-- Captured at x=487 so the updated value is available to the background
+	-- pipeline when line_reset triggers at x=488.
+	process (clk_sys)
+	begin
+		if rising_edge(clk_sys) then
+			if reset_n = '0' then
+				bg_scroll_x_latched <= (others => '0');
+			elsif ss_regs_set = '1' then
+				-- Preserve deterministic behavior after restoring a state.
+				bg_scroll_x_latched <= ss_regs_in(127 downto 120);
+			elsif ce_pix = '1' then
+				if x = conv_std_logic_vector(487, 9) then
+					bg_scroll_x_latched <= bg_scroll_x;
+				end if;
+			end if;
+		end if;
+	end process;
+
 end Behavioral;
