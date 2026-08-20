@@ -1783,7 +1783,7 @@ port map(
 				-- Detects LD (nn),A (opcode 0x32) sequences targeting $0002/$0003/$0004
 				-- vs $FFFF. No opcode-boundary tracking needed: same approach as MAME.
 				-- ---------------------------------------------------------------
-				if unsigned(ROMAD(14 downto 0)) < 32768 then  -- first 32KB only
+				if unsigned(ROMAD) < 32768 then  -- first 32KB only
 					case zem_scan_state is
 						when 0 =>
 							-- Waiting for 0x32 (LD (nn),A opcode)
@@ -1821,8 +1821,8 @@ port map(
 							zem_scan_state <= 0;
 					end case;
 
-					if unsigned(ROMAD(14 downto 0)) = 32767 then
-						if zem_count_0002 > zem_count_ffff + 2 then
+					if unsigned(ROMAD) = 32767 then
+						if zem_count_0002 > zem_count_ffff + 1 then
 							detect_zemina_static <= '1';
 						end if;
 					end if;
