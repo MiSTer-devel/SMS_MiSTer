@@ -1022,6 +1022,7 @@ system #(63) system
 
 	.x(x),
 	.y(y),
+	.vcounter_cpu(vcounter_cpu),
 	.color(color),
 	.palettemode(sg_palette),
 	.mask_column(mask_column),
@@ -1427,6 +1428,7 @@ assign AUDIO_R=audio_r;
 
 wire [8:0] x;
 wire [8:0] y;
+wire [7:0] vcounter_cpu;
 wire [11:0] color;
 wire mask_column;
 wire smode_M1, smode_M2, smode_M3;
@@ -1449,9 +1451,10 @@ video video
 	.smode_M3(smode_M3),
 	.video_state_out(ss_video_state_out),
 	.video_state_in(ss_video_state_in),
-	.video_state_set(1'b0),
+	.video_state_set(ss_video_state_set),
 	.x(x),
 	.y(y),
+	.vcounter_cpu(vcounter_cpu),
 	.hsync(HS),
 	.vsync(VS),
 	.hblank(HBlank),

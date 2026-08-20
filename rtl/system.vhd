@@ -92,6 +92,7 @@ entity system is
 
 		x:				in	 STD_LOGIC_VECTOR(8 downto 0);
 		y:				in	 STD_LOGIC_VECTOR(8 downto 0);
+		vcounter_cpu:	in	 STD_LOGIC_VECTOR(7 downto 0);
 		color:		out STD_LOGIC_VECTOR(11 downto 0);
 		palettemode:	in	STD_LOGIC;
 		mask_column:out STD_LOGIC;
@@ -573,6 +574,7 @@ begin
 		D_out		=> vdp_D_out,
 		x			=> x,
 		y			=> y,
+		vcounter_cpu=> vcounter_cpu,
 		color		=> vdp_color,
 		palettemode	=> palettemode,
 --		y1       => vdp_y1,
@@ -624,6 +626,7 @@ begin
 		D_out		=> vdp2_D_out,
 		x			=> x,
 		y			=> y,
+		vcounter_cpu=> vcounter_cpu,
 		color		=> vdp2_color,
 		palettemode	=> palettemode,
 		y1       => vdp2_y1,
