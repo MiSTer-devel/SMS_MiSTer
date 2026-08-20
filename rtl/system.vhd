@@ -100,6 +100,7 @@ entity system is
 		smode_M1:		out STD_LOGIC;
 		smode_M2:		out STD_LOGIC;
 		smode_M3:		out STD_LOGIC;
+		smode_M4:		out STD_LOGIC;
 		ysj_quirk:		in	STD_LOGIC;
 		pal:				in STD_LOGIC;
 		region:			in	STD_LOGIC;
@@ -577,13 +578,14 @@ begin
 		vcounter_cpu=> vcounter_cpu,
 		color		=> vdp_color,
 		palettemode	=> palettemode,
---		y1       => vdp_y1,
-		smode_M1  => smode_M1,
-		smode_M2  => smode_M2,
-		smode_M3  => smode_M3,
-		ysj_quirk	=> ysj_quirk,
+		y1			=> open,
 		mask_column => mask_column,
 		black_column => black_column,
+		smode_M1	=> smode_M1,
+		smode_M2	=> smode_M2,
+		smode_M3	=> smode_M3,
+		smode_M4	=> smode_M4,
+		ysj_quirk	=> ysj_quirk,
 		reset_n  => RESET_n,
 		ss_regs_out => vdp_regs_out,
 		ss_regs_in  => vdp_regs_in,
@@ -629,13 +631,14 @@ begin
 		vcounter_cpu=> vcounter_cpu,
 		color		=> vdp2_color,
 		palettemode	=> palettemode,
-		y1       => vdp2_y1,
---		smode_M1  => smode2_M1,
---		smode_M2  => smode2_M2,
---		smode_M3  => smode2_M3,
-		ysj_quirk	=> ysj_quirk,
---		mask_column => mask2_column,
+		y1			=> vdp2_y1,
+		mask_column => open,
 		black_column => black_column,
+		smode_M1	=> open,
+		smode_M2	=> open,
+		smode_M3	=> open,
+		smode_M4	=> open,
+		ysj_quirk	=> ysj_quirk,
 		reset_n  => RESET_n,
 		ss_regs_out => vdp2_regs_out_i,
 		ss_regs_in  => vdp2_regs_in,
