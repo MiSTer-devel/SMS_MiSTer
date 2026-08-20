@@ -442,6 +442,19 @@ architecture Behavioral of system is
 		return crc;
 	end function;
 
+	function reverse8(x : std_logic_vector(7 downto 0)) return std_logic_vector is
+	begin
+		return x(0) & x(1) & x(2) & x(3) & x(4) & x(5) & x(6) & x(7);
+	end function;
+
+	-- Janggun mapper (Janggun-ui Adeul): CRC32-based auto-detection
+	signal mapper_janggun         : std_logic := '0';
+	signal jang_bank1, jang_bank2 : std_logic_vector(5 downto 0) := "000010"; -- $4000 (page 2), $6000 (page 3)
+	signal jang_bank3, jang_bank4 : std_logic_vector(5 downto 0) := "000100"; -- $8000 (page 4), $A000 (page 5)
+	signal jang_rev1, jang_rev2   : std_logic := '0';
+	signal jang_rev3, jang_rev4   : std_logic := '0';
+	signal janggun_reverse_active : std_logic := '0';
+
 	component CODES is
 		generic(
 			ADDR_WIDTH  : in integer := 16;
@@ -1066,6 +1079,13 @@ port map(
 	-- will fall back into the SPRAM BIOS - giving the correct no-cart loop.
 	active_bios_D_out <= ext_bios_D_out when (ext_bios_sel='1' and ext_bios_loaded='1') else boot_rom_D_out;
 
+	janggun_reverse_active <=
+		jang_rev1 when mapper_janggun = '1' and bootloader_n = '1' and A(15 downto 13) = "010" else
+		jang_rev2 when mapper_janggun = '1' and bootloader_n = '1' and A(15 downto 13) = "011" else
+		jang_rev3 when mapper_janggun = '1' and bootloader_n = '1' and A(15 downto 13) = "100" else
+		jang_rev4 when mapper_janggun = '1' and bootloader_n = '1' and A(15 downto 13) = "101" else
+		'0';
+
 	irom_D_out <=	ext_gg_bios_D_out when (bootloader_n='0' and gg_bios_en='1' and ext_gg_bios_loaded='1' and A(15 downto 14)="00")
 	               else active_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and A(15 downto 14)="00")
 	               else ext_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and ext_bios_sel='1' and ext_bios_loaded='1' and A(15 downto 14)/="11")
@@ -1075,7 +1095,9 @@ port map(
 	               -- incorrectly detect a cartridge when none is present.
 	               else x"FF" when (bootloader_n='1' and dbr='0')
 	               else segadect2_D_out when (encrypt(1 downto 0)="10" and A(15)='0')
-						else mc8123_D_out when (encrypt(0)='1' and A(15)='0') or (encrypt(1 downto 0)="11" and A(14)='0') else rom_do;
+						else mc8123_D_out when (encrypt(0)='1' and A(15)='0') or (encrypt(1 downto 0)="11" and A(14)='0')
+						else reverse8(rom_do) when (mapper_janggun = '1' and bootloader_n = '1' and janggun_reverse_active = '1')
+						else rom_do;
 	
 	process (clk_sys)
 	begin
@@ -1189,6 +1211,14 @@ port map(
 			bank1 <= "00000001";
 			bank2 <= "00000010";
 			bank3 <= "00000011";
+			jang_bank1 <= "000010";
+			jang_bank2 <= "000011";
+			jang_bank3 <= "000100";
+			jang_bank4 <= "000101";
+			jang_rev1 <= '0';
+			jang_rev2 <= '0';
+			jang_rev3 <= '0';
+			jang_rev4 <= '0';
 			nvram_e  <= '0';
 			nvram_ex <= '0';
 			nvram_p  <= '0';
@@ -1209,28 +1239,39 @@ port map(
 			if rising_edge(clk_sys) then
 				eeprom_soft_reset <= '0';
 				if mapper_set = '1' then
-					-- For System E, mapper_in(7:0) is IO port 0xF7 state (VDP bank
-					-- selects + rom_bank), NOT bank0.  The IO module restores the
-					-- SE banking via se_mapper_set, so skip bank0/pak4_reg0 here.
-					if systeme = '0' then
-						bank0          <= mapper_in(7 downto 0);
+					if mapper_janggun = '1' then
+						jang_bank1 <= mapper_in(5 downto 0);
+						jang_rev1  <= mapper_in(7);
+						jang_bank2 <= mapper_in(13 downto 8);
+						jang_rev2  <= mapper_in(15);
+						jang_bank3 <= mapper_in(21 downto 16);
+						jang_rev3  <= mapper_in(23);
+						jang_bank4 <= mapper_in(29 downto 24);
+						jang_rev4  <= mapper_in(31);
+					else
+						-- For System E, mapper_in(7:0) is IO port 0xF7 state (VDP bank
+						-- selects + rom_bank), NOT bank0.  The IO module restores the
+						-- SE banking via se_mapper_set, so skip bank0/pak4_reg0 here.
+						if systeme = '0' then
+							bank0          <= mapper_in(7 downto 0);
+						end if;
+						bank1              <= mapper_in(15 downto 8);
+						bank2              <= mapper_in(23 downto 16);
+						bank3              <= mapper_in(31 downto 24);
+						if systeme = '0' then
+							pak4_reg0      <= mapper_in(7 downto 0);
+						end if;
+						pak4_reg2          <= mapper_in(39 downto 32);
+						nem_bank0          <= mapper_in(47 downto 40);
+						nvram_e            <= mapper_in(50);
+						nvram_ex           <= mapper_in(51);
+						nvram_p            <= mapper_in(52);
+						nvram_cme          <= mapper_in(53);
+						mapper_4pak        <= mapper_in(57);
+						mapper_codies      <= mapper_in(58);
+						lock_mapper_B      <= mapper_in(59);
+						mapper_codies_lock <= mapper_in(60);
 					end if;
-					bank1              <= mapper_in(15 downto 8);
-					bank2              <= mapper_in(23 downto 16);
-					bank3              <= mapper_in(31 downto 24);
-					if systeme = '0' then
-						pak4_reg0      <= mapper_in(7 downto 0);
-					end if;
-					pak4_reg2          <= mapper_in(39 downto 32);
-					nem_bank0          <= mapper_in(47 downto 40);
-					nvram_e            <= mapper_in(50);
-					nvram_ex           <= mapper_in(51);
-					nvram_p            <= mapper_in(52);
-					nvram_cme          <= mapper_in(53);
-					mapper_4pak        <= mapper_in(57);
-					mapper_codies      <= mapper_in(58);
-					lock_mapper_B      <= mapper_in(59);
-					mapper_codies_lock <= mapper_in(60);
 					-- Prevent edge detector registers from triggering false transitions
 					-- in the next clock cycle after state restoration.
 					bootloader_n_prev     <= bootloader_n;
@@ -1250,6 +1291,14 @@ port map(
 					bank1 <= "00000001";
 					bank2 <= "00000010";
 					bank3 <= "00000011";
+					jang_bank1 <= "000010";
+					jang_bank2 <= "000011";
+					jang_bank3 <= "000100";
+					jang_bank4 <= "000101";
+					jang_rev1 <= '0';
+					jang_rev2 <= '0';
+					jang_rev3 <= '0';
+					jang_rev4 <= '0';
 					nvram_e  <= '0';
 					nvram_ex <= '0';
 					nvram_p  <= '0';
@@ -1269,6 +1318,16 @@ port map(
 				-- rom_size_pages is stable here because
 				-- cart_download holds RESET_n low throughout the entire ROM transfer.
 				if RESET_n = '1' and reset_n_prev = '0' then
+					if mapper_janggun = '1' then
+						jang_bank1 <= "000010";
+						jang_bank2 <= "000011";
+						jang_bank3 <= "000100";
+						jang_bank4 <= "000101";
+						jang_rev1 <= '0';
+						jang_rev2 <= '0';
+						jang_rev3 <= '0';
+						jang_rev4 <= '0';
+					end if;
 					if mapper_zemina_force = '1' then
 						nem_bank0 <= (others => '0');
 					elsif mapper_nemesis_auto = '1' and unsigned(rom_size_pages) /= 0 then
@@ -1308,7 +1367,42 @@ port map(
 					end if;
 				end if;
 
-				if mapper_eeprom = '1' then
+				if mapper_janggun = '1' and bootloader_n = '1' then
+					if ss_freeze = '0' and WR_n = '0' and MREQ_n = '0' then
+						case A is
+							when x"4000" =>
+								jang_bank1 <= D_in(5 downto 0);
+								jang_rev1  <= D_in(7);
+
+							when x"6000" =>
+								jang_bank2 <= D_in(5 downto 0);
+								jang_rev2  <= D_in(7);
+
+							when x"8000" =>
+								jang_bank3 <= D_in(5 downto 0);
+								jang_rev3  <= D_in(7);
+
+							when x"A000" =>
+								jang_bank4 <= D_in(5 downto 0);
+								jang_rev4  <= D_in(7);
+
+							when x"FFFE" =>
+								jang_bank1 <= D_in(4 downto 0) & '0';
+								jang_bank2 <= D_in(4 downto 0) & '1';
+								jang_rev1  <= D_in(6) or D_in(7);
+								jang_rev2  <= D_in(6) or D_in(7);
+
+							when x"FFFF" =>
+								jang_bank3 <= D_in(4 downto 0) & '0';
+								jang_bank4 <= D_in(4 downto 0) & '1';
+								jang_rev3  <= D_in(6) or D_in(7);
+								jang_rev4  <= D_in(6) or D_in(7);
+
+							when others =>
+								null;
+						end case;
+					end if;
+				elsif mapper_eeprom = '1' then
 					-- EEPROM carts (93C46) always use the plain Sega $FFFC-$FFFF register map.
 					-- Must take priority over every other mapper heuristic below (4-PAK $3FFE
 					-- write-trigger, Zemina opcode scan, Dahjee/linear/castle/etc.) so a false
@@ -1429,8 +1523,12 @@ port map(
 	mapper_manual_force <= mapper_lock or mapper_codies_force or mapper_dahjee_a_force or
 	                       mapper_linear_force or mapper_zemina_force;
 
+	-- Janggun mapper (Janggun-ui Adeul): CRC32-based auto-detection.
+	-- CRC32 0x192949D5
+	mapper_janggun <= '1' when mapper_manual_force = '0' and (rom_crc32 xor x"FFFFFFFF") = x"192949D5" else '0';
+
 	-- Castle mapper heuristic + OSD force.
-	mapper_castle <= '1' when mapper_manual_force = '0' and detect_castle = '1' else
+	mapper_castle <= '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_castle = '1' else
 	                 '0';
 
 	-- Wonder Kid [Proto] [SMS-GG]: MAPPER_MSX_Generic16_8000
@@ -1445,13 +1543,11 @@ port map(
 	-- CRC16-CCITT of last 8KB block: 0x8613
 
 	-- Nemesis I requires a special startup mapping: $0000-$1FFF from the last page.
-	mapper_nemesis_auto <= '1' when mapper_manual_force = '0' and
+	mapper_nemesis_auto <= '1' when mapper_manual_force = '0' and mapper_janggun = '0' and
 	                                rom_crc16_run = x"EE05" else
 	                       '0';
 
-
-
-	mapper_wonderkid <= '1' when mapper_manual_force = '0' and
+	mapper_wonderkid <= '1' when mapper_manual_force = '0' and mapper_janggun = '0' and
 	                             (detect_wonderkid = '1' or rom_crc16_run = x"8613") else
 	                    '0';
 
@@ -1463,7 +1559,7 @@ port map(
 	-- rom_a_i branch are handled separately by mapper_sega_locked (see below).
 	-- Linear mapper heuristic + OSD force.
 	mapper_linear <= '1' when mapper_linear_force = '1' else
-	                 '1' when mapper_manual_force = '0' and detect_linear = '1' else
+	                 '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_linear = '1' else
 	                 '0';
 
 	-- 48KB dahjee_typeb games: Sega mapper code path (bank registers 0,1,2 never updated)
@@ -1474,7 +1570,7 @@ port map(
 	-- Keeping them on the Sega mapper path (same SDRAM addresses for banks 0,1,2 on 48KB)
 	-- while blocking all write detection fixes both the boot failure and the logo loop.
 	-- Mapper that follows Sega path but locks all bank writes (used for some 48KB linear/dahjee_typeb games)
-	mapper_sega_locked <= '1' when mapper_manual_force = '0' and detect_sega_locked = '1' else '0';
+	mapper_sega_locked <= '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_sega_locked = '1' else '0';
 
 	-- Dahjee Type A expansion: linear ROM + 8KB RAM at 0x2000-0x3FFF.
 	-- MSX conversions published by DahJee/Jumbo that require the Type A
@@ -1483,7 +1579,7 @@ port map(
 	-- (MAME devices: sega8_dahjee_typea_device)
 	-- Dahjee Type A heuristic + OSD force.
 	mapper_dahjee_a <= '1' when mapper_dahjee_a_force = '1' else
-	                  '1' when mapper_manual_force = '0' and detect_dahjee_a = '1' else
+	                  '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_dahjee_a = '1' else
 	                  '0';
 
 	-- GG EEPROM mapper: CRC32-based auto-detection. 
@@ -1526,13 +1622,24 @@ port map(
 	-- [31:24]bank3 [23:16]bank2 [15:8]bank1 [7:0]bank0
 	-- Note: when systeme='1', bits [7:0] mirror IO port 0xF7:
 	--   [7]=vdp_se_bank [6]=vdp2_se_bank [5]=vdp_cpu_bank [3:0]=rom_bank
-	mapper_out(63 downto 8) <= detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
+	mapper_out(63 downto 8) <=
+	              detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
+	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
+	              detect_zemina_static & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
+	              detect_sega_locked & detect_dahjee_a &
+	              x"0000" &
+	              jang_rev4 & "0" & jang_bank4 &
+	              jang_rev3 & "0" & jang_bank3 &
+	              jang_rev2 & "0" & jang_bank2 when mapper_janggun = '1' else
+	              detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
 	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
 	              detect_zemina_static & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
 	              detect_sega_locked & detect_dahjee_a &
 	              nem_bank0 & pak4_reg2 & bank3 & bank2 & bank1;
 
-	mapper_out(7 downto 0) <= vdp_se_bank & vdp2_se_bank & vdp_cpu_bank & '0' & rom_bank when systeme='1' else bank0;
+	mapper_out(7 downto 0) <= vdp_se_bank & vdp2_se_bank & vdp_cpu_bank & '0' & rom_bank when systeme='1' else
+	                          jang_rev1 & "0" & jang_bank1 when mapper_janggun = '1' else
+	                          bank0;
 
 	-- Active for any Zemina-family mapper.
 	-- detect_zemina_static: MAME-equivalent static opcode scan result.
@@ -1540,6 +1647,7 @@ port map(
 	-- GG guard: no Zemina games exist on Game Gear cartridges.
 	use_zem <= '1' when mapper_zemina_force = '1' else
 	           '0' when mapper_manual_force = '1' else
+	           '0' when mapper_janggun = '1' else
 	           '0' when mapper_wonderkid = '1' else
 	           '0' when mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' else
 	           '1' when mapper_nemesis_auto = '1' else
@@ -1549,7 +1657,8 @@ port map(
 	           '0';
 
 	rom_a_i(12 downto 0) <= A(12 downto 0);
-	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a)
+	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a,
+	         mapper_janggun,jang_bank1,jang_bank2,jang_bank3,jang_bank4)
 	begin
 		if systeme = '1' then
 			case A(15 downto 14) is
@@ -1566,6 +1675,22 @@ port map(
 			-- Keep the full CPU address so ROM pages don't mirror.
 			rom_a_i(21 downto 16) <= (others=>'0');
 			rom_a_i(15 downto 13) <= A(15 downto 13);
+		elsif mapper_janggun = '1' and bootloader_n = '1' then
+			case A(15 downto 13) is
+			when "000" | "001" =>
+				-- $0000-$3FFF fixed: first 16KB / pages 0 and 1
+				rom_a_i(21 downto 13) <= "000000" & A(15 downto 13);
+			when "010" => -- $4000-$5FFF
+				rom_a_i(21 downto 13) <= "000" & jang_bank1;
+			when "011" => -- $6000-$7FFF
+				rom_a_i(21 downto 13) <= "000" & jang_bank2;
+			when "100" => -- $8000-$9FFF
+				rom_a_i(21 downto 13) <= "000" & jang_bank3;
+			when "101" => -- $A000-$BFFF
+				rom_a_i(21 downto 13) <= "000" & jang_bank4;
+			when others =>
+				rom_a_i(21 downto 13) <= "000000" & A(15 downto 13);
+			end case;
 		-- Zemina/Nemesis mapper is suppressed while the BIOS is running (bootloader_n='0').
 		-- This allows large banked BIOSes (e.g. Korean 64KB) to bank-switch their own
 		-- pages via the standard Sega mapper, without nem_bank0 corrupting $0000-$1FFF.
