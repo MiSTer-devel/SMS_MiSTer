@@ -42,14 +42,13 @@ begin
 				shift3 <= (others => '0');
 				wideclock <= false;
 			elsif ce_pix = '1' then
-				-- spr_x=0xFF is the wrapped value produced when the VDP sprite X
-				-- register is 0 (the scanner stores VDP_X-1). Treat it as the
-				-- off-screen predecessor of X=0 instead of allowing it to match
-				-- the right edge through the 8-bit coordinate wrap.
-				if ((spr_x=x and ((load and (m4 or spr_d3(7)='0')) or 
-									 (x224 and spr_d3(7)='1'))) and spr_x/=x"FF")
-					or (spr_x=x"FF" and x=x"00" and load)
-					or (spr_x=x+8 and x248 and spr_x/=x"FF") then
+				-- In shifted mode, spr_x=x+8 is an 8-bit comparison.
+				-- spr_x=0xFF corresponds to a sprite with VDP X=0, which
+				-- should be completely off-screen after the 8-pixel shift.
+				-- Do not let the 8-bit comparison wrap it onto the right edge.
+				if (spr_x=x and ((load and (m4 or spr_d3(7)='0')) or 
+									 (x224 and spr_d3(7)='1'))) or 
+					((spr_x=x+8 and x248) and spr_x/=x"FF") then
 					shift0 <= spr_d0;
 					shift1 <= spr_d1;
 					shift2 <= spr_d2;
