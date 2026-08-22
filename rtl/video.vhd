@@ -23,6 +23,7 @@ entity video is
 		
 		x: 				out std_logic_vector(8 downto 0);
 		y:					out std_logic_vector(8 downto 0);
+		vcounter_cpu:	out std_logic_vector(7 downto 0);
 		hsync:			out std_logic;
 		vsync:			out std_logic;
 		hblank:			out std_logic;
@@ -33,6 +34,11 @@ architecture Behavioral of video is
 
 	signal hcount:			std_logic_vector(8 downto 0) := (others => '0');
 	signal vcount:			std_logic_vector(8 downto 0) := (others => '0');
+	
+	-- CPU-visible VCounter advances two pixel ticks before vcount/y updates
+	-- at hcount=487. VDPTEST accepts hcount=484/485 and rejects 486.
+	constant VCOUNT_CPU_UPDATE_HCOUNT : integer := 485;
+	signal vcounter_cpu_reg : std_logic_vector(8 downto 0) := (others => '0');
 	
 	signal hsync_reg:		std_logic := '0';
 	signal vsync_reg:		std_logic := '0';
@@ -51,7 +57,111 @@ begin
 				vcount <= video_state_in(12 downto 4);
 				hsync_reg <= video_state_in(3);
 				vsync_reg <= video_state_in(2);
+				
+				-- Reconstruct CPU VCounter based on whether restored position is in early transition window (486..487)
+				if (video_state_in(21 downto 13) = conv_std_logic_vector(486, 9) or
+				    video_state_in(21 downto 13) = conv_std_logic_vector(487, 9)) then
+					if pal = '1' then
+						if smode_M1 = '1' and smode_M2 = '1' then
+							if video_state_in(12 downto 4) = 258 then
+								vcounter_cpu_reg <= conv_std_logic_vector(458, 9);
+							else
+								vcounter_cpu_reg <= video_state_in(12 downto 4) + 1;
+							end if;
+						elsif smode_M3 = '1' and smode_M2 = '1' then
+							if video_state_in(12 downto 4) = 266 then
+								vcounter_cpu_reg <= conv_std_logic_vector(482, 9);
+							else
+								vcounter_cpu_reg <= video_state_in(12 downto 4) + 1;
+							end if;
+						else
+							if video_state_in(12 downto 4) = 242 then
+								vcounter_cpu_reg <= conv_std_logic_vector(442, 9);
+							else
+								vcounter_cpu_reg <= video_state_in(12 downto 4) + 1;
+							end if;
+						end if;
+					else
+						if smode_M1 = '1' and smode_M2 = '1' then
+							if video_state_in(12 downto 4) = 234 then
+								vcounter_cpu_reg <= conv_std_logic_vector(485, 9);
+							else
+								vcounter_cpu_reg <= video_state_in(12 downto 4) + 1;
+							end if;
+						elsif smode_M3 = '1' and smode_M2 = '1' then
+							if video_state_in(12 downto 4) = 261 then
+								vcounter_cpu_reg <= (others => '0');
+							else
+								vcounter_cpu_reg <= video_state_in(12 downto 4) + 1;
+							end if;
+						else
+							if video_state_in(12 downto 4) = 218 then
+								vcounter_cpu_reg <= conv_std_logic_vector(469, 9);
+							else
+								vcounter_cpu_reg <= video_state_in(12 downto 4) + 1;
+							end if;
+						end if;
+					end if;
+				else
+					vcounter_cpu_reg <= video_state_in(12 downto 4);
+				end if;
 			elsif ce_pix = '1' then
+				-- CPU-visible VCounter changes before the internal line counter.
+				if hcount = conv_std_logic_vector(VCOUNT_CPU_UPDATE_HCOUNT, 9) then
+					if pal = '1' then
+						if smode_M1 = '1' and smode_M2 = '1' then
+							-- PAL 224-line mode
+							if vcount = 258 then
+								vcounter_cpu_reg <= conv_std_logic_vector(458, 9);
+							else
+								vcounter_cpu_reg <= vcount + 1;
+							end if;
+
+						elsif smode_M3 = '1' and smode_M2 = '1' then
+							-- PAL 240-line mode
+							if vcount = 266 then
+								vcounter_cpu_reg <= conv_std_logic_vector(482, 9);
+							else
+								vcounter_cpu_reg <= vcount + 1;
+							end if;
+
+						else
+							-- PAL 192-line mode
+							if vcount = 242 then
+								vcounter_cpu_reg <= conv_std_logic_vector(442, 9);
+							else
+								vcounter_cpu_reg <= vcount + 1;
+							end if;
+						end if;
+
+					else
+						if smode_M1 = '1' and smode_M2 = '1' then
+							-- NTSC 224-line mode
+							if vcount = 234 then
+								vcounter_cpu_reg <= conv_std_logic_vector(485, 9);
+							else
+								vcounter_cpu_reg <= vcount + 1;
+							end if;
+
+						elsif smode_M3 = '1' and smode_M2 = '1' then
+							-- NTSC 240-line mode
+							if vcount = 261 then
+								vcounter_cpu_reg <= (others => '0');
+							else
+								vcounter_cpu_reg <= vcount + 1;
+							end if;
+
+						else
+							-- NTSC 192-line mode
+							if vcount = 218 then
+								vcounter_cpu_reg <= conv_std_logic_vector(469, 9);
+							else
+								vcounter_cpu_reg <= vcount + 1;
+							end if;
+						end if;
+					end if;
+				end if;
+
 				if hcount=487	then
 					vcount <= vcount + 1;
 					if pal = '1' then
@@ -130,6 +240,7 @@ begin
 
 	x	<= hcount;
 	y	<= vcount;
+	vcounter_cpu <= vcounter_cpu_reg(7 downto 0);
 	hsync <= hsync_reg;
 	vsync <= vsync_reg;
 	hblank <= hblank_reg;

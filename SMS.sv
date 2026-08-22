@@ -1022,6 +1022,7 @@ system #(63) system
 
 	.x(x),
 	.y(y),
+	.vcounter_cpu(vcounter_cpu),
 	.color(color),
 	.palettemode(sg_palette),
 	.mask_column(mask_column),
@@ -1029,6 +1030,7 @@ system #(63) system
 	.smode_M1(smode_M1),
 	.smode_M2(smode_M2),
 	.smode_M3(smode_M3),
+	.smode_M4(smode_M4),
 	.ysj_quirk(ysj_quirk),
 	.pal(pal),
 	.region(status[10]),
@@ -1427,9 +1429,10 @@ assign AUDIO_R=audio_r;
 
 wire [8:0] x;
 wire [8:0] y;
+wire [7:0] vcounter_cpu;
 wire [11:0] color;
 wire mask_column;
-wire smode_M1, smode_M2, smode_M3;
+wire smode_M1, smode_M2, smode_M3, smode_M4;
 wire pal = status[2];
 wire border = status[13] & ~gg;
 wire ggres = ~status[39] & gg;
@@ -1447,11 +1450,13 @@ video video
 	.smode_M1(smode_M1),
 	.smode_M2(smode_M2),
 	.smode_M3(smode_M3),
+	.smode_M4(smode_M4),
 	.video_state_out(ss_video_state_out),
 	.video_state_in(ss_video_state_in),
-	.video_state_set(1'b0),
+	.video_state_set(ss_video_state_set),
 	.x(x),
 	.y(y),
+	.vcounter_cpu(vcounter_cpu),
 	.hsync(HS),
 	.vsync(VS),
 	.hblank(HBlank),

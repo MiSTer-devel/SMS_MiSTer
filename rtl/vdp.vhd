@@ -27,6 +27,7 @@ entity vdp is
 		D_out:			out STD_LOGIC_VECTOR (7 downto 0);
 		x:					in  STD_LOGIC_VECTOR (8 downto 0);
 		y:					in  STD_LOGIC_VECTOR (8 downto 0);
+		vcounter_cpu:		in  STD_LOGIC_VECTOR (7 downto 0);
 		color:			out STD_LOGIC_VECTOR (11 downto 0);
 		palettemode:	in STD_LOGIC;
 		y1:            out std_logic;
@@ -507,7 +508,7 @@ begin
 				elsif old_RD_n = '1' and RD_n='0' then
 					case A(7 downto 6)&A(0) is
 					when "010" => -- VCounter
-						D_out <= y(7 downto 0);
+						D_out <= vcounter_cpu;
 					when "011" => -- HCounter
 						D_out <= latched_x;
 					when "100" => -- Data port
