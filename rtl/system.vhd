@@ -1860,7 +1860,7 @@ port map(
 					end if;
 					if ss_freeze = '0' and WR_n='0' and MREQ_n='0' and nvram_e='0' and mapper_lock='0' then
 						case A(15 downto 0) is
-							-- Codemasters (active via detect_codies_static or mapper_codies_force)
+							-- Codemasters-style banking; Wonder Kid mapper #41 uses only $8000.
 							when x"0000" => 
 								if mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' then
 									bank0 <= D_in ;
@@ -1872,7 +1872,7 @@ port map(
 									nvram_cme <= D_in(7) ;
 								end if ;
 							when x"8000" => 
-								if (mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1') and mapper_eeprom = '0' then
+								if (mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or mapper_wonderkid = '1') and mapper_eeprom = '0' then
 									bank2 <= D_in ; 
 								end if;
 							-- Korean mapper (Sangokushi 3, Dodgeball King (Dallyeora Pigu-Wang), Jang Pung II, Jang Pung 3)
