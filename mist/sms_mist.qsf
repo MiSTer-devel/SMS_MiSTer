@@ -304,6 +304,7 @@ set_global_assignment -name VHDL_FILE ../rtl/vdp_cram.vhd
 set_global_assignment -name VHDL_FILE ../rtl/vdp_background.vhd
 set_global_assignment -name VHDL_FILE ../rtl/vdp.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/sdram.sv
+set_global_assignment -name VHDL_FILE ../rtl/mapper_detect.vhd
 set_global_assignment -name VHDL_FILE ../rtl/system.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sprom.vhd
 set_global_assignment -name VHDL_FILE ../rtl/spram.vhd

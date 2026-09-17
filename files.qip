@@ -22,6 +22,7 @@ set_global_assignment -name VHDL_FILE rtl/vdp_main.vhd
 set_global_assignment -name VHDL_FILE rtl/vdp_cram.vhd
 set_global_assignment -name VHDL_FILE rtl/vdp_background.vhd
 set_global_assignment -name VHDL_FILE rtl/vdp.vhd
+set_global_assignment -name VHDL_FILE rtl/mapper_detect.vhd
 set_global_assignment -name VHDL_FILE rtl/system.vhd
 set_global_assignment -name VHDL_FILE rtl/evolution_mapper.vhd
 set_global_assignment -name VHDL_FILE rtl/eeprom_93c46.vhd
