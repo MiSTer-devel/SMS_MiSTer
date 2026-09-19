@@ -73,6 +73,14 @@ architecture Behavioral of mapper_detect is
 	signal zem_scan_lo          : std_logic_vector(7 downto 0) := (others => '0');
 	signal zem_count_0002       : integer range 0 to 127 := 0;
 	signal zem_count_ffff       : integer range 0 to 127 := 0;
+	-- DahJee uses MAME's separate scan: skip operands only on a matching
+	-- destination. Keep Zemina's existing scanner and counters unchanged.
+	signal detect_dahjee_static : std_logic := '0';
+	signal dahjee_prev2, dahjee_prev1 : std_logic_vector(7 downto 0) := x"00";
+	signal dahjee_skip : integer range 0 to 2 := 0;
+	-- At most floor(32768/3) matches; do not saturate and lose A/B ordering.
+	signal dahjee_count_23, dahjee_count_def : integer range 0 to 16383 := 0;
+	signal dahjee_region_ff : std_logic := '0';
 
 	-- Static Codemasters header detection (mirrors MAME get_cart_type)
 	-- Checks: ROM[0x7FE0] & 0x0F <= 9, ROM[0x7FE3] in {0x93, 0x94, 0x95}, ROM[0x7FEF] = 0x00
@@ -211,7 +219,8 @@ begin
 	-- (MAME devices: sega8_dahjee_typea_device)
 	-- Dahjee Type A heuristic + OSD force.
 	mapper_dahjee_a <= '1' when mapper_dahjee_a_force = '1' else
-	                  '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_dahjee_a = '1' else
+	                  '1' when mapper_manual_force = '0' and mapper_janggun = '0' and
+	                           (detect_dahjee_a = '1' or (gg = '0' and detect_dahjee_static = '1')) else
 	                  '0';
 
 	-- GG EEPROM mapper: CRC32-based auto-detection. 
@@ -492,6 +501,57 @@ begin
 					end if;
 				end loop;
 				rom_crc32 <= crc32_v;
+			end if;
+		end if;
+	end process;
+
+	-- Static DahJee Type A, in the existing download clock domain. Downloads
+	-- supply ascending byte addresses; ROMEN gaps do not advance the scanner.
+	-- Only complete triples inside [0,$8000) count (MAME's loop can read two
+	-- bytes beyond that window). A new address-zero write resets all state.
+	process (ROMCL)
+		variable count_23, count_def : integer range 0 to 16383;
+	begin
+		if rising_edge(ROMCL) then
+			if ROMEN = '1' then
+				if unsigned(ROMAD) = 0 then
+					detect_dahjee_static <= '0';
+					dahjee_count_23 <= 0;
+					dahjee_count_def <= 0;
+					dahjee_region_ff <= '1';
+					dahjee_skip <= 0;
+					dahjee_prev2 <= x"00";
+					dahjee_prev1 <= ROMDT;
+				elsif unsigned(ROMAD) < 32768 then
+					count_23 := dahjee_count_23;
+					count_def := dahjee_count_def;
+					-- prev2 is the opcode, prev1 the low operand, ROMDT the
+					-- high operand. These ranges depend only on the high byte.
+					if dahjee_skip /= 0 then
+						dahjee_skip <= dahjee_skip - 1;
+					elsif unsigned(ROMAD) >= 2 and dahjee_prev2 = x"32" then
+						if ROMDT(7 downto 5) = "001" then
+							count_23 := count_23 + 1;
+							dahjee_skip <= 2;
+						elsif unsigned(ROMDT) >= 16#D0# then
+							count_def := count_def + 1;
+							dahjee_skip <= 2;
+						end if;
+					end if;
+					dahjee_prev2 <= dahjee_prev1;
+					dahjee_prev1 <= ROMDT;
+					dahjee_count_23 <= count_23;
+					dahjee_count_def <= count_def;
+					if unsigned(ROMAD) >= 16#2000# and unsigned(ROMAD) < 16#4000# and ROMDT /= x"FF" then
+						dahjee_region_ff <= '0';
+					end if;
+					-- Variables include a match ending on the final byte.
+					if unsigned(ROMAD) = 32767 then
+						if dahjee_region_ff = '1' and (count_23 > 10 or count_def > 10) and count_23 >= count_def then
+							detect_dahjee_static <= '1';
+						end if;
+					end if;
+				end if;
 			end if;
 		end if;
 	end process;
