@@ -169,7 +169,7 @@ entity system is
 		mapper_out   : out STD_LOGIC_VECTOR(63 downto 0);
 		mapper_in    : in  STD_LOGIC_VECTOR(63 downto 0) := (others => '0');
 		mapper_set   : in  STD_LOGIC := '0';
-		evolution_ss_out : out STD_LOGIC_VECTOR(95 downto 0);
+		evolution_ss_out : out STD_LOGIC_VECTOR(159 downto 0);
 		evolution_ss_in  : in  STD_LOGIC_VECTOR(95 downto 0) := (others => '0');
 		evolution_ss_set : in  STD_LOGIC := '0';
 		eeprom_ss_out : out STD_LOGIC_VECTOR(63 downto 0);
@@ -278,7 +278,6 @@ architecture Behavioral of system is
 	signal evolution_gg_mode     : std_logic;
 	signal effective_vdp_gg      : std_logic;
 	signal effective_gg          : std_logic;
-	signal evolution_launch_trace : std_logic_vector(63 downto 0);
 	signal evolution_launch_fetch_addr : std_logic_vector(15 downto 0);
 	signal mapper_evolution : std_logic;
 
@@ -625,6 +624,7 @@ begin
 		clk        => clk_sys,
 		reset_n    => RESET_n,
 		enable     => mapper_evolution,
+		bios_active => not bootloader_n,
 		cpu_a      => A,
 		mreq_n     => MREQ_n,
 		iorq_n     => IORQ_n,
@@ -646,7 +646,6 @@ begin
 		reg8d      => evolution_8d,
 		reg8e      => evolution_8e,
 		reg8f      => evolution_8f,
-		launch_trace => evolution_launch_trace,
 		launch_fetch_addr => evolution_launch_fetch_addr,
 		game_launch => evolution_game_launch,
 		ss_out      => evolution_ss_out,
@@ -1105,8 +1104,12 @@ port map(
 	                              evolution_63 = x"18" else '0';
 	-- Menu/service space also uses the clone VDP's 12-bit CRAM, but retains
 	-- Evolution/SMS controller I/O. Keep the two hardware modes independent.
+	-- The Evolution mapper is detected from the cartridge CRC before an SMS
+	-- BIOS hands execution to the cartridge. Do not apply the clone CRAM mode
+	-- to that BIOS while $3FFE still contains its reset value ($00).
 	effective_vdp_gg <= gg or evolution_gg_mode or
-	                    (mapper_evolution and not evolution_3ffe(1));
+	                    (mapper_evolution and (bootloader_n or cart_precedence) and
+	                     not evolution_3ffe(1));
 	effective_gg <= gg or evolution_gg_mode;
 	evolution_gg_active <= evolution_gg_mode;
 	-- Some patched interrupt handlers restore a selector with A21 asserted.
@@ -1460,7 +1463,8 @@ port map(
 		process (IORQ_n,A,vdp_D_out,vdp2_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
 					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena,bootloader_n,systeme,io_upper_port,io_gg_data_port,
 					sc_cart_ram_rd,sc_multicart_open,dahjee_cart_access,
-					mapper_eeprom,eeprom_enabled,eeprom_D_out,eeprom_bus_active,MREQ_n,evolution_io_port)
+					mapper_eeprom,eeprom_enabled,eeprom_D_out,eeprom_bus_active,MREQ_n,evolution_io_port,
+					mapper_evolution,cart_precedence)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' and systeme='0' and mapper_evolution='0' then
@@ -1469,8 +1473,13 @@ port map(
 				D_out <= io_D_out;
 			elsif io_upper_port='1' or io_gg_data_port='1' then
 				D_out(6 downto 0) <= io_D_out(6 downto 0);
-				-- during bootload, we trick the io ports so bit 7 indicates gg or sms game
-				if (bootloader_n='0') then
+				-- While the BIOS actually owns the bus, trick bit 7 so BIOS
+				-- probing can distinguish GG from SMS.  bootloader_n alone is not
+				-- sufficient: on SMS1 hardware the cartridge can have precedence
+				-- while the BIOS remains logically enabled.  Evolution games use
+				-- that state (e.g. Shinobi writes $04 to $3E), and forcing bit 7
+				-- low there turns an idle $DC read from $FF into $7F.
+				if bootloader_n='0' and cart_precedence='0' then
 					D_out(7) <= gg;
 				else
 					D_out(7) <= io_D_out(7);

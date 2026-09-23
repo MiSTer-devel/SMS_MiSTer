@@ -22,6 +22,7 @@ entity evolution_mapper is
         clk        : in  std_logic;
         reset_n    : in  std_logic;
         enable     : in  std_logic;
+        bios_active : in std_logic;
         cpu_a      : in  std_logic_vector(15 downto 0);
         mreq_n     : in  std_logic;
         iorq_n     : in  std_logic;
@@ -43,10 +44,9 @@ entity evolution_mapper is
         reg8d      : out std_logic_vector(7 downto 0);
         reg8e      : out std_logic_vector(7 downto 0);
         reg8f      : out std_logic_vector(7 downto 0);
-        launch_trace : out std_logic_vector(63 downto 0);
         launch_fetch_addr : out std_logic_vector(15 downto 0);
         game_launch : out std_logic;
-        ss_out      : out std_logic_vector(95 downto 0);
+        ss_out      : out std_logic_vector(159 downto 0);
         ss_in       : in  std_logic_vector(95 downto 0) := (others => '0');
         ss_mapper_in: in  std_logic_vector(63 downto 0) := (others => '0');
         ss_set      : in  std_logic := '0'
@@ -78,20 +78,10 @@ architecture rtl of evolution_mapper is
     signal old_m1_n        : std_logic := '1';
     signal game_started    : std_logic := '0';
     signal game_launch_r   : std_logic := '0';
-    signal launch_trace_r  : std_logic_vector(63 downto 0) := (others => '0');
-    signal trace_frozen_r  : std_logic := '0';
-    signal trace_last_event_r : std_logic_vector(11 downto 0) := (others => '0');
-    signal trace_io_code   : std_logic_vector(3 downto 0);
     signal launch_fetch_addr_r : std_logic_vector(15 downto 0) := (others => '0');
     signal record_read_pending_r : std_logic := '0';
     signal menu_launch_armed_r : std_logic := '0';
 begin
-
-    with cpu_a(7 downto 0) select trace_io_code <=
-        x"1" when x"61", x"2" when x"62",
-        x"6" when x"63", x"7" when x"8D",
-        x"8" when x"8E", x"9" when x"8F", x"A" when x"CD",
-        x"0" when others;
 
     process(clk)
     begin
@@ -121,15 +111,11 @@ begin
                 switch_armed    <= '0';
                 old_m1_n        <= '1';
                 game_started    <= '0';
-                launch_trace_r  <= (others => '0');
-                trace_frozen_r  <= '0';
-                trace_last_event_r <= (others => '0');
                 launch_fetch_addr_r <= (others => '0');
                 record_read_pending_r <= '0';
                 menu_launch_armed_r <= '0';
             elsif ss_set = '1' and enable = '1' and
                   ss_in(31 downto 16) = x"E132" then
-                launch_trace_r             <= (others => '0');
                 launch_fetch_addr_r        <= ss_mapper_in(63 downto 48);
                 bank61_r                   <= ss_in(15 downto 8);
                 bank62_r                   <= ss_in(7 downto 0);
@@ -154,10 +140,8 @@ begin
                 switch_pending            <= '0';
                 switch_armed              <= '0';
                 game_started              <= ss_mapper_in(15) or ss_mapper_in(14);
-                trace_frozen_r            <= ss_mapper_in(15) or ss_mapper_in(14);
                 record_read_pending_r      <= '0';
                 menu_launch_armed_r        <= '0';
-                trace_last_event_r         <= (others => '0');
             elsif enable = '1' then
                 old_m1_n <= m1_n;
 
@@ -222,11 +206,6 @@ begin
 
                 -- Port $61 / $62 I/O writes
                 if wr_n = '0' and iorq_n = '0' then
-                    if trace_frozen_r = '0' and trace_io_code /= x"0" and
-                       (trace_io_code & d_in) /= trace_last_event_r then
-                        launch_trace_r <= launch_trace_r(51 downto 0) & trace_io_code & d_in;
-                        trace_last_event_r <= trace_io_code & d_in;
-                    end if;
                     case cpu_a(7 downto 0) is
                         when x"61" => bank61_r <= d_in;
                         when x"62" =>
@@ -251,15 +230,6 @@ begin
                     reg3ffe_pending <= d_in;
                     switch_pending  <= '1';
                     switch_armed    <= '0';
-                    if trace_frozen_r = '0' then
-                        if (x"3" & d_in) /= trace_last_event_r then
-                            launch_trace_r <= launch_trace_r(51 downto 0) & x"3" & d_in;
-                            trace_last_event_r <= x"3" & d_in;
-                        end if;
-                        if d_in = x"87" or d_in = x"97" or d_in = x"C7" then
-                            trace_frozen_r <= '1';
-                        end if;
-                    end if;
                 end if;
             end if;
         end if;
@@ -279,14 +249,15 @@ begin
     reg8d <= reg8d_r;
     reg8e <= reg8e_r;
     reg8f <= reg8f_r;
-    launch_trace <= launch_trace_r;
     launch_fetch_addr <= launch_fetch_addr_r;
     game_launch <= game_launch_r;
 
     -- The extra Evolution state is stored in unused header bits and in the
     -- EEPROM word (Evolution has no cartridge EEPROM). The generic mapper
     -- word carries the launch record, normal Sega banks and active $3FFE mode.
-    ss_out <= reg3ffe_pending & reg8f_r & reg8e_r & reg8d_r & reg88_r &
+    -- The upper 64 bits are reserved; operational restore state remains in
+    -- the established low 96-bit layout.
+    ss_out <= x"0000000000000000" & reg3ffe_pending & reg8f_r & reg8e_r & reg8d_r & reg88_r &
               reg63_r & regcd_r & reg8c_r & x"E132" & bank61_r & bank62_r
               when enable = '1' else
               (others => '0');
