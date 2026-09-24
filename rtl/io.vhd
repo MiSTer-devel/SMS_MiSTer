@@ -438,7 +438,7 @@ begin
 				gg_tx_wr_d <= '0';
 			end if;
 			-- savestate restore: System E IO port 0xF7 state
-			if se_mapper_set = '1' then
+			if se_mapper_set = '1' and systeme = '1' then
 				vdp1_bank    <= se_mapper_in(7);
 				vdp2_bank    <= se_mapper_in(6);
 				vdp_cpu_bank <= se_mapper_in(5);
