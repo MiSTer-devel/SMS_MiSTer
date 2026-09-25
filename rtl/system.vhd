@@ -221,6 +221,7 @@ architecture Behavioral of system is
 	signal z80_iset_int:		std_logic_vector(1 downto 0);
 	signal A:					std_logic_vector(15 downto 0);
 	signal D_in:				std_logic_vector(7 downto 0);
+	signal memory_D_out: std_logic_vector(7 downto 0);
 	signal D_out:				std_logic_vector(7 downto 0);
 	signal ce_z80:				std_logic;
 	
@@ -419,12 +420,6 @@ architecture Behavioral of system is
 	signal io_sc_ppi_port:		std_logic;
 	signal io_sc_legacy_port:	std_logic;
 	signal io_sc_mc_port:		std_logic;
-	signal sc_cart_ram_32k:		std_logic;
-	signal sc_cart_ram_low:		std_logic;
-	signal sc_cart_ram_high:	std_logic;
-	signal sc_cart_ram_rd:		std_logic;
-	signal sc_multicart_upper:	std_logic;
-	signal sc_multicart_open:	std_logic;
 
 	signal nvram_WR:		   std_logic;
 	signal nvram_e:         std_logic;
@@ -1040,13 +1035,6 @@ port map(
 	io_sc_legacy_port <= '1' when (A(7 downto 0)=x"DE" or A(7 downto 0)=x"DF") and palettemode='1' and gg='0' and systeme='0' else '0';
 	io_sc_mc_port <= '1' when A(7 downto 5)="111" and sc_multicart_en='1' and gg='0' and systeme='0' else '0';
 
-	sc_cart_ram_32k <= '1' when (sc3000_en='1' and sc_cart_ram="11") or mapper_castle='1' else '0';
-	sc_cart_ram_low <= '1' when ((sc3000_en='1' and sc_cart_ram/="00") or mapper_castle='1') and A(15 downto 14)="10" else '0';
-	sc_cart_ram_high <= '1' when sc_cart_ram_32k='1' and A(15 downto 14)="11" else '0';
-	sc_cart_ram_rd <= sc_cart_ram_low or sc_cart_ram_high;
-	sc_multicart_upper <= '1' when sc_multicart_en='1' and A(15)='1' else '0';
-	sc_multicart_open <= '1' when sc_multicart_en='1' and A(15 downto 14)="10" and sc_cart_ram="00" else '0';
-
 	ram_a <= "000" & A(10 downto 0) when sc3000_en = '1' else
 	         A(13 downto 0) when systeme = '1' else
 	         '0' & A(12 downto 0);
@@ -1283,6 +1271,33 @@ port map(
 	eeprom_ss_out <= eeprom_ss_out_i;
 	mapper_eeprom_out <= mapper_eeprom;
 
+	memory_bus_inst : entity work.memory_bus
+		port map (
+			A => A,
+			sc3000_en => sc3000_en,
+			sc_cart_ram => sc_cart_ram,
+			mapper_castle => mapper_castle,
+			sc_multicart_en => sc_multicart_en,
+			WR_n => WR_n,
+			RD_n => RD_n,
+			MREQ_n => MREQ_n,
+			ss_freeze => ss_freeze,
+			mapper_eeprom => mapper_eeprom,
+			nvram_e => nvram_e,
+			nvram_ex => nvram_ex,
+			nvram_cme => nvram_cme,
+			dahjee_cart_access => dahjee_cart_access,
+			eeprom_bus_active => eeprom_bus_active,
+			eeprom_D_out => eeprom_D_out,
+			nvram_D_out => nvram_D_out,
+			ram_D_out => ram_D_out,
+			irom_D_out => irom_D_out,
+			ram_WR => ram_WR,
+			nvram_WR => nvram_WR,
+			rom_RD => rom_RD,
+			memory_D_out => memory_D_out
+		);
+
 	-- glue logic
 	bal_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)="00000110" and effective_gg='1' else '1';
 	vdp_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and evolution_io_port='0' and
@@ -1315,18 +1330,8 @@ port map(
 	det_WR_n <= WR_n when IORQ_n='0' and M1_n='1' and A(7 downto 0)=x"F2" and mapper_evolution='0' else '1';
 	IRQ_n <= vdp_IRQ_n when systeme='0' else vdp2_IRQ_n;
 					
-	ram_WR   <= not WR_n when ss_freeze = '0' and MREQ_n='0' and A(15 downto 14)="11" and sc_cart_ram_32k='0' else '0';
 	vram_WR  <= not WR_n when ss_freeze = '0' and MREQ_n='0' and A(15 downto 14)="10" and vdp_cpu_bank='1' and systeme='1' else '0';
 	vram2_WR  <= not WR_n when ss_freeze = '0' and MREQ_n='0' and A(15 downto 14)="10" and vdp_cpu_bank='0' and systeme='1' else '0';
-	nvram_WR <= not WR_n when ss_freeze = '0' and MREQ_n='0' and mapper_eeprom = '0' and (((A(15 downto 14)="10" and nvram_e = '1')
-						or (A(15 downto 14)="11" and nvram_ex = '1') 
-						or (A(15 downto 13)="101" and nvram_cme = '1'))
-						or sc_cart_ram_low='1'
-						or sc_cart_ram_high='1'
-						or (dahjee_cart_access='1' and A(15 downto 13)="001")) else '0';
-	rom_RD   <= not RD_n when MREQ_n='0' and A(15 downto 14)/="11" and sc_multicart_upper='0'
-	                     and not (mapper_castle='1' and A(15)='1')
-	                     and not (dahjee_cart_access='1' and A(15 downto 13)="001") else '0';
 	color    <= vdp2_color when (vdp2_y1='1' and systeme='1' and vdp_enables(1)='0') else vdp_color when vdp_enables(0)='0' else x"000";
 
 	active_bios <= '1' when (bios_en = '1' and (ext_bios_sel = '0' or ext_bios_loaded = '1')) or (gg_bios_en = '1' and ext_gg_bios_loaded = '1') else '0';
@@ -1476,11 +1481,9 @@ port map(
 		end if;
 	end process;
 	
-		process (IORQ_n,A,vdp_D_out,vdp2_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
-					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena,bootloader_n,systeme,io_upper_port,io_gg_data_port,
-					sc_cart_ram_rd,sc_multicart_open,dahjee_cart_access,
-					mapper_eeprom,eeprom_enabled,eeprom_D_out,eeprom_bus_active,MREQ_n,evolution_io_port,
-					mapper_evolution,cart_precedence)
+		process (IORQ_n,A,vdp_D_out,vdp2_D_out,io_D_out,memory_D_out,
+		         gg,det_D,fm_ena,bootloader_n,systeme,io_upper_port,io_gg_data_port,
+		         evolution_io_port,mapper_evolution,cart_precedence)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' and systeme='0' and mapper_evolution='0' then
@@ -1506,26 +1509,7 @@ port map(
 				D_out <= vdp_D_out;
 			end if;
 		else
-			if eeprom_bus_active = '1' then
-				D_out <= eeprom_D_out;
-			elsif sc_cart_ram_rd='1' then
-				D_out <= nvram_D_out;
-			elsif sc_multicart_open='1' then
-				D_out <= x"FF";
-			elsif A(15 downto 14)="11" and nvram_ex = '1' then
-				D_out <= nvram_D_out;
-			elsif A(15 downto 14)="11" and nvram_ex = '0' then
-				D_out <= ram_D_out;
-			elsif A(15 downto 13)="101" and nvram_cme  = '1' then
-				D_out <= nvram_D_out;
-			elsif A(15 downto 14)="10" and nvram_e  = '1' then
-				D_out <= nvram_D_out;
-			elsif dahjee_cart_access = '1' and A(15 downto 13) = "001" then
-				-- Dahjee Type A: RAM at 0x2000-0x3FFF reads from nvram block
-				D_out <= nvram_D_out;
-			else
-				D_out <= irom_D_out;
-			end if;
+			D_out <= memory_D_out;
 		end if;
 	end process;
 
