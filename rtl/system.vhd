@@ -169,7 +169,7 @@ entity system is
 		mapper_out   : out STD_LOGIC_VECTOR(63 downto 0);
 		mapper_in    : in  STD_LOGIC_VECTOR(63 downto 0) := (others => '0');
 		mapper_set   : in  STD_LOGIC := '0';
-		evolution_ss_out : out STD_LOGIC_VECTOR(95 downto 0);
+		evolution_ss_out : out STD_LOGIC_VECTOR(159 downto 0);
 		evolution_ss_in  : in  STD_LOGIC_VECTOR(95 downto 0) := (others => '0');
 		evolution_ss_set : in  STD_LOGIC := '0';
 		eeprom_ss_out : out STD_LOGIC_VECTOR(63 downto 0);
@@ -278,7 +278,6 @@ architecture Behavioral of system is
 	signal evolution_gg_mode     : std_logic;
 	signal effective_vdp_gg      : std_logic;
 	signal effective_gg          : std_logic;
-	signal evolution_launch_trace : std_logic_vector(63 downto 0);
 	signal evolution_launch_fetch_addr : std_logic_vector(15 downto 0);
 	signal mapper_evolution : std_logic;
 
@@ -354,6 +353,8 @@ architecture Behavioral of system is
 	signal bootloader_n:	std_logic := '0';
 	signal media_control:   std_logic_vector(7 downto 5) := "101";
 	signal cart_precedence: std_logic;
+	signal cart_memory_selected: std_logic;
+	signal dahjee_cart_access: std_logic;
 	signal io_state_out_i:  std_logic_vector(31 downto 0);
 	signal active_bios:     std_logic;
 	signal irom_D_out:		std_logic_vector(7 downto 0);
@@ -623,6 +624,7 @@ begin
 		clk        => clk_sys,
 		reset_n    => RESET_n,
 		enable     => mapper_evolution,
+		bios_active => not bootloader_n,
 		cpu_a      => A,
 		mreq_n     => MREQ_n,
 		iorq_n     => IORQ_n,
@@ -644,7 +646,6 @@ begin
 		reg8d      => evolution_8d,
 		reg8e      => evolution_8e,
 		reg8f      => evolution_8f,
-		launch_trace => evolution_launch_trace,
 		launch_fetch_addr => evolution_launch_fetch_addr,
 		game_launch => evolution_game_launch,
 		ss_out      => evolution_ss_out,
@@ -1063,7 +1064,7 @@ port map(
                "0000" & A(10 downto 0) when sc3000_en = '1' and sc_cart_ram = "01" else
                '0' & A(13 downto 0)    when sc3000_en = '1' and sc_cart_ram = "10" else
                A(14 downto 0)          when (sc3000_en = '1' and sc_cart_ram = "11") or mapper_castle = '1' else
-               "00" & A(12 downto 0)   when mapper_dahjee_a = '1' else
+               "00" & A(12 downto 0)   when dahjee_cart_access = '1' else
                (nvram_p and not A(14)) & A(13 downto 0);
 
 	nvram_we <= eeprom_nvram_we          when eeprom_enabled = '1' else nvram_WR;
@@ -1103,8 +1104,12 @@ port map(
 	                              evolution_63 = x"18" else '0';
 	-- Menu/service space also uses the clone VDP's 12-bit CRAM, but retains
 	-- Evolution/SMS controller I/O. Keep the two hardware modes independent.
+	-- The Evolution mapper is detected from the cartridge CRC before an SMS
+	-- BIOS hands execution to the cartridge. Do not apply the clone CRAM mode
+	-- to that BIOS while $3FFE still contains its reset value ($00).
 	effective_vdp_gg <= gg or evolution_gg_mode or
-	                    (mapper_evolution and not evolution_3ffe(1));
+	                    (mapper_evolution and (bootloader_n or cart_precedence) and
+	                     not evolution_3ffe(1));
 	effective_gg <= gg or evolution_gg_mode;
 	evolution_gg_active <= evolution_gg_mode;
 	-- Some patched interrupt handlers restore a selector with A21 asserted.
@@ -1318,10 +1323,10 @@ port map(
 						or (A(15 downto 13)="101" and nvram_cme = '1'))
 						or sc_cart_ram_low='1'
 						or sc_cart_ram_high='1'
-						or (mapper_dahjee_a='1' and A(15 downto 13)="001")) else '0';
+						or (dahjee_cart_access='1' and A(15 downto 13)="001")) else '0';
 	rom_RD   <= not RD_n when MREQ_n='0' and A(15 downto 14)/="11" and sc_multicart_upper='0'
 	                     and not (mapper_castle='1' and A(15)='1')
-	                     and not (mapper_dahjee_a='1' and A(15 downto 13)="001") else '0';
+	                     and not (dahjee_cart_access='1' and A(15 downto 13)="001") else '0';
 	color    <= vdp2_color when (vdp2_y1='1' and systeme='1' and vdp_enables(1)='0') else vdp_color when vdp_enables(0)='0' else x"000";
 
 	active_bios <= '1' when (bios_en = '1' and (ext_bios_sel = '0' or ext_bios_loaded = '1')) or (gg_bios_en = '1' and ext_gg_bios_loaded = '1') else '0';
@@ -1417,17 +1422,25 @@ port map(
 	                               and ext_bios_sel='1' and ext_bios_loaded='1' and dbr='1'
 	                               and bootloader_n='0' and media_control(6)='0') else '0';
 
-	irom_D_out <=	ext_gg_bios_D_out when (bootloader_n='0' and gg_bios_en='1' and ext_gg_bios_loaded='1' and A(15 downto 14)="00")
-	               else active_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and cart_precedence='0' and A(15 downto 14)="00")
-	               else ext_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and ext_bios_sel='1' and ext_bios_loaded='1' and cart_precedence='0' and A(15 downto 14)/="11")
-	               -- External SMS BIOS media probes: port $3E bit 6 is active low.
-	               else x"FF" when (bootloader_n='1' and bios_en='1' and gg='0' and gg_bios_en='0'
-	                               and ext_bios_sel='1' and ext_bios_loaded='1' and media_control(6)='1')
-	               -- Empty cartridge slot: data lines float high on real hardware.
-	               -- Without this, SDRAM returns stale data from the last loaded ROM,
-	               -- causing BIOSes that check for non-0xFF bytes (Korea) to
-	               -- incorrectly detect a cartridge when none is present.
-	               else x"FF" when (bootloader_n='1' and dbr='0')
+	-- Source selection shared by the ROM mux and cartridge-only DahJee effects.
+	-- A full external SMS BIOS also owns banking writes at $FFFC-$FFFF:
+	-- do not restrict that ownership to CPU ROM addresses below $C000.
+	-- Internal/GG BIOSes only cover the first 16KB; retain their existing decode.
+	cart_memory_selected <= '0' when bootloader_n='0' and
+	                           ((gg_bios_en='1' and ext_gg_bios_loaded='1' and A(15 downto 14)="00") or
+	                            (gg_bios_en='0' and cart_precedence='0' and
+	                             (A(15 downto 14)="00" or (ext_bios_sel='1' and ext_bios_loaded='1')))) else
+	                        '0' when bootloader_n='1' and
+	                           (dbr='0' or (bios_en='1' and gg='0' and gg_bios_en='0' and
+	                            ext_bios_sel='1' and ext_bios_loaded='1' and media_control(6)='1')) else
+	                        '1';
+	dahjee_cart_access <= mapper_dahjee_a and cart_memory_selected;
+
+	irom_D_out <=	ext_gg_bios_D_out when (bootloader_n='0' and gg_bios_en='1' and cart_memory_selected='0' and A(15 downto 14)="00")
+	               else active_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and cart_memory_selected='0' and A(15 downto 14)="00")
+	               else ext_bios_D_out when (bootloader_n='0' and gg_bios_en='0' and cart_memory_selected='0' and A(15 downto 14)/="11")
+	               -- Disabled/absent cartridge during media probes: open bus.
+	               else x"FF" when (bootloader_n='1' and cart_memory_selected='0')
 	               else segadect2_D_out when (encrypt(1 downto 0)="10" and A(15)='0')
 						else mc8123_D_out when (encrypt(0)='1' and A(15)='0') or (encrypt(1 downto 0)="11" and A(14)='0')
 						else reverse8(rom_do) when (mapper_janggun = '1' and bootloader_n = '1' and janggun_reverse_active = '1')
@@ -1449,8 +1462,9 @@ port map(
 	
 		process (IORQ_n,A,vdp_D_out,vdp2_D_out,io_D_out,irom_D_out,ram_D_out,nvram_D_out,
 					nvram_ex,nvram_e,nvram_cme,gg,det_D,fm_ena,bootloader_n,systeme,io_upper_port,io_gg_data_port,
-					sc_cart_ram_rd,sc_multicart_open,mapper_dahjee_a,
-					mapper_eeprom,eeprom_enabled,eeprom_D_out,eeprom_bus_active,MREQ_n,evolution_io_port)
+					sc_cart_ram_rd,sc_multicart_open,dahjee_cart_access,
+					mapper_eeprom,eeprom_enabled,eeprom_D_out,eeprom_bus_active,MREQ_n,evolution_io_port,
+					mapper_evolution,cart_precedence)
 	begin
 		if IORQ_n='0' then
 			if A(7 downto 0)=x"F2" and fm_ena = '1' and systeme='0' and mapper_evolution='0' then
@@ -1459,8 +1473,13 @@ port map(
 				D_out <= io_D_out;
 			elsif io_upper_port='1' or io_gg_data_port='1' then
 				D_out(6 downto 0) <= io_D_out(6 downto 0);
-				-- during bootload, we trick the io ports so bit 7 indicates gg or sms game
-				if (bootloader_n='0') then
+				-- While the BIOS actually owns the bus, trick bit 7 so BIOS
+				-- probing can distinguish GG from SMS.  bootloader_n alone is not
+				-- sufficient: on SMS1 hardware the cartridge can have precedence
+				-- while the BIOS remains logically enabled.  Evolution games use
+				-- that state (e.g. Shinobi writes $04 to $3E), and forcing bit 7
+				-- low there turns an idle $DC read from $FF into $7F.
+				if bootloader_n='0' and cart_precedence='0' then
 					D_out(7) <= gg;
 				else
 					D_out(7) <= io_D_out(7);
@@ -1485,7 +1504,7 @@ port map(
 				D_out <= nvram_D_out;
 			elsif A(15 downto 14)="10" and nvram_e  = '1' then
 				D_out <= nvram_D_out;
-			elsif mapper_dahjee_a = '1' and A(15 downto 13) = "001" then
+			elsif dahjee_cart_access = '1' and A(15 downto 13) = "001" then
 				-- Dahjee Type A: RAM at 0x2000-0x3FFF reads from nvram block
 				D_out <= nvram_D_out;
 			else
@@ -1578,7 +1597,7 @@ port map(
 			sc3000_en => sc3000_en,
 			mapper_castle => mapper_castle,
 			mapper_linear => mapper_linear,
-			mapper_dahjee_a => mapper_dahjee_a,
+			mapper_dahjee_a => dahjee_cart_access,
 			mapper_sega_locked => mapper_sega_locked,
 			use_zem => use_zem,
 			mapper_manual_force => mapper_manual_force,
@@ -1614,7 +1633,7 @@ port map(
 	-- [63]detect_linear [62]detect_wonderkid [61]detect_castle [60]mapper_codies_lock
 	-- [59]lock_mapper_B [58]mapper_codies [57]mapper_4pak [56]spare
 	-- [55]detect_zemina_static [54]bootloader_n [53]nvram_cme [52]nvram_p [51]nvram_ex [50]nvram_e
-	-- [49]detect_sega_locked [48]detect_dahjee_a [47:40]nem_bank0 [39:32]pak4_reg2
+	-- [49]detect_sega_locked [48]mapper_dahjee_a [47:40]nem_bank0 [39:32]pak4_reg2
 	-- [31:24]bank3 [23:16]bank2 [15:8]bank1 [7:0]bank0
 	-- Note: when systeme='1', bits [7:0] mirror IO port 0xF7:
 	--   [7]=vdp_se_bank [6]=vdp2_se_bank [5]=vdp_cpu_bank [3:0]=rom_bank
@@ -1628,7 +1647,7 @@ port map(
 	              detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
 	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
 	              detect_zemina_static & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
-	              detect_sega_locked & detect_dahjee_a &
+	              detect_sega_locked & mapper_dahjee_a &
 	              x"0000" &
 	              jang_rev4 & "0" & jang_bank4 &
 	              jang_rev3 & "0" & jang_bank3 &
@@ -1636,7 +1655,7 @@ port map(
 	              detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
 	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
 	              detect_zemina_static & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
-	              detect_sega_locked & detect_dahjee_a &
+	              detect_sega_locked & mapper_dahjee_a &
 	              nem_bank0 & pak4_reg2 & bank3 & bank2 & bank1;
 
 	mapper_out(7 downto 0) <= evolution_bank61 when mapper_evolution = '1' else
@@ -1646,7 +1665,7 @@ port map(
 
 
 	rom_a_i(12 downto 0) <= A(12 downto 0);
-	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,mapper_dahjee_a,
+	process (A,bank0,bank1,bank2,bank3,use_zem,nem_bank0,mapper_4pak,mapper_codies,systeme,sc3000_en,sc_multicart_en,sc_multicart_page,rom_bank,bootloader_n,mapper_linear,dahjee_cart_access,
 	         mapper_janggun,jang_bank1,jang_bank2,jang_bank3,jang_bank4)
 	begin
 		if systeme = '1' then
@@ -1659,7 +1678,7 @@ port map(
 		elsif sc_multicart_en = '1' then
 			rom_a_i(21 downto 15) <= sc_multicart_page;
 			rom_a_i(14 downto 13) <= A(14 downto 13);
-		elsif sc3000_en = '1' or mapper_linear = '1' or mapper_dahjee_a = '1' then
+		elsif sc3000_en = '1' or mapper_linear = '1' or dahjee_cart_access = '1' then
 			-- SC-3000, no-mapper (MEKA type 11), and Dahjee Type A cartridges: linear, unbanked.
 			-- Keep the full CPU address so ROM pages don't mirror.
 			rom_a_i(21 downto 16) <= (others=>'0');
