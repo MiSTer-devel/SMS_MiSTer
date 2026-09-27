@@ -7,7 +7,7 @@ use IEEE.NUMERIC_STD.ALL;
 -- runtime heuristics on clk_sys. No new sampling stages or CDC paths are added.
 -- mapper_in/evolution_ss_in retain the existing savestate interpretation.
 -- Static download results (including mapper_out bit 55) are not restored,
--- matching the original detector; only the five runtime flags are restored.
+-- matching the original detector; runtime flags retain their original restore rules.
 entity mapper_detect is
 	port (
 		clk_sys : in std_logic;
@@ -28,6 +28,10 @@ entity mapper_detect is
 		mapper_linear_force : in std_logic;
 		mapper_zemina_force : in std_logic;
 		mapper_evolution : in std_logic;
+		D_out : in std_logic_vector(7 downto 0);
+		sc3000_en : in std_logic;
+		-- Drive the registered result directly; retain mapper_msx feedback for heuristics.
+		mapper_msx_o : out std_logic := '0';
 		mapper_msx : in std_logic;
 		mapper_4pak : in std_logic;
 		mapper_codies : in std_logic;
@@ -59,6 +63,10 @@ entity mapper_detect is
 end mapper_detect;
 
 architecture Behavioral of mapper_detect is
+	signal mapper_msx_check0 : boolean := false ;
+	signal mapper_msx_check1 : boolean := false ;
+	signal mapper_msx_lock0 :  boolean := false ;
+	signal mapper_msx_lock :   boolean := false ;
 	signal rom_size_pages     : std_logic_vector(7 downto 0)  := (others => '0');
 	-- CRC16-CCITT (poly 0x1021, init 0xFFFF) of last 8KB block, accumulated during ROM load.
 	-- Used to identify Wonder Kid [Proto] (CRC 0x8613) which starts with 0x41/0x42 (MSX header
@@ -138,6 +146,61 @@ architecture Behavioral of mapper_detect is
 
 
 begin
+
+	-- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
+	process (RESET_n, clk_sys)
+	begin
+		if RESET_n='0' then
+			mapper_msx_check0 <= false ;
+			mapper_msx_check1 <= false ;
+			mapper_msx_lock0 <= false ;
+			mapper_msx_lock <= false ;
+			mapper_msx_o <= '0' ;
+		else
+			if rising_edge(clk_sys) then
+				if mapper_set = '1' then
+					if mapper_evolution = '1' and
+					   evolution_ss_in(31 downto 16) = x"E132" then
+						-- Evolution's record address occupies the generic mapper flag
+						-- bits; never interpret it as an MSX mapper selection.
+						mapper_msx_o <= '0';
+						mapper_msx_lock <= false;
+						mapper_msx_lock0 <= false;
+						mapper_msx_check0 <= false;
+						mapper_msx_check1 <= false;
+					elsif mapper_in(56) = '1' then
+						mapper_msx_o <= '1';
+						mapper_msx_lock <= true;
+						mapper_msx_lock0 <= true;
+					else
+						mapper_msx_o <= '0';
+						mapper_msx_lock <= false;
+						mapper_msx_lock0 <= false;
+						mapper_msx_check0 <= false;
+						mapper_msx_check1 <= false;
+					end if;
+				elsif ss_freeze = '0' and bootloader_n='1' and sc3000_en='0' and mapper_wonderkid='0' and not mapper_msx_lock then
+					if MREQ_n='0' then
+					-- in this state, A is stable but not D_out
+						if A=x"0000" then
+							mapper_msx_check0 <= (D_out=x"41") ;
+						elsif A=x"0001" then
+							mapper_msx_check1 <= (D_out=x"42") ;
+							mapper_msx_lock0 <= true ;
+						end if;
+					else
+					-- this state is similar to old_MREQ_n
+					-- now we can lock values depending on D_out
+						if mapper_msx_check0 and mapper_msx_check1 then
+							mapper_msx_o <= '1'; -- if 4142 lock msx mapper on
+						end if;
+						-- be paranoid : give only 1 chance to the mapper to lock on
+						mapper_msx_lock <= mapper_msx_lock0 ;
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
 
 	mapper_manual_force_o <= mapper_manual_force;
 	sega_mapper_write_seen_o <= sega_mapper_write_seen;

@@ -360,11 +360,7 @@ architecture Behavioral of system is
 	signal mapper_codies:	std_logic; -- Ernie Els Golf mapper
 	signal mapper_codies_lock:	std_logic;
 	
-	signal mapper_msx_check0 : boolean := false ;
-	signal mapper_msx_check1 : boolean := false ;
-	signal mapper_msx_lock0 :  boolean := false ;
-	signal mapper_msx_lock :   boolean := false ;
-	signal mapper_msx :		   std_logic := '0' ;
+	signal mapper_msx :		   std_logic;
 
 	-- 4-PAK All Action mapper signals (HES 4 PAK All Action)
 	-- References: MAME sega8_4pak_device (src/devices/bus/sega8/rom.cpp)
@@ -499,6 +495,9 @@ begin
 			mapper_linear_force => mapper_linear_force,
 			mapper_zemina_force => mapper_zemina_force,
 			mapper_evolution => mapper_evolution,
+			D_out => D_out,
+			sc3000_en => sc3000_en,
+			mapper_msx_o => mapper_msx,
 			mapper_msx => mapper_msx,
 			mapper_4pak => mapper_4pak,
 			mapper_codies => mapper_codies,
@@ -1374,61 +1373,6 @@ port map(
 		end if;
 	end process;
 
-	-- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
-	process (RESET_n, clk_sys)
-	begin
-		if RESET_n='0' then
-			mapper_msx_check0 <= false ;
-			mapper_msx_check1 <= false ;
-			mapper_msx_lock0 <= false ;
-			mapper_msx_lock <= false ;
-			mapper_msx <= '0' ;
-		else
-			if rising_edge(clk_sys) then
-				if mapper_set = '1' then
-					if mapper_evolution = '1' and
-					   evolution_ss_in(31 downto 16) = x"E132" then
-						-- Evolution's record address occupies the generic mapper flag
-						-- bits; never interpret it as an MSX mapper selection.
-						mapper_msx <= '0';
-						mapper_msx_lock <= false;
-						mapper_msx_lock0 <= false;
-						mapper_msx_check0 <= false;
-						mapper_msx_check1 <= false;
-					elsif mapper_in(56) = '1' then
-						mapper_msx <= '1';
-						mapper_msx_lock <= true;
-						mapper_msx_lock0 <= true;
-					else
-						mapper_msx <= '0';
-						mapper_msx_lock <= false;
-						mapper_msx_lock0 <= false;
-						mapper_msx_check0 <= false;
-						mapper_msx_check1 <= false;
-					end if;
-				elsif ss_freeze = '0' and bootloader_n='1' and sc3000_en='0' and mapper_wonderkid='0' and not mapper_msx_lock then
-					if MREQ_n='0' then 
-					-- in this state, A is stable but not D_out
-						if A=x"0000" then
-							mapper_msx_check0 <= (D_out=x"41") ;
-						elsif A=x"0001" then
-							mapper_msx_check1 <= (D_out=x"42") ;
-							mapper_msx_lock0 <= true ;
-						end if;
-					else
-					-- this state is similar to old_MREQ_n
-					-- now we can lock values depending on D_out
-						if mapper_msx_check0 and mapper_msx_check1 then
-							mapper_msx <= '1'; -- if 4142 lock msx mapper on
-						end if;
-						-- be paranoid : give only 1 chance to the mapper to lock on
-						mapper_msx_lock <= mapper_msx_lock0 ; 
-					end if;
-				end if;
-			end if;
-		end if;
-	end process;
-	
 	mapper_banking : entity work.mapper_ctrl
 		port map (
 			RESET_n => RESET_n,
