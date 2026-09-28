@@ -360,7 +360,6 @@ architecture Behavioral of system is
 	signal mapper_codies:	std_logic; -- Ernie Els Golf mapper
 	signal mapper_codies_lock:	std_logic;
 	
-	signal mapper_msx :		   std_logic;
 
 	-- 4-PAK All Action mapper signals (HES 4 PAK All Action)
 	-- References: MAME sega8_4pak_device (src/devices/bus/sega8/rom.cpp)
@@ -495,10 +494,6 @@ begin
 			mapper_linear_force => mapper_linear_force,
 			mapper_zemina_force => mapper_zemina_force,
 			mapper_evolution => mapper_evolution,
-			D_out => D_out,
-			sc3000_en => sc3000_en,
-			mapper_msx_o => mapper_msx,
-			mapper_msx => mapper_msx,
 			mapper_4pak => mapper_4pak,
 			mapper_codies => mapper_codies,
 			mapper_set => mapper_set,
@@ -1436,7 +1431,7 @@ port map(
 
 	-- Save-state: pack all mapper state into one 64-bit word.
 	-- [63]detect_linear [62]detect_wonderkid [61]detect_castle [60]mapper_codies_lock
-	-- [59]lock_mapper_B [58]mapper_codies [57]mapper_4pak [56]spare
+	-- [59]lock_mapper_B [58]mapper_codies [57]mapper_4pak [56]reserved (0 in generic/Janggun layouts)
 	-- [55]detect_zemina_static [54]bootloader_n [53]nvram_cme [52]nvram_p [51]nvram_ex [50]nvram_e
 	-- [49]detect_sega_locked [48]mapper_dahjee_a [47:40]nem_bank0 [39:32]pak4_reg2
 	-- [31:24]bank3 [23:16]bank2 [15:8]bank1 [7:0]bank0
@@ -1450,7 +1445,7 @@ port map(
 	              evolution_launch_fetch_addr & bank0 & bank1 & bank2 & bank3 & evolution_3ffe
 	              when mapper_evolution = '1' else
 	              detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
-	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
+	              lock_mapper_B & mapper_codies & mapper_4pak & '0' &
 	              detect_zemina_static & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
 	              detect_sega_locked & mapper_dahjee_a &
 	              x"0000" &
@@ -1458,7 +1453,7 @@ port map(
 	              jang_rev3 & "0" & jang_bank3 &
 	              jang_rev2 & "0" & jang_bank2 when mapper_janggun = '1' else
 	              detect_linear & detect_wonderkid & detect_castle & mapper_codies_lock &
-	              lock_mapper_B & mapper_codies & mapper_4pak & mapper_msx &
+	              lock_mapper_B & mapper_codies & mapper_4pak & '0' &
 	              detect_zemina_static & bootloader_n & nvram_cme & nvram_p & nvram_ex & nvram_e &
 	              detect_sega_locked & mapper_dahjee_a &
 	              nem_bank0 & pak4_reg2 & bank3 & bank2 & bank1;

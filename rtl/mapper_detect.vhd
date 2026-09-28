@@ -28,11 +28,6 @@ entity mapper_detect is
 		mapper_linear_force : in std_logic;
 		mapper_zemina_force : in std_logic;
 		mapper_evolution : in std_logic;
-		D_out : in std_logic_vector(7 downto 0);
-		sc3000_en : in std_logic;
-		-- Drive the registered result directly; retain mapper_msx feedback for heuristics.
-		mapper_msx_o : out std_logic := '0';
-		mapper_msx : in std_logic;
 		mapper_4pak : in std_logic;
 		mapper_codies : in std_logic;
 		mapper_set : in std_logic;
@@ -63,15 +58,9 @@ entity mapper_detect is
 end mapper_detect;
 
 architecture Behavioral of mapper_detect is
-	signal mapper_msx_check0 : boolean := false ;
-	signal mapper_msx_check1 : boolean := false ;
-	signal mapper_msx_lock0 :  boolean := false ;
-	signal mapper_msx_lock :   boolean := false ;
 	signal rom_size_pages     : std_logic_vector(7 downto 0)  := (others => '0');
 	-- CRC16-CCITT (poly 0x1021, init 0xFFFF) of last 8KB block, accumulated during ROM load.
-	-- Used to identify Wonder Kid [Proto] (CRC 0x8613) which starts with 0x41/0x42 (MSX header
-	-- bytes) but uses Codemasters-style banking -- the CRC is needed because the MSX detector
-	-- fires on the first two ROM reads, before any write-based heuristic can fire.
+	-- Identifies Wonder Kid [Proto] (CRC 0x8613) before CPU writes begin.
 	signal rom_crc16_run      : std_logic_vector(15 downto 0) := x"FFFF";
 	-- Static opcode-scan Zemina detection (computed during ROM download, ROMCL domain)
 	-- Mirrors MAME's get_cart_type() logic: counts LD (nn),A opcodes targeting
@@ -152,60 +141,6 @@ architecture Behavioral of mapper_detect is
 
 begin
 
-	-- detect MSX mapper : we check the two first bytes of the rom, must be 41:42
-	process (RESET_n, clk_sys)
-	begin
-		if RESET_n='0' then
-			mapper_msx_check0 <= false ;
-			mapper_msx_check1 <= false ;
-			mapper_msx_lock0 <= false ;
-			mapper_msx_lock <= false ;
-			mapper_msx_o <= '0' ;
-		else
-			if rising_edge(clk_sys) then
-				if mapper_set = '1' then
-					if mapper_evolution = '1' and
-					   evolution_ss_in(31 downto 16) = x"E132" then
-						-- Evolution's record address occupies the generic mapper flag
-						-- bits; never interpret it as an MSX mapper selection.
-						mapper_msx_o <= '0';
-						mapper_msx_lock <= false;
-						mapper_msx_lock0 <= false;
-						mapper_msx_check0 <= false;
-						mapper_msx_check1 <= false;
-					elsif mapper_in(56) = '1' then
-						mapper_msx_o <= '1';
-						mapper_msx_lock <= true;
-						mapper_msx_lock0 <= true;
-					else
-						mapper_msx_o <= '0';
-						mapper_msx_lock <= false;
-						mapper_msx_lock0 <= false;
-						mapper_msx_check0 <= false;
-						mapper_msx_check1 <= false;
-					end if;
-				elsif ss_freeze = '0' and bootloader_n='1' and sc3000_en='0' and mapper_wonderkid='0' and not mapper_msx_lock then
-					if MREQ_n='0' then
-					-- in this state, A is stable but not D_out
-						if A=x"0000" then
-							mapper_msx_check0 <= (D_out=x"41") ;
-						elsif A=x"0001" then
-							mapper_msx_check1 <= (D_out=x"42") ;
-							mapper_msx_lock0 <= true ;
-						end if;
-					else
-					-- this state is similar to old_MREQ_n
-					-- now we can lock values depending on D_out
-						if mapper_msx_check0 and mapper_msx_check1 then
-							mapper_msx_o <= '1'; -- if 4142 lock msx mapper on
-						end if;
-						-- be paranoid : give only 1 chance to the mapper to lock on
-						mapper_msx_lock <= mapper_msx_lock0 ;
-					end if;
-				end if;
-			end if;
-		end if;
-	end process;
 
 	mapper_manual_force_o <= mapper_manual_force;
 	sega_mapper_write_seen_o <= sega_mapper_write_seen;
@@ -243,13 +178,8 @@ begin
 
 	-- Wonder Kid [Proto] [SMS-GG]: MAPPER_MSX_Generic16_8000
 	-- Codemasters-style 16KB banking, register at $8000, all slots init at page 0.
-	-- This ROM starts with 0x41 0x42 which would normally trigger the MSX/Zemina
-	-- detector on the CPU's very first two reads -- long before any $8000 write
-	-- can confirm Wonder Kid via the write-based heuristic.  The CRC of the last
-	-- 8KB block (0x8613) provides a load-time identity that's already stable when
-	-- the CPU starts, so mapper_wonderkid='1' suppresses MSX detection from the
-	-- first clock.  The write-based heuristic (detect_wonderkid) is kept as a
-	-- fallback for ROM dumps where the CRC differs.
+	-- The last 8KB block CRC identifies the cartridge before CPU execution.
+	-- The write-based heuristic remains a fallback for dumps with a different CRC.
 	-- CRC16-CCITT of last 8KB block: 0x8613
 
 	-- Nemesis I requires a special startup mapping: $0000-$1FFF from the last page.
