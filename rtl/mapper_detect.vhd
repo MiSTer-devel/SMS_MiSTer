@@ -7,7 +7,7 @@ use IEEE.NUMERIC_STD.ALL;
 -- runtime heuristics on clk_sys. No new sampling stages or CDC paths are added.
 -- mapper_in/evolution_ss_in retain the existing savestate interpretation.
 -- Static download results (including mapper_out bit 55) are not restored,
--- matching the original detector; only the five runtime flags are restored.
+-- matching the original detector; runtime flags retain their original restore rules.
 entity mapper_detect is
 	port (
 		clk_sys : in std_logic;
@@ -28,7 +28,6 @@ entity mapper_detect is
 		mapper_linear_force : in std_logic;
 		mapper_zemina_force : in std_logic;
 		mapper_evolution : in std_logic;
-		mapper_msx : in std_logic;
 		mapper_4pak : in std_logic;
 		mapper_codies : in std_logic;
 		mapper_set : in std_logic;
@@ -61,9 +60,7 @@ end mapper_detect;
 architecture Behavioral of mapper_detect is
 	signal rom_size_pages     : std_logic_vector(7 downto 0)  := (others => '0');
 	-- CRC16-CCITT (poly 0x1021, init 0xFFFF) of last 8KB block, accumulated during ROM load.
-	-- Used to identify Wonder Kid [Proto] (CRC 0x8613) which starts with 0x41/0x42 (MSX header
-	-- bytes) but uses Codemasters-style banking -- the CRC is needed because the MSX detector
-	-- fires on the first two ROM reads, before any write-based heuristic can fire.
+	-- Identifies Wonder Kid [Proto] (CRC 0x8613) before CPU writes begin.
 	signal rom_crc16_run      : std_logic_vector(15 downto 0) := x"FFFF";
 	-- Static opcode-scan Zemina detection (computed during ROM download, ROMCL domain)
 	-- Mirrors MAME's get_cart_type() logic: counts LD (nn),A opcodes targeting
@@ -87,19 +84,24 @@ architecture Behavioral of mapper_detect is
 	signal codies_byte_fe0      : std_logic_vector(7 downto 0) := (others => '1');
 	signal codies_byte_fe3      : std_logic_vector(7 downto 0) := (others => '1');
 	signal detect_codies_static : std_logic := '0';
+	-- The Castle raw-ROM signature: "ASCII 1986" at $1CC3-$1CCC.
+	type castle_signature_t is array (0 to 9) of std_logic_vector(7 downto 0);
+	constant CASTLE_SIGNATURE : castle_signature_t :=
+		(x"41", x"53", x"43", x"49", x"49", x"20", x"31", x"39", x"38", x"36");
+	signal castle_signature_match : std_logic_vector(9 downto 0) := (others => '0');
+	signal detect_castle_static : std_logic := '0';
 
 	-- CRC32 of the full ROM, accumulated during download (ROMCL domain).
 	-- Used for CRC-based mapper and cartridge identification.
 	signal rom_crc32            : std_logic_vector(31 downto 0) := x"FFFFFFFF";
 
 	-- Heuristic detection signals
-	signal detect_castle       : std_logic := '0';
+	signal detect_castle       : std_logic := '0'; -- Legacy save-state bit 61; no longer selects Castle.
 	signal detect_dahjee_a     : std_logic := '0';
 	signal detect_linear       : std_logic := '0';
 	signal detect_wonderkid    : std_logic := '0';
 	signal detect_sega_locked  : std_logic := '0';
 	signal wonderkid_write_count: integer range 0 to 3 := 0;
-	signal castle_write_count  : integer range 0 to 15 := 0;
 	signal bank_write_seen     : std_logic := '0';
 	signal sega_mapper_write_seen : std_logic := '0';
 	signal mapper_detect_ticks : unsigned(15 downto 0) := (others => '0'); -- detection window timer (16-bit: ~1.2ms at 53.6MHz, needed for external BIOS handoff)
@@ -110,7 +112,7 @@ architecture Behavioral of mapper_detect is
 	signal use_zem            : std_logic;  -- active for any Zemina-family mapper
 	signal mapper_eeprom        : std_logic := '0';
 	signal mapper_manual_force  : std_logic;
-	signal mapper_castle        : std_logic := '0'; -- The Castle (Japan): 32KB RAM at 0x8000-0xFFFF
+	signal mapper_castle        : std_logic := '0'; -- The Castle cartridge: 8KB RAM at $8000-$9FFF.
 	signal mapper_wonderkid     : std_logic;         -- Wonder Kid [Proto]: Codemasters-style 16KB, all banks init 0
 	signal mapper_linear        : std_logic;         -- No mapper, linear ROM up to 48KB (MEKA type 11)
 	signal mapper_sega_locked   : std_logic := '0';  -- Sega mapper path + all bank writes blocked (for 48KB dahjee_typeb games)
@@ -139,13 +141,16 @@ architecture Behavioral of mapper_detect is
 
 begin
 
+
 	mapper_manual_force_o <= mapper_manual_force;
 	sega_mapper_write_seen_o <= sega_mapper_write_seen;
 	rom_size_pages_o <= rom_size_pages;
 	rom_crc32_o <= rom_crc32;
 	detect_zemina_static_o <= detect_zemina_static;
 	detect_codies_static_o <= detect_codies_static;
-	detect_castle_o <= detect_castle;
+	-- Bit 61 also requests Castle RAM in savestates. Keep legacy restoration,
+	-- but include the static selection so fresh Castle saves retain their RAM.
+	detect_castle_o <= detect_castle or mapper_castle;
 	detect_dahjee_a_o <= detect_dahjee_a;
 	detect_linear_o <= detect_linear;
 	detect_wonderkid_o <= detect_wonderkid;
@@ -167,19 +172,14 @@ begin
 	-- CRC32 0x192949D5
 	mapper_janggun <= '1' when mapper_manual_force = '0' and (rom_crc32 xor x"FFFFFFFF") = x"192949D5" else '0';
 
-	-- Castle mapper heuristic + OSD force.
-	mapper_castle <= '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_castle = '1' else
+	-- Castle identification is load-time only; preserve manual/Janggun precedence.
+	mapper_castle <= '1' when mapper_manual_force = '0' and mapper_janggun = '0' and detect_castle_static = '1' else
 	                 '0';
 
 	-- Wonder Kid [Proto] [SMS-GG]: MAPPER_MSX_Generic16_8000
 	-- Codemasters-style 16KB banking, register at $8000, all slots init at page 0.
-	-- This ROM starts with 0x41 0x42 which would normally trigger the MSX/Zemina
-	-- detector on the CPU's very first two reads -- long before any $8000 write
-	-- can confirm Wonder Kid via the write-based heuristic.  The CRC of the last
-	-- 8KB block (0x8613) provides a load-time identity that's already stable when
-	-- the CPU starts, so mapper_wonderkid='1' suppresses MSX detection from the
-	-- first clock.  The write-based heuristic (detect_wonderkid) is kept as a
-	-- fallback for ROM dumps where the CRC differs.
+	-- The last 8KB block CRC identifies the cartridge before CPU execution.
+	-- The write-based heuristic remains a fallback for dumps with a different CRC.
 	-- CRC16-CCITT of last 8KB block: 0x8613
 
 	-- Nemesis I requires a special startup mapping: $0000-$1FFF from the last page.
@@ -274,7 +274,6 @@ begin
 		if rising_edge(clk_sys) then
 			if RESET_n = '0' then
 				mapper_detect_ticks <= (others => '0');
-				castle_write_count <= 0;
 				bank_write_seen <= '0';
 				detect_castle <= '0';
 				detect_dahjee_a <= '0';
@@ -301,14 +300,12 @@ begin
 					detect_sega_locked <= mapper_in(49);
 				end if;
 				mapper_detect_ticks <= to_unsigned(65535, 16);
-				castle_write_count <= 0;
 				bank_write_seen <= '0';
 				sega_mapper_write_seen <= '0';
 				wonderkid_write_count <= 0;
 			else
 				if bootloader_n = '0' then
 					mapper_detect_ticks <= (others => '0');
-					castle_write_count <= 0;
 					bank_write_seen <= '0';
 					detect_castle <= '0';
 					detect_dahjee_a <= '0';
@@ -325,7 +322,7 @@ begin
 				if ss_freeze = '0' and bootloader_n = '1' and mapper_manual_force = '0' and mapper_detect_ticks < to_unsigned(65535, mapper_detect_ticks'length) then
 					if WR_n = '0' and MREQ_n = '0' then
 						-- Wonder Kid [Proto]: confirm after two $8000 writes during the detection window.
-						if A = x"8000" and mapper_4pak = '0' and mapper_codies = '0' and detect_castle = '0' and detect_dahjee_a = '0' and sega_mapper_write_seen = '0' then
+						if A = x"8000" and mapper_4pak = '0' and mapper_codies = '0' and mapper_castle = '0' and detect_dahjee_a = '0' and sega_mapper_write_seen = '0' then
 							if wonderkid_write_count < 2 then
 								wonderkid_write_count <= wonderkid_write_count + 1;
 							end if;
@@ -334,19 +331,6 @@ begin
 								if rom_page0_byte0 = x"41" and rom_page0_byte1 = x"42" then
 									detect_wonderkid <= '1';
 								end if;
-							end if;
-						end if;
-
-						-- Castle heuristic: repeated non-mapper writes inside 0x8000-0xBFFF.
-						-- Excludes common mapper registers to avoid false positives on Sega games.
-						if gg = '0' and A(15 downto 14) = "10" and
-						   A /= x"8000" and A /= x"A000" and A /= x"BFFF" and A /= x"9FFF" and
-						   bank_write_seen = '0' and mapper_msx = '0' and mapper_4pak = '0' and mapper_codies = '0' then
-							if castle_write_count < 15 then
-								castle_write_count <= castle_write_count + 1;
-							end if;
-							if castle_write_count >= 12 then
-								detect_castle <= '1';
 							end if;
 						end if;
 						-- bank register writes (common Sega banking addresses) disable linear assumption
@@ -386,6 +370,34 @@ begin
 					-- 48KB linear ROMs: use Sega mapper path but block bank writes
 					if unsigned(rom_size_pages) = 6 and bank_write_seen = '0' then
 						detect_sega_locked <= '1';
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
+
+	-- Track each signature byte independently so ROMEN gaps and incomplete
+	-- downloads cannot manufacture a match. No size, platform or CRC guard.
+	process (ROMCL)
+		variable matches : std_logic_vector(9 downto 0);
+		variable byte_index : integer range 0 to 9;
+	begin
+		if rising_edge(ROMCL) then
+			if ROMEN = '1' then
+				if unsigned(ROMAD) = 0 then
+					castle_signature_match <= (others => '0');
+					detect_castle_static <= '0';
+				elsif unsigned(ROMAD) >= 16#1CC3# and unsigned(ROMAD) <= 16#1CCC# then
+					byte_index := to_integer(unsigned(ROMAD)) - 16#1CC3#;
+					matches := castle_signature_match;
+					matches(byte_index) := '0';
+					if ROMDT = CASTLE_SIGNATURE(byte_index) then
+						matches(byte_index) := '1';
+					end if;
+					castle_signature_match <= matches;
+					detect_castle_static <= '0';
+					if matches = "1111111111" then
+						detect_castle_static <= '1';
 					end if;
 				end if;
 			end if;
