@@ -361,6 +361,31 @@ reg         vblank_seen;   // goes 1 once we have seen vblank=1 in ST_WAIT_VBLAN
 reg [27:0]  op_cooldown;
 reg         is_old_format;
 
+// VRAM transfer routing: state-derived only; no additional registered state.
+wire vram_second_port = state == ST_SAVE_VRAM2 || state == ST_SAVE_VRAM2_PASSIVE ||
+                        state == ST_LOAD_VRAM2 || state == ST_LOAD_VRAM2_PASSIVE;
+wire [28:0] vram_ddr_offset = (state == ST_SAVE_VRAM1_PASSIVE || state == ST_LOAD_VRAM1_PASSIVE) ? 29'h1901 :
+                              (state == ST_SAVE_VRAM2 || state == ST_LOAD_VRAM2) ? 29'h1101 :
+                              (state == ST_SAVE_VRAM2_PASSIVE || state == ST_LOAD_VRAM2_PASSIVE) ? 29'h2101 : 29'h101;
+wire [7:0] vram_save_data = vram_second_port ? vram2_D : vram_D;
+
+// Update only the selected port; the other port retains its registered values.
+task vram_restore_byte;
+    input [7:0] data;
+    begin
+        if (vram_second_port) begin
+            vram2_WE <= 1;
+            vram2_WA <= vram_load_addr;
+            vram2_WD <= data;
+        end else begin
+            vram_WE <= 1;
+            vram_WA <= vram_load_addr;
+            vram_WD <= data;
+        end
+    end
+endtask
+// End VRAM transfer routing.
+
 // -----------------------------------------------------------------------
 // DDRAM helper tasks (inline)
 // -----------------------------------------------------------------------
@@ -767,117 +792,101 @@ always @(posedge clk or negedge reset_n) begin
             end
         end
 
-        ST_SAVE_VRAM: begin
-            // Pipeline: issue address on cycle 0, data is ready 2 cycles later
-            vram_en <= 1;
+        ST_SAVE_VRAM, ST_SAVE_VRAM1_PASSIVE,
+        ST_SAVE_VRAM2, ST_SAVE_VRAM2_PASSIVE: begin
+            if (vram_second_port) vram2_en <= 1;
+            else                  vram_en <= 1;
+            // Prime for two visits; preserve the +1/+2 address lookahead.
             if (vram_pipe < 3'd2) begin
-                // Prime the pipeline: advance address each cycle
                 vram_pipe <= vram_pipe + 3'd1;
-                if (vram_pipe >= 1 && vram_save_addr[13:0] != 14'h3FFF)
-                    vram_A <= vram_save_addr + 15'd1;
+                if (vram_pipe >= 1 && vram_save_addr[13:0] != 14'h3FFF) begin
+                    if (vram_second_port) vram2_A <= vram_save_addr + 15'd1;
+                    else                  vram_A <= vram_save_addr + 15'd1;
+                end
             end else begin
-                // Stall entire pipeline at 8-byte word boundary if DDRAM is busy.
-                // Holding all signals stable means vram_D (and word_buf) remain
-                // valid so the write can be retried on the next cycle.
                 if (vram_byte_cnt < 7 || !DDRAM_BUSY) begin
-                    // On first arrival at byte 7 after a stall the SPRAM
-                    // pipeline has already advanced one address, so vram_D
-                    // now holds the NEXT byte – use the value we latched on
-                    // the stall cycle instead.
-                    vram_d_latched <= 0;   // clear for next word
-                    vram_word_buf <= {(vram_byte_cnt == 7 && vram_d_latched) ? vram_d_latch : vram_D,
+                    vram_d_latched <= 0;
+                    vram_word_buf <= {(vram_byte_cnt == 7 && vram_d_latched) ? vram_d_latch : vram_save_data,
                                       vram_word_buf[63:8]};
                     vram_byte_cnt <= vram_byte_cnt + 3'd1;
                     if (vram_byte_cnt == 7) begin
-                        ddram_write(base_addr + 29'h101 + {17'd0, word_cnt},
-                                    {vram_d_latched ? vram_d_latch : vram_D,
+                        // Use byte 7 directly with the OLD buffer contents.
+                        ddram_write(base_addr + vram_ddr_offset + {17'd0, word_cnt},
+                                    {vram_d_latched ? vram_d_latch : vram_save_data,
                                      vram_word_buf[63:8]}, 8'hFF);
                         word_cnt <= word_cnt + 12'd1;
                     end
-                    // Advance address pipeline
                     if (vram_save_addr[13:0] < 14'h3FFF) begin
                         vram_save_addr <= vram_save_addr + 15'd1;
-                        vram_A         <= vram_save_addr + 15'd2;
+                        if (vram_second_port) vram2_A <= vram_save_addr + 15'd2;
+                        else                  vram_A <= vram_save_addr + 15'd2;
                     end else if (vram_byte_cnt == 7) begin
-                        if (systeme) begin
-                            // System E: save VDP1 passive bank before WRAM
-                            vram_save_addr <= {~mapper_snap[7], 14'b0};
-                            vram_byte_cnt  <= 0;
-                            vram_word_buf  <= 0;
-                            vram_pipe      <= 0;
-                            vram_A         <= {~mapper_snap[7], 14'b0};
-                            word_cnt       <= 0;
-                            vram_d_latched <= 0;
-                            state          <= ST_SAVE_VRAM1_PASSIVE;
-                            vram_en        <= 1;
-                        end else begin
-                            vram_en <= 0;
-                            // Start WRAM DMA
-                            wram_save_addr <= 0;
-                            wram_byte_cnt  <= 0;
-                            wram_word_buf  <= 0;
-                            wram_pipe      <= 0;
-                            wram_A         <= 0;
-                            word_cnt       <= 0;
-                            wram_d_latched <= 0;
-                            state          <= ST_SAVE_WRAM;
-                        end
+                        case (state)
+                            ST_SAVE_VRAM: begin
+                                if (systeme) begin
+                                    // System E: save VDP1 passive bank before WRAM
+                                    vram_save_addr <= {~mapper_snap[7], 14'b0};
+                                    vram_byte_cnt  <= 0;
+                                    vram_word_buf  <= 0;
+                                    vram_pipe      <= 0;
+                                    vram_A         <= {~mapper_snap[7], 14'b0};
+                                    word_cnt       <= 0;
+                                    vram_d_latched <= 0;
+                                    state          <= ST_SAVE_VRAM1_PASSIVE;
+                                    vram_en        <= 1;
+                                end else begin
+                                    vram_en <= 0;
+                                    // Start WRAM DMA
+                                    wram_save_addr <= 0;
+                                    wram_byte_cnt  <= 0;
+                                    wram_word_buf  <= 0;
+                                    wram_pipe      <= 0;
+                                    wram_A         <= 0;
+                                    word_cnt       <= 0;
+                                    wram_d_latched <= 0;
+                                    state          <= ST_SAVE_WRAM;
+                                end
+                            end
+                            ST_SAVE_VRAM1_PASSIVE: begin
+                                vram_en <= 0;
+                                // Continue to WRAM save
+                                wram_save_addr <= 0;
+                                wram_byte_cnt  <= 0;
+                                wram_word_buf  <= 0;
+                                wram_pipe      <= 0;
+                                wram_A         <= 0;
+                                word_cnt       <= 0;
+                                wram_d_latched <= 0;
+                                state          <= ST_SAVE_WRAM;
+                            end
+                            ST_SAVE_VRAM2: begin
+                                // Save VDP2 passive bank before ending (ST_SAVE_VRAM2 is System E only)
+                                vram_save_addr <= {~mapper_snap[6], 14'b0};
+                                vram_byte_cnt  <= 0;
+                                vram_word_buf  <= 0;
+                                vram_pipe      <= 0;
+                                vram2_A        <= {~mapper_snap[6], 14'b0};
+                                word_cnt       <= 0;
+                                vram_d_latched <= 0;
+                                state          <= ST_SAVE_VRAM2_PASSIVE;
+                                // vram2_en stays 1 for the passive-save state
+                            end
+                            ST_SAVE_VRAM2_PASSIVE: begin
+                                vram2_en <= 0;
+                                state    <= ST_SAVE_DONE;
+                            end
+                        endcase
                     end
                 end else begin
-                    // DDRAM busy at boundary: latch byte-7 on the first
-                    // stall cycle before the SPRAM pipeline advances.
+                    // Capture only the first stalled eighth byte.
                     if (!vram_d_latched) begin
-                        vram_d_latch   <= vram_D;
+                        vram_d_latch   <= vram_save_data;
                         vram_d_latched <= 1;
                     end
                 end
             end
         end
 
-        ST_SAVE_VRAM1_PASSIVE: begin
-            // System E: DMA VDP1 passive bank (16 KB) to DDRAM at passive1_base(cur_slot).
-            // Reuses vram_save_addr / vram_byte_cnt / vram_word_buf / vram_pipe / vram_d_latched.
-            // Entry: vram_save_addr = {~mapper_snap[7], 14'b0}, vram_en = 1, pipe/cnt reset.
-            vram_en <= 1;
-            if (vram_pipe < 3'd2) begin
-                vram_pipe <= vram_pipe + 3'd1;
-                if (vram_pipe >= 1 && vram_save_addr[13:0] != 14'h3FFF)
-                    vram_A <= vram_save_addr + 15'd1;
-            end else begin
-                if (vram_byte_cnt < 7 || !DDRAM_BUSY) begin
-                    vram_d_latched <= 0;
-                    vram_word_buf <= {(vram_byte_cnt == 7 && vram_d_latched) ? vram_d_latch : vram_D,
-                                      vram_word_buf[63:8]};
-                    vram_byte_cnt <= vram_byte_cnt + 3'd1;
-                    if (vram_byte_cnt == 7) begin
-                        ddram_write(base_addr + 29'h1901 + {17'd0, word_cnt},
-                                    {vram_d_latched ? vram_d_latch : vram_D,
-                                     vram_word_buf[63:8]}, 8'hFF);
-                        word_cnt <= word_cnt + 12'd1;
-                    end
-                    if (vram_save_addr[13:0] < 14'h3FFF) begin
-                        vram_save_addr <= vram_save_addr + 15'd1;
-                        vram_A         <= vram_save_addr + 15'd2;
-                    end else if (vram_byte_cnt == 7) begin
-                        vram_en <= 0;
-                        // Continue to WRAM save
-                        wram_save_addr <= 0;
-                        wram_byte_cnt  <= 0;
-                        wram_word_buf  <= 0;
-                        wram_pipe      <= 0;
-                        wram_A         <= 0;
-                        word_cnt       <= 0;
-                        wram_d_latched <= 0;
-                        state          <= ST_SAVE_WRAM;
-                    end
-                end else begin
-                    if (!vram_d_latched) begin
-                        vram_d_latch   <= vram_D;
-                        vram_d_latched <= 1;
-                    end
-                end
-            end
-        end
 
         ST_SAVE_WRAM: begin
             // System E has 16KB RAM (0x0000-0x3FFF); SMS has 8KB (0xC000-0xDFFF).
@@ -970,86 +979,7 @@ always @(posedge clk or negedge reset_n) begin
             end
         end
 
-        ST_SAVE_VRAM2: begin
-            // System E: DMA VRAM2 (16KB) to DDRAM at base + 0x1101
-            // Reuse vram_save_addr / vram_byte_cnt / vram_word_buf / vram_d_latched,
-            // but drive vram2_* instead of vram_*.
-            vram2_en <= 1;
-            if (vram_pipe < 3'd2) begin
-                vram_pipe <= vram_pipe + 3'd1;
-                if (vram_pipe >= 1 && vram_save_addr[13:0] != 14'h3FFF)
-                    vram2_A <= vram_save_addr + 15'd1;
-            end else begin
-                if (vram_byte_cnt < 7 || !DDRAM_BUSY) begin
-                    vram_d_latched <= 0;
-                    vram_word_buf <= {(vram_byte_cnt == 7 && vram_d_latched) ? vram_d_latch : vram2_D,
-                                      vram_word_buf[63:8]};
-                    vram_byte_cnt <= vram_byte_cnt + 3'd1;
-                    if (vram_byte_cnt == 7) begin
-                        ddram_write(base_addr + 29'h1101 + {17'd0, word_cnt},
-                                    {vram_d_latched ? vram_d_latch : vram2_D,
-                                     vram_word_buf[63:8]}, 8'hFF);
-                        word_cnt <= word_cnt + 12'd1;
-                    end
-                    if (vram_save_addr[13:0] < 14'h3FFF) begin
-                        vram_save_addr <= vram_save_addr + 15'd1;
-                        vram2_A        <= vram_save_addr + 15'd2;
-                    end else if (vram_byte_cnt == 7) begin
-                        // Save VDP2 passive bank before ending (ST_SAVE_VRAM2 is System E only)
-                        vram_save_addr <= {~mapper_snap[6], 14'b0};
-                        vram_byte_cnt  <= 0;
-                        vram_word_buf  <= 0;
-                        vram_pipe      <= 0;
-                        vram2_A        <= {~mapper_snap[6], 14'b0};
-                        word_cnt       <= 0;
-                        vram_d_latched <= 0;
-                        state          <= ST_SAVE_VRAM2_PASSIVE;
-                        // vram2_en stays 1 for the passive-save state
-                    end
-                end else begin
-                    if (!vram_d_latched) begin
-                        vram_d_latch   <= vram2_D;
-                        vram_d_latched <= 1;
-                    end
-                end
-            end
-        end
 
-        ST_SAVE_VRAM2_PASSIVE: begin
-            // System E: DMA VDP2 passive bank (16 KB) to DDRAM at passive2_base(cur_slot).
-            // Entry: vram_save_addr = {~mapper_snap[6], 14'b0}, vram2_en = 1, pipe/cnt reset.
-            vram2_en <= 1;
-            if (vram_pipe < 3'd2) begin
-                vram_pipe <= vram_pipe + 3'd1;
-                if (vram_pipe >= 1 && vram_save_addr[13:0] != 14'h3FFF)
-                    vram2_A <= vram_save_addr + 15'd1;
-            end else begin
-                if (vram_byte_cnt < 7 || !DDRAM_BUSY) begin
-                    vram_d_latched <= 0;
-                    vram_word_buf <= {(vram_byte_cnt == 7 && vram_d_latched) ? vram_d_latch : vram2_D,
-                                      vram_word_buf[63:8]};
-                    vram_byte_cnt <= vram_byte_cnt + 3'd1;
-                    if (vram_byte_cnt == 7) begin
-                        ddram_write(base_addr + 29'h2101 + {17'd0, word_cnt},
-                                    {vram_d_latched ? vram_d_latch : vram2_D,
-                                     vram_word_buf[63:8]}, 8'hFF);
-                        word_cnt <= word_cnt + 12'd1;
-                    end
-                    if (vram_save_addr[13:0] < 14'h3FFF) begin
-                        vram_save_addr <= vram_save_addr + 15'd1;
-                        vram2_A        <= vram_save_addr + 15'd2;
-                    end else if (vram_byte_cnt == 7) begin
-                        vram2_en <= 0;
-                        state    <= ST_SAVE_DONE;
-                    end
-                end else begin
-                    if (!vram_d_latched) begin
-                        vram_d_latch   <= vram2_D;
-                        vram_d_latched <= 1;
-                    end
-                end
-            end
-        end
 
         ST_SAVE_DONE: begin
             // Write MiSTer framework control word at slot base (word 0).
@@ -1347,9 +1277,9 @@ always @(posedge clk or negedge reset_n) begin
             end
         end
 
-        ST_LOAD_VRAM: begin
+        ST_LOAD_VRAM, ST_LOAD_VRAM1_PASSIVE,
+        ST_LOAD_VRAM2, ST_LOAD_VRAM2_PASSIVE: begin
             if (!vram_load_active) begin
-                // Wait for DDRAM read to complete, then latch the 64-bit word
                 if (DDRAM_DOUT_READY && dout_expected) begin
                     dout_expected    <= 0;
                     dout_latch       <= DDRAM_DOUT;
@@ -1357,42 +1287,62 @@ always @(posedge clk or negedge reset_n) begin
                     vram_load_active <= 1;
                 end
             end else begin
-                // Write one byte per clock cycle from the latched word
                 if (vram_byte_cnt < 7) begin
-                    vram_WE         <= 1;
-                    vram_WA         <= vram_load_addr;
-                    vram_WD         <= dout_latch[8*vram_byte_cnt +: 8];
-                    vram_load_addr  <= vram_load_addr + 15'd1;
-                    vram_byte_cnt   <= vram_byte_cnt + 3'd1;
-                end else begin // vram_byte_cnt == 7
+                    vram_restore_byte(dout_latch[8*vram_byte_cnt +: 8]);
+                    vram_load_addr <= vram_load_addr + 15'd1;
+                    vram_byte_cnt  <= vram_byte_cnt + 3'd1;
+                end else begin
                     if (!DDRAM_BUSY) begin
-                        vram_WE         <= 1;
-                        vram_WA         <= vram_load_addr;
-                        vram_WD         <= dout_latch[8*7 +: 8];
-                        vram_load_addr  <= vram_load_addr + 15'd1;
+                        vram_restore_byte(dout_latch[8*7 +: 8]);
+                        vram_load_addr   <= vram_load_addr + 15'd1;
                         vram_load_active <= 0;
-                        vram_byte_cnt   <= 0;
+                        vram_byte_cnt    <= 0;
                         if (word_cnt < 12'd2047) begin
                             word_cnt <= word_cnt + 12'd1;
-                            ddram_read(base_addr + 29'h101 + {17'd0, word_cnt + 12'd1});
+                            ddram_read(base_addr + vram_ddr_offset + {17'd0, word_cnt + 12'd1});
                         end else begin
-                            if (systeme) begin
-                                // System E: restore VDP1 passive bank from inline slot data.
-                                vram_load_addr   <= {~mapper_snap[7], 14'b0};
-                                vram_byte_cnt    <= 0;
-                                vram_load_active <= 0;
-                                word_cnt         <= 0;
-                                ddram_read(base_addr + 29'h1901);
-                                state <= ST_LOAD_VRAM1_PASSIVE;
-                            end else begin
-                                // VRAM done → WRAM
-                                wram_load_addr   <= 0;
-                                wram_byte_cnt    <= 0;
-                                wram_load_active <= 0;
-                                word_cnt         <= 0;
-                                ddram_read(base_addr + 29'h901);
-                                state <= ST_LOAD_WRAM;
-                            end
+                            case (state)
+                                ST_LOAD_VRAM: begin
+                                    if (systeme) begin
+                                        // System E: restore VDP1 passive bank from inline slot data.
+                                        vram_load_addr   <= {~mapper_snap[7], 14'b0};
+                                        vram_byte_cnt    <= 0;
+                                        vram_load_active <= 0;
+                                        word_cnt         <= 0;
+                                        ddram_read(base_addr + 29'h1901);
+                                        state <= ST_LOAD_VRAM1_PASSIVE;
+                                    end else begin
+                                        // VRAM done → WRAM
+                                        wram_load_addr   <= 0;
+                                        wram_byte_cnt    <= 0;
+                                        wram_load_active <= 0;
+                                        word_cnt         <= 0;
+                                        ddram_read(base_addr + 29'h901);
+                                        state <= ST_LOAD_WRAM;
+                                    end
+                                end
+                                ST_LOAD_VRAM1_PASSIVE: begin
+                                    wram_load_addr   <= 0;
+                                    wram_byte_cnt    <= 0;
+                                    wram_load_active <= 0;
+                                    word_cnt         <= 0;
+                                    ddram_read(base_addr + 29'h901);
+                                    state <= ST_LOAD_WRAM;
+                                end
+                                ST_LOAD_VRAM2: begin
+                                    // Restore VDP2 passive bank from inline slot area.
+                                    vram_load_addr   <= {~mapper_snap[6], 14'b0};
+                                    vram_byte_cnt    <= 0;
+                                    vram_load_active <= 0;
+                                    word_cnt         <= 0;
+                                    ddram_read(base_addr + 29'h2101);
+                                    state <= ST_LOAD_VRAM2_PASSIVE;
+                                end
+                                ST_LOAD_VRAM2_PASSIVE: begin
+                                    state      <= ST_WAIT_RESTORE_BOUNDARY;
+                                    cram_entry <= 0;
+                                end
+                            endcase
                         end
                     end
                 end
@@ -1480,123 +1430,8 @@ always @(posedge clk or negedge reset_n) begin
             end
         end
 
-        ST_LOAD_VRAM2: begin
-            // System E: DMA DDRAM 0x1101-0x1900 → VRAM2 (16KB)
-            // Reuses vram_load_addr / vram_byte_cnt / vram_load_active / dout_latch
-            if (!vram_load_active) begin
-                if (DDRAM_DOUT_READY && dout_expected) begin
-                    dout_expected    <= 0;
-                    dout_latch       <= DDRAM_DOUT;
-                    vram_byte_cnt    <= 0;
-                    vram_load_active <= 1;
-                end
-            end else begin
-                if (vram_byte_cnt < 7) begin
-                    vram2_WE         <= 1;
-                    vram2_WA         <= vram_load_addr;
-                    vram2_WD         <= dout_latch[8*vram_byte_cnt +: 8];
-                    vram_load_addr   <= vram_load_addr + 15'd1;
-                    vram_byte_cnt    <= vram_byte_cnt + 3'd1;
-                end else begin // vram_byte_cnt == 7
-                    if (!DDRAM_BUSY) begin
-                        vram2_WE         <= 1;
-                        vram2_WA         <= vram_load_addr;
-                        vram2_WD         <= dout_latch[8*7 +: 8];
-                        vram_load_addr   <= vram_load_addr + 15'd1;
-                        vram_load_active <= 0;
-                        vram_byte_cnt    <= 0;
-                        if (word_cnt < 12'd2047) begin
-                            word_cnt <= word_cnt + 12'd1;
-                            ddram_read(base_addr + 29'h1101 + {17'd0, word_cnt + 12'd1});
-                        end else begin
-                            // Restore VDP2 passive bank from inline slot area.
-                            vram_load_addr   <= {~mapper_snap[6], 14'b0};
-                            vram_byte_cnt    <= 0;
-                            vram_load_active <= 0;
-                            word_cnt         <= 0;
-                            ddram_read(base_addr + 29'h2101);
-                            state <= ST_LOAD_VRAM2_PASSIVE;
-                        end
-                    end
-                end
-            end
-        end
 
-        ST_LOAD_VRAM1_PASSIVE: begin
-            // System E: restore VDP1 passive bank from inline slot area (base + 0x1901).
-            if (!vram_load_active) begin
-                if (DDRAM_DOUT_READY && dout_expected) begin
-                    dout_expected    <= 0;
-                    dout_latch       <= DDRAM_DOUT;
-                    vram_byte_cnt    <= 0;
-                    vram_load_active <= 1;
-                end
-            end else begin
-                if (vram_byte_cnt < 7) begin
-                    vram_WE         <= 1;
-                    vram_WA         <= vram_load_addr;
-                    vram_WD         <= dout_latch[8*vram_byte_cnt +: 8];
-                    vram_load_addr  <= vram_load_addr + 15'd1;
-                    vram_byte_cnt   <= vram_byte_cnt + 3'd1;
-                end else begin // vram_byte_cnt == 7
-                    if (!DDRAM_BUSY) begin
-                        vram_WE         <= 1;
-                        vram_WA         <= vram_load_addr;
-                        vram_WD         <= dout_latch[8*7 +: 8];
-                        vram_load_addr  <= vram_load_addr + 15'd1;
-                        vram_load_active <= 0;
-                        vram_byte_cnt   <= 0;
-                        if (word_cnt < 12'd2047) begin
-                            word_cnt <= word_cnt + 12'd1;
-                            ddram_read(base_addr + 29'h1901 + {17'd0, word_cnt + 12'd1});
-                        end else begin
-                            wram_load_addr   <= 0;
-                            wram_byte_cnt    <= 0;
-                            wram_load_active <= 0;
-                            word_cnt         <= 0;
-                            ddram_read(base_addr + 29'h901);
-                            state <= ST_LOAD_WRAM;
-                        end
-                    end
-                end
-            end
-        end
 
-        ST_LOAD_VRAM2_PASSIVE: begin
-            // System E: restore VDP2 passive bank from inline slot area (base + 0x2101).
-            if (!vram_load_active) begin
-                if (DDRAM_DOUT_READY && dout_expected) begin
-                    dout_expected    <= 0;
-                    dout_latch       <= DDRAM_DOUT;
-                    vram_byte_cnt    <= 0;
-                    vram_load_active <= 1;
-                end
-            end else begin
-                if (vram_byte_cnt < 7) begin
-                    vram2_WE        <= 1;
-                    vram2_WA        <= vram_load_addr;
-                    vram2_WD        <= dout_latch[8*vram_byte_cnt +: 8];
-                    vram_load_addr  <= vram_load_addr + 15'd1;
-                    vram_byte_cnt   <= vram_byte_cnt + 3'd1;
-                end else begin // vram_byte_cnt == 7
-                    if (!DDRAM_BUSY) begin
-                        vram2_WE        <= 1;
-                        vram2_WA        <= vram_load_addr;
-                        vram2_WD        <= dout_latch[8*7 +: 8];
-                        vram_load_addr  <= vram_load_addr + 15'd1;
-                        vram_load_active <= 0;
-                        vram_byte_cnt   <= 0;
-                        if (word_cnt < 12'd2047) begin
-                            word_cnt <= word_cnt + 12'd1;
-                            ddram_read(base_addr + 29'h2101 + {17'd0, word_cnt + 12'd1});
-                        end else begin
-                            state      <= ST_WAIT_RESTORE_BOUNDARY;
-                            cram_entry <= 0;
-                        end
-                    end
-                end
-            end
-        end
 
         // ---------------------------------------------------------------
         ST_LOAD_RESTORE: begin
