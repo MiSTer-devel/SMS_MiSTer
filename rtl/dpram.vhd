@@ -102,7 +102,7 @@ BEGIN
 		outdata_aclr_a => "NONE",
 		outdata_aclr_b => "NONE",
 		outdata_reg_a => outdata_reg_a,
-		outdata_reg_b => outdata_reg_a,
+		outdata_reg_b => outdata_reg_b,
 		power_up_uninitialized => "FALSE",
 		read_during_write_mode_port_a => "NEW_DATA_NO_NBE_READ",
 		read_during_write_mode_port_b => "NEW_DATA_NO_NBE_READ",

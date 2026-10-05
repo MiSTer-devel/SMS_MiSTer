@@ -1437,10 +1437,10 @@ always @(posedge clk_sys) begin
 
 		if(ce_cpu) begin
 			if(tmr > 57000) jcnt <= 0;
-			else if(joya_th) tmr <= tmr + 1'd1;
+			else if(joya_th_out) tmr <= tmr + 1'd1;
 
-			old_th <= joya_th;
-			if(old_th & ~joya_th) begin
+			old_th <= joya_th_out;
+			if(old_th & ~joya_th_out) begin
 				tmr <= 0;
 			//first clock doesn't count as capacitor has not discharged yet
 			if(tmr < 57000) jcnt <= jcnt + 1'd1;
