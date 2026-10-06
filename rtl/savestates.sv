@@ -38,7 +38,7 @@ module savestates (
     output reg        ss_freeze,
 
     // VBlank level from video.vhd (not gated by ss_freeze)
-    // Used to defer unfreeze until a clean frame boundary after load
+    // Used to capture save/load at a clean instruction boundary during VBlank
     input             vblank,
     input       [8:0] x,
 
@@ -201,11 +201,7 @@ localparam ST_SAVE_SETTLE  = 6'd55;  // short DDRAM settle after final save writ
 localparam ST_FREEZE       = 6'd1;
 localparam ST_SAVE_HDR     = 6'd2;
 localparam ST_SAVE_CPU0    = 6'd3;
-localparam ST_SAVE_CPU1    = 6'd4;
-localparam ST_SAVE_CPU2    = 6'd5;
-localparam ST_SAVE_CPU3    = 6'd6;
 localparam ST_SAVE_VDP0    = 6'd7;
-localparam ST_SAVE_VDP1    = 6'd8;
 localparam ST_SAVE_CRAM0   = 6'd9;
 // CRAM is 6 words (SAVE_CRAM0 .. SAVE_CRAM5 via cram_idx counter)
 localparam ST_SAVE_PSG     = 6'd15;
@@ -217,11 +213,7 @@ localparam ST_SAVE_DONE    = 6'd19;
 localparam ST_LOAD_HDR_RD  = 6'd20;
 localparam ST_LOAD_HDR_WT  = 6'd21;
 localparam ST_LOAD_CPU0    = 6'd22;
-localparam ST_LOAD_CPU1    = 6'd23;
-localparam ST_LOAD_CPU2    = 6'd24;
-localparam ST_LOAD_CPU3    = 6'd25;
 localparam ST_LOAD_VDP0    = 6'd26;
-localparam ST_LOAD_VDP1    = 6'd27;
 localparam ST_LOAD_CRAM    = 6'd28;  // streams 32 × 12-bit entries via cram_A/D/wr
 localparam ST_LOAD_PSG     = 6'd29;
 localparam ST_LOAD_MAPPER  = 6'd30;
@@ -232,7 +224,6 @@ localparam ST_UNFREEZE     = 6'd34;
 localparam ST_SAVE_NVRAM   = 6'd35;
 localparam ST_PRE_UNFREEZE = 6'd56;
 localparam ST_LOAD_NVRAM   = 6'd36;
-localparam ST_WAIT_VBLANK  = 6'd38;  // wait for VBlank before unfreeze (load path)
 localparam ST_WAIT_RESTORE_BOUNDARY = 6'd39;  // one-cycle mapper-settle phase before core restore
 localparam ST_ERROR        = 6'd40;  // error state - unfreeze and return to idle
 // System E extra states
@@ -356,8 +347,6 @@ localparam  DDRAM_WATCHDOG_MAX = 25'h1FFFFFF;
 // Drain window after taking DDRAM ownership from scaler/video path.
 reg [5:0]   freeze_drain_cnt;
 
-// VBlank edge-detection for clean unfreeze
-reg         vblank_seen;   // goes 1 once we have seen vblank=1 in ST_WAIT_VBLANK
 reg [27:0]  op_cooldown;
 reg         is_old_format;
 
@@ -460,7 +449,6 @@ always @(posedge clk or negedge reset_n) begin
         video_state_in  <= 22'd0;
         video_state_set <= 0;
         video_snap      <= 22'd0;
-        vblank_seen     <= 0;
         dout_expected   <= 0;
         ddram_watchdog  <= 0;
         freeze_drain_cnt <= 0;
@@ -507,7 +495,6 @@ always @(posedge clk or negedge reset_n) begin
         // ---------------------------------------------------------------
         ST_IDLE: begin
             ss_freeze   <= 0;
-            vblank_seen <= 0;  // reset for next VBlank wait
             is_old_format <= 0;
              if (op_cooldown != 0)
                  op_cooldown <= op_cooldown - 28'd1;
@@ -1475,14 +1462,6 @@ always @(posedge clk or negedge reset_n) begin
                 state     <= ST_FLUSH_PIPELINE;
             end else
                 cram_entry <= cram_entry + 5'd1;
-        end
-
-        ST_WAIT_VBLANK: begin
-            if (!vblank)                  vblank_seen <= 1;
-            if (vblank_seen && vblank) begin
-                flush_cnt <= 20'd0;
-                state     <= ST_FLUSH_PIPELINE;
-            end
         end
 
         ST_FLUSH_PIPELINE: begin
