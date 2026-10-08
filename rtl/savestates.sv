@@ -84,6 +84,21 @@ module savestates (
     output reg [55:0] psg_in,
     output reg        psg_set,
 
+    // Opaque exact audio extension; legacy configuration ports stay unchanged.
+    input [95:0] psg_ext_out,
+    input [95:0] psg2_ext_out,
+    output reg [95:0] psg_ext_in,
+    output reg [95:0] psg2_ext_in,
+    input [3:0] psg_div_out,
+    output reg [3:0] psg_div_in,
+    input [10:0] audio_control_out,
+    output reg [10:0] audio_control_in,
+    input audio_quiescent,
+    input audio_phase_out,
+    output reg audio_phase_in,
+    output reg audio_ext_set,
+    output reg audio_phase_set,
+
     // ---- Mapper snapshot / restore ----
     input      [63:0] mapper_out,
     output reg [63:0] mapper_in,
@@ -252,6 +267,25 @@ localparam ST_UNFREEZE_SETTLE = 6'd63;
 // Post-op guard time to avoid pathological immediate re-entry (rapid hammering).
 localparam [27:0] OP_COOLDOWN_MAX = 28'd26846500; // ~500ms @ 53.7MHz
 localparam [19:0] FLUSH_MAX       = 20'd900000;    // ≈16.8ms @ 53.7MHz
+
+// PSG extension v1: 020 descriptor, 021/022 PSG1, 023/024 PSG2.
+// Descriptor: [31:0] "PSGX", [39:32] version, [40] PSG2,
+// [44:41] divider, [45] AudioMix phase, [48:46] payload words,
+// [63:49] reserved zero. Payload high words have [63:32] zero.
+localparam [31:0] AUDIO_MAGIC = 32'h50534758;
+localparam ST_SAVE_AUDIO_INVALID = 7'd66, ST_SAVE_AUDIO_PAYLOAD = 7'd67,
+           ST_SAVE_AUDIO_DESC = 7'd68, ST_SAVE_AUDIO_COMMIT = 7'd69,
+           ST_LOAD_AUDIO_DESC = 7'd70, ST_LOAD_AUDIO_PAYLOAD = 7'd71,
+           ST_SAVE_AUDIO_DRAIN = 7'd72;
+reg [95:0] psg_ext_snap, psg2_ext_snap;
+reg [3:0] audio_div_snap;
+reg [10:0] audio_control_snap;
+reg audio_phase_snap, has_audio_ext;
+reg [2:0] audio_word;
+wire [2:0] audio_words = systeme ? 3'd4 : 3'd2;
+wire [63:0] audio_descriptor = {15'd0, audio_words, audio_phase_snap,
+                               audio_div_snap, systeme, 8'd1, AUDIO_MAGIC};
+
 
 // NVRAM size calculation helpers
 wire evolution_state = evolution_snap[31:16] == 16'hE132;
@@ -469,7 +503,27 @@ always @(*) begin
         ST_SAVE_VRAM , ST_SAVE_VRAM1_PASSIVE , ST_SAVE_VRAM2 , ST_SAVE_VRAM2_PASSIVE: if (!(vram_pipe < 3'd2)) if (vram_byte_cnt < 7 || ! DDRAM_BUSY) if (vram_byte_cnt == 7) ddram_cmd_write ( base_addr + vram_ddr_offset + { 17'd0 , word_cnt } , { vram_d_latched ? vram_d_latch : vram_save_data , vram_word_buf [ 63 : 8 ] } , 8'hFF ) ;
         ST_SAVE_WRAM: if (!(wram_pipe < 2'd2)) if (wram_byte_cnt < 7 || ! DDRAM_BUSY) if (wram_byte_cnt == 7) ddram_cmd_write ( base_addr + 29'h901 + { 17'd0 , word_cnt } , { wram_d_latched ? wram_d_latch : wram_D , wram_word_buf [ 63 : 8 ] } , 8'hFF ) ;
         ST_SAVE_NVRAM: if (!(nvram_pipe < 2'd2)) if (nvram_byte_cnt < 7 || ! DDRAM_BUSY) if (nvram_byte_cnt == 7) ddram_cmd_write ( base_addr + 29'h0D01 + { 17'd0 , word_cnt } , { nvram_d_latched ? nvram_d_latch : nvram_D , nvram_word_buf [ 63 : 8 ] } , 8'hFF ) ;
-        ST_SAVE_DONE: if (!(cur_bios_mode)) if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd0 , { NEW_SS_WORDS , ss_change_det } , 8'hFF ) ;
+        ST_SAVE_AUDIO_INVALID: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h00e , { 12'd0 , psg_snap [ 51 : 0 ] } , 8'hFF ) ;
+        ST_SAVE_AUDIO_PAYLOAD: begin
+            if (! DDRAM_BUSY) begin
+                case (audio_word)
+                    0: ddram_cmd_write ( base_addr + 29'h021 , psg_ext_snap [ 63 : 0 ] , 8'hFF ) ;
+                    1: ddram_cmd_write ( base_addr + 29'h022 , { 32'd0 , psg_ext_snap [ 95 : 64 ] } , 8'hFF ) ;
+                    2: ddram_cmd_write ( base_addr + 29'h023 , psg2_ext_snap [ 63 : 0 ] , 8'hFF ) ;
+                    3: ddram_cmd_write ( base_addr + 29'h024 , { 32'd0 , psg2_ext_snap [ 95 : 64 ] } , 8'hFF ) ;
+                    default: begin end
+                endcase
+            end
+        end
+        ST_SAVE_AUDIO_DESC: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h020 , audio_descriptor , 8'hFF ) ;
+        ST_SAVE_AUDIO_COMMIT: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h00e , { 1'b1 , audio_control_snap , psg_snap [ 51 : 0 ] } , 8'hFF ) ;
+        ST_SAVE_DONE: begin
+            if (cur_bios_mode) begin
+                if (! DDRAM_BUSY) ddram_cmd_write ( base_addr , { NEW_SS_WORDS , 32'd0 } , 8'hF0 ) ;
+            end else begin
+                if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd0 , { NEW_SS_WORDS , ss_change_det } , 8'hFF ) ;
+            end
+        end
         ST_LOAD_HDR_RD: if (! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'd0 ) ;
         ST_LOAD_HDR_WT: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'd1 ) ;
         ST_LOAD_HDR_WT2: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) if (dout_latch [ 31 : 0 ] == cur_magic && ( is_old_format || dout_latch [ 63 : 32 ] == cur_game_id )) ddram_cmd_read ( base_addr + 29'd2 ) ;
@@ -511,7 +565,31 @@ always @(*) begin
                 end
             end
         end
-        ST_LOAD_PSG: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'd15 ) ;
+        ST_LOAD_PSG: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    if (dout_latch [ 63 ]) begin
+                        ddram_cmd_read ( base_addr + 29'h020 ) ;
+                    end else begin
+                        ddram_cmd_read ( base_addr + 29'd15 ) ;
+                    end
+                end
+            end
+        end
+        ST_LOAD_AUDIO_DESC: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) if (! is_old_format && dout_latch [ 31 : 0 ] == AUDIO_MAGIC && dout_latch [ 39 : 32 ] == 8'd1 && dout_latch [ 40 ] == systeme && dout_latch [ 48 : 46 ] == audio_words && dout_latch [ 63 : 49 ] == 0) ddram_cmd_read ( base_addr + 29'h021 ) ;
+        ST_LOAD_AUDIO_PAYLOAD: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    if (!(audio_word [ 0 ] && ( dout_latch [ 63 : 32 ] != 0 ))) begin
+                        if (audio_word == audio_words - 1) begin
+                            ddram_cmd_read ( base_addr + 29'h00f ) ;
+                        end else begin
+                            ddram_cmd_read ( base_addr + 29'h022 + { 26'd0 , audio_word } ) ;
+                        end
+                    end
+                end
+            end
+        end
         ST_LOAD_MAPPER: begin
             if (!(DDRAM_DOUT_READY && dout_expected)) begin
                 if (! dout_expected && ! DDRAM_BUSY) begin
@@ -684,6 +762,12 @@ always @(posedge clk or negedge reset_n) begin
         freeze_drain_cnt <= 0;
         op_cooldown    <= 0;
         is_old_format   <= 0;
+        has_audio_ext <= 0;
+        audio_ext_set <= 0;
+        audio_phase_set <= 0;
+        psg_ext_in <= 0; psg2_ext_in <= 0; psg_div_in <= 0;
+        audio_control_in <= 0; audio_phase_in <= 0;
+        audio_word <= 0;
         flush_cnt       <= 0;
         unfreeze_cnt    <= 0;
         align_timeout   <= 0;
@@ -708,6 +792,8 @@ always @(posedge clk or negedge reset_n) begin
         vram2_WE     <= 0;
         io_set       <= 0;
         video_state_set <= 0;
+        audio_ext_set <= 0;
+        audio_phase_set <= 0;
         ddram_idle();
 
         // DDRAM read watchdog: abort if no response after ~640ms
@@ -727,6 +813,7 @@ always @(posedge clk or negedge reset_n) begin
         ST_IDLE: begin
             ss_freeze   <= 0;
             is_old_format <= 0;
+            has_audio_ext <= 0;
              if (op_cooldown != 0)
                  op_cooldown <= op_cooldown - 28'd1;
             else if (ss_save) begin
@@ -810,7 +897,24 @@ always @(posedge clk or negedge reset_n) begin
         // ---------------------------------------------------------------
         ST_FREEZE: begin
             ss_freeze <= 1;
-            state <= do_save ? ST_SAVE_HDR : ST_LOAD_HDR_RD;
+            // synthesis translate_off
+            if (do_save && audio_quiescent !== 1'b1)
+                $fatal(1,"PSG not quiescent at post-drain capture");
+            // synthesis translate_on
+            if (!do_save) state <= ST_LOAD_HDR_RD;
+            else if (audio_quiescent) begin
+                // PSG-only capture after the pending tick and write pipeline drain.
+                // CPU, VDP, mapper, IO and video capture edges above are unchanged.
+                psg_snap <= psg_out;
+                psg2_snap <= psg2_out;
+                psg_ext_snap <= psg_ext_out;
+                psg2_ext_snap <= psg2_ext_out;
+                audio_div_snap <= psg_div_out;
+                audio_control_snap <= audio_control_out;
+                audio_phase_snap <= audio_phase_out;
+                audio_word <= 0;
+                state <= ST_SAVE_AUDIO_INVALID;
+            end
         end
 
         // ---------------------------------------------------------------
@@ -1091,7 +1195,7 @@ always @(posedge clk or negedge reset_n) begin
                             end
                             ST_SAVE_VRAM2_PASSIVE: begin
                                 vram2_en <= 0;
-                                state    <= ST_SAVE_DONE;
+                                state    <= ST_SAVE_AUDIO_PAYLOAD;
                             end
                         endcase
                     end
@@ -1152,7 +1256,7 @@ always @(posedge clk or negedge reset_n) begin
                             nvram_d_latched <= 0;
                             state           <= ST_SAVE_NVRAM;
                         end else begin
-                            state <= ST_SAVE_DONE;
+                            state <= ST_SAVE_AUDIO_PAYLOAD;
                         end
                     end
                 end else begin
@@ -1186,7 +1290,7 @@ always @(posedge clk or negedge reset_n) begin
                         nvram_save_addr <= nvram_save_addr + 15'd1;
                         nvram_A         <= nvram_save_addr + 15'd2;
                     end else if (nvram_byte_cnt == 7) begin
-                        state <= ST_SAVE_DONE;
+                        state <= ST_SAVE_AUDIO_PAYLOAD;
                     end
                 end else begin
                     if (!nvram_d_latched) begin
@@ -1199,6 +1303,46 @@ always @(posedge clk or negedge reset_n) begin
 
 
 
+        // Invalidate an old slot before replacing any of its contents.
+        ST_SAVE_AUDIO_INVALID: begin
+            if (!DDRAM_BUSY) begin
+                ddram_write(base_addr + 29'h00e, {12'd0, psg_snap[51:0]}, 8'hFF);
+                state <= ST_SAVE_HDR;
+            end
+        end
+        ST_SAVE_AUDIO_PAYLOAD: begin
+            if (!DDRAM_BUSY) begin
+                case (audio_word)
+                    0: ddram_write(base_addr + 29'h021, psg_ext_snap[63:0], 8'hFF);
+                    1: ddram_write(base_addr + 29'h022, {32'd0,psg_ext_snap[95:64]}, 8'hFF);
+                    2: ddram_write(base_addr + 29'h023, psg2_ext_snap[63:0], 8'hFF);
+                    3: ddram_write(base_addr + 29'h024, {32'd0,psg2_ext_snap[95:64]}, 8'hFF);
+                endcase
+                if (audio_word == audio_words-1) state <= ST_SAVE_AUDIO_DESC;
+                else audio_word <= audio_word+3'd1;
+            end
+        end
+        ST_SAVE_AUDIO_DESC: begin
+            if (!DDRAM_BUSY) begin
+                ddram_write(base_addr + 29'h020, audio_descriptor, 8'hFF);
+                freeze_drain_cnt <= 0;
+                state <= ST_SAVE_AUDIO_DRAIN;
+            end
+        end
+        ST_SAVE_AUDIO_DRAIN: begin
+            // Drain all ordered payload/descriptor writes before publishing presence.
+            if (DDRAM_BUSY) freeze_drain_cnt <= 0;
+            else if (freeze_drain_cnt == 31) state <= ST_SAVE_AUDIO_COMMIT;
+            else freeze_drain_cnt <= freeze_drain_cnt+6'd1;
+        end
+        ST_SAVE_AUDIO_COMMIT: begin
+            if (!DDRAM_BUSY) begin
+                ddram_write(base_addr + 29'h00e,
+                            {1'b1,audio_control_snap,psg_snap[51:0]},8'hFF);
+                state <= ST_SAVE_DONE; // framework change detector remains last
+            end
+        end
+
         ST_SAVE_DONE: begin
             // Write MiSTer framework control word at slot base (word 0).
             // [31:0]  = change_det: must change on every save to trigger firmware write to /savestates/
@@ -1206,10 +1350,14 @@ always @(posedge clk or negedge reset_n) begin
             //           slot = 96KB = 98304 bytes; minus 8-byte control word = 98296 bytes → 24574 words
             if (cur_bios_mode) begin
                 // BIOS states live in their own DDRAM region (bios_slot_base);
-                // no change_det write → ARM never saves them to disk, so they
-                // cannot contaminate the last-loaded game's .ss file.
-                freeze_drain_cnt <= 0;
-                state <= ST_SAVE_SETTLE;
+                // update size only: an overwritten old 64KB BIOS header must
+                // not classify this committed extension as an old-format load.
+                // Preserve all change_det bytes; BIOS publication stays disabled.
+                if (!DDRAM_BUSY) begin
+                    ddram_write(base_addr, {NEW_SS_WORDS,32'd0},8'hF0);
+                    freeze_drain_cnt <= 0;
+                    state <= ST_SAVE_SETTLE;
+                end
             end else if (!DDRAM_BUSY) begin
                 ddram_write(base_addr + 29'd0, {NEW_SS_WORDS, ss_change_det}, 8'hFF);
                 ss_change_det <= ss_change_det + 32'd1;
@@ -1353,9 +1501,61 @@ always @(posedge clk or negedge reset_n) begin
                 dout_expected <= 0;
                 dout_latch    <= DDRAM_DOUT;
             end else if (!dout_expected && !DDRAM_BUSY) begin
-                psg_snap <= dout_latch[55:0];
-                ddram_read(base_addr + 29'd15);
-                state    <= ST_LOAD_MAPPER;
+                psg_snap <= dout_latch[63] ? {4'd0,dout_latch[51:0]} : dout_latch[55:0];
+                if (dout_latch[63]) begin
+                    audio_control_snap <= dout_latch[62:52];
+                    ddram_read(base_addr + 29'h020);
+                    state <= ST_LOAD_AUDIO_DESC;
+                end else begin
+                    // Never inspect stale extension metadata for a legacy state.
+                    ddram_read(base_addr + 29'd15);
+                    state <= ST_LOAD_MAPPER;
+                end
+            end
+        end
+
+        ST_LOAD_AUDIO_DESC: begin
+            if (DDRAM_DOUT_READY && dout_expected) begin
+                dout_expected <= 0;
+                dout_latch <= DDRAM_DOUT;
+            end else if (!dout_expected && !DDRAM_BUSY) begin
+                if (!is_old_format && dout_latch[31:0] == AUDIO_MAGIC &&
+                    dout_latch[39:32] == 8'd1 && dout_latch[40] == systeme &&
+                    dout_latch[48:46] == audio_words && dout_latch[63:49] == 0) begin
+                    audio_div_snap <= dout_latch[44:41];
+                    audio_phase_snap <= dout_latch[45];
+                    audio_word <= 0;
+                    ddram_read(base_addr + 29'h021);
+                    state <= ST_LOAD_AUDIO_PAYLOAD;
+                end else begin
+                    // Presence without a supported descriptor is never legacy.
+                    state <= ST_ERROR;
+                end
+            end
+        end
+        ST_LOAD_AUDIO_PAYLOAD: begin
+            if (DDRAM_DOUT_READY && dout_expected) begin
+                dout_expected <= 0;
+                dout_latch <= DDRAM_DOUT;
+            end else if (!dout_expected && !DDRAM_BUSY) begin
+                if (audio_word[0] && (dout_latch[63:32] != 0)) begin
+                    state <= ST_ERROR;
+                end else begin
+                    case (audio_word)
+                        0: psg_ext_snap[63:0] <= dout_latch;
+                        1: psg_ext_snap[95:64] <= dout_latch[31:0];
+                        2: psg2_ext_snap[63:0] <= dout_latch;
+                        3: psg2_ext_snap[95:64] <= dout_latch[31:0];
+                    endcase
+                    if (audio_word == audio_words-1) begin
+                        has_audio_ext <= 1;
+                        ddram_read(base_addr + 29'h00f);
+                        state <= ST_LOAD_MAPPER;
+                    end else begin
+                        audio_word <= audio_word+3'd1;
+                        ddram_read(base_addr + 29'h022 + {26'd0,audio_word});
+                    end
+                end
             end
         end
 
@@ -1664,6 +1864,13 @@ always @(posedge clk or negedge reset_n) begin
                 vdp_regs_set <= 1;
                 psg_in       <= psg_snap;
                 psg_set      <= 1;
+                if (has_audio_ext) begin
+                    psg_ext_in <= psg_ext_snap;
+                    psg2_ext_in <= psg2_ext_snap;
+                    psg_div_in <= audio_div_snap;
+                    audio_control_in <= audio_control_snap;
+                    audio_ext_set <= 1;
+                end
                 if (!is_old_format) begin
                     io_in        <= io_snap;
                     io_set       <= 1;
@@ -1721,6 +1928,10 @@ always @(posedge clk or negedge reset_n) begin
             end else if (is_old_format || (video_state_out[21:4] == video_snap[21:4]) || (align_timeout >= 22'd2200000)) begin
                 if (!cpu_ce && !vdp_ce && !pix_ce && !sp_ce) begin
                     ss_freeze    <= 0;
+                    if (!do_save && has_audio_ext) begin
+                        audio_phase_in <= audio_phase_snap;
+                        audio_phase_set <= 1;
+                    end
                     unfreeze_cnt <= 8'd0;
                     state        <= ST_UNFREEZE_SETTLE;
                 end else begin

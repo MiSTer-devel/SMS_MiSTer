@@ -1,7 +1,7 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
 
-package jt89 is 
+package jt89 is
 
 component jt89
 port
@@ -18,7 +18,13 @@ port
     -- Save-state ports
     ss_out     : out std_logic_vector(55 downto 0);
     ss_set     : in  std_logic := '0';
-    ss_in      : in  std_logic_vector(55 downto 0) := (others => '0')
+    ss_in      : in  std_logic_vector(55 downto 0) := (others => '0');
+    ss_ext_out : out std_logic_vector(95 downto 0);
+    ss_ext_in  : in std_logic_vector(95 downto 0) := (others => '0');
+    ss_ext_set : in std_logic := '0';
+    ss_div_out : out std_logic_vector(3 downto 0);
+    ss_div_in  : in std_logic_vector(3 downto 0) := (others => '0');
+    ss_quiescent : out std_logic
 );
 end component;
 

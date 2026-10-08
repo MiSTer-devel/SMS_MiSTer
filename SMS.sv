@@ -866,6 +866,10 @@ wire         ss_vram_en;
 wire [14:0]  ss_vram_A, ss_vram_WA;
 wire  [7:0]  ss_vram_D, ss_vram_WD;
 wire         ss_vram_WE;
+wire [95:0] ss_psg_ext_out,ss_psg2_ext_out,ss_psg_ext_in,ss_psg2_ext_in;
+wire [3:0] ss_psg_div_out,ss_psg_div_in;
+wire [10:0] ss_audio_control_out,ss_audio_control_in;
+wire ss_audio_quiescent,ss_audio_phase_out,ss_audio_phase_in,ss_audio_phase_set,ss_audio_ext_set;
 wire [55:0]  ss_psg_out, ss_psg_in;
 wire         ss_psg_set;
 wire [63:0]  ss_mapper_out, ss_mapper_in;
@@ -1119,6 +1123,19 @@ system #(63) system
 	.ss_vram_WE  (ss_vram_WE),
 	.ss_vram_WA  (ss_vram_WA),
 	.ss_vram_WD  (ss_vram_WD),
+	.psg_ext_out(ss_psg_ext_out),
+	.psg2_ext_out(ss_psg2_ext_out),
+	.psg_ext_in(ss_psg_ext_in),
+	.psg2_ext_in(ss_psg2_ext_in),
+	.psg_div_out(ss_psg_div_out),
+	.psg_div_in(ss_psg_div_in),
+	.audio_control_out(ss_audio_control_out),
+	.audio_control_in(ss_audio_control_in),
+	.audio_quiescent(ss_audio_quiescent),
+	.audio_phase_out(ss_audio_phase_out),
+	.audio_phase_in(ss_audio_phase_in),
+	.audio_phase_set(ss_audio_phase_set),
+	.audio_ext_set(ss_audio_ext_set),
 	.psg_out     (ss_psg_out),
 	.psg_in      (ss_psg_in),
 	.psg_set     (ss_psg_set),
@@ -1215,6 +1232,19 @@ savestates savestates_inst (
 	.vram_WA         (ss_vram_WA),
 	.vram_WD         (ss_vram_WD),
 	// PSG
+	.psg_ext_out(ss_psg_ext_out),
+	.psg2_ext_out(ss_psg2_ext_out),
+	.psg_ext_in(ss_psg_ext_in),
+	.psg2_ext_in(ss_psg2_ext_in),
+	.psg_div_out(ss_psg_div_out),
+	.psg_div_in(ss_psg_div_in),
+	.audio_control_out(ss_audio_control_out),
+	.audio_control_in(ss_audio_control_in),
+	.audio_quiescent(ss_audio_quiescent),
+	.audio_phase_out(ss_audio_phase_out),
+	.audio_phase_in(ss_audio_phase_in),
+	.audio_phase_set(ss_audio_phase_set),
+	.audio_ext_set(ss_audio_ext_set),
 	.psg_out         (ss_psg_out),
 	.psg_in          (ss_psg_in),
 	.psg_set         (ss_psg_set),

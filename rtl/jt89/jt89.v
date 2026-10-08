@@ -44,7 +44,13 @@ module jt89(
     output [55:0]  ss_out,   // tone0[9:0], tone1[9:0], tone2[9:0], vol0-3[3:0], ctrl3[2:0], regn[2:0]
     // Save-state restore (synchronous, held one cycle)
     input          ss_set,
-    input  [55:0]  ss_in
+    input  [55:0]  ss_in,
+    output [95:0]  ss_ext_out,
+    input  [95:0]  ss_ext_in,
+    input          ss_ext_set,
+    output [3:0]   ss_div_out,
+    input  [3:0]   ss_div_in,
+    output         ss_quiescent
 );
 
 wire signed [ 8:0] ch0, ch1, ch2, noise;
@@ -78,19 +84,23 @@ always @(negedge clk )
     if( rst ) begin
         cen_16 <= 1'b1;
     end else begin
-        cen_16 <= clk_en & (&clk_div);
+        cen_16 <= !ss_ext_set && clk_en & (&clk_div);
     end
 
 always @(posedge clk )
     if( rst ) 
         clk_div <= 4'd0;
+    else if (ss_ext_set)
+        clk_div <= ss_div_in;
     else if( clk_en )
         clk_div <= clk_div + 1'b1;
 
 // Save-state snapshot: {regn[2:0], ctrl3[2:0], vol3[3:0], vol2[3:0], vol1[3:0], vol0[3:0], tone2[9:0], tone1[9:0], tone0[9:0]}
 assign ss_out = { regn, ctrl3, vol3, vol2, vol1, vol0, tone2, tone1, tone0 };
+assign ss_div_out = clk_div;
 
 reg clr_noise, last_wr;
+assign ss_quiescent = !clk_en && !cen_16 && wr_n && !clr_noise && last_wr;
 wire [2:0] reg_sel = din[7] ? din[6:4] : regn;
 
 always @(posedge clk) 
@@ -100,7 +110,7 @@ always @(posedge clk)
         ctrl3 <= 3'b100;
         regn  <= 3'd0;
     end
-    else if( ss_set ) begin
+    else if( ss_set || ss_ext_set ) begin
         tone0 <= ss_in[9:0];
         tone1 <= ss_in[19:10];
         tone2 <= ss_in[29:20];
@@ -110,6 +120,10 @@ always @(posedge clk)
         vol3  <= ss_in[45:42];
         ctrl3 <= ss_in[48:46];
         regn  <= ss_in[51:49];
+        if (ss_ext_set) begin
+            clr_noise <= 1'b0;
+            last_wr <= 1'b1;
+        end
     end
     else begin
         last_wr <= wr_n;
@@ -138,7 +152,10 @@ jt89_tone u_tone0(
     .vol    ( vol0      ),
     .tone   ( tone0     ),
     .snd    ( ch0       ),
-    .out    (           )
+    .out    (           ),
+    .ss_out ( {ss_ext_out[68:60],ss_ext_out[10:0]} ),
+    .ss_set ( ss_ext_set ),
+    .ss_in  ( {ss_ext_in[68:60],ss_ext_in[10:0]} )
 );
 
 jt89_tone u_tone1(
@@ -148,7 +165,10 @@ jt89_tone u_tone1(
     .vol    ( vol1      ),
     .tone   ( tone1     ),
     .snd    ( ch1       ),
-    .out    (           )
+    .out    (           ),
+    .ss_out ( {ss_ext_out[77:69],ss_ext_out[21:11]} ),
+    .ss_set ( ss_ext_set ),
+    .ss_in  ( {ss_ext_in[77:69],ss_ext_in[21:11]} )
 );
 
 wire out2;
@@ -160,7 +180,10 @@ jt89_tone u_tone2(
     .vol    ( vol2      ),
     .tone   ( tone2     ),
     .snd    ( ch2       ),
-    .out    ( out2      )
+    .out    ( out2      ),
+    .ss_out ( {ss_ext_out[86:78],ss_ext_out[32:22]} ),
+    .ss_set ( ss_ext_set ),
+    .ss_in  ( {ss_ext_in[86:78],ss_ext_in[32:22]} )
 );
 
 jt89_noise u_noise(
@@ -171,7 +194,10 @@ jt89_noise u_noise(
     .vol    ( vol3      ),
     .ctrl3  ( ctrl3     ),
     .tone2  ( tone2     ),
-    .snd    ( noise     )
+    .snd    ( noise     ),
+    .ss_out ( {ss_ext_out[95:87],ss_ext_out[59:33]} ),
+    .ss_set ( ss_ext_set ),
+    .ss_in  ( {ss_ext_in[95:87],ss_ext_in[59:33]} )
 );
 
 endmodule

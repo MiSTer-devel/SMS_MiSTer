@@ -28,11 +28,17 @@ module jt89_vol(
     input         rst,
     input         din,
     input  [3:0]  vol,
-    output reg signed [8:0]  snd   
+    output reg signed [8:0]  snd,
+    output [8:0] ss_out,
+    input ss_set,
+    input [8:0] ss_in
 );
 
 
 reg [7:0] max;
+
+// Serialize the historical signed sample bits without conversion.
+assign ss_out = snd;
 
 always @(*)
     case ( vol ) // 2dB per LSB (20*log10)
@@ -57,6 +63,8 @@ always @(*)
 always @(posedge clk)
     if( rst )
         snd <= 9'd0;
+    else if (ss_set)
+        snd <= ss_in;
     else if( clk_en )
         snd <= din ? {1'b0,max} : -{1'b0,max};
 
