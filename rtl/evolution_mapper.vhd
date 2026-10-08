@@ -22,7 +22,6 @@ entity evolution_mapper is
         clk        : in  std_logic;
         reset_n    : in  std_logic;
         enable     : in  std_logic;
-        bios_active : in std_logic;
         cpu_a      : in  std_logic_vector(15 downto 0);
         mreq_n     : in  std_logic;
         iorq_n     : in  std_logic;

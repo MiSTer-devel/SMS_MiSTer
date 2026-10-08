@@ -10,7 +10,6 @@ entity mapper_ctrl is
 		evolution_game_launch : in std_logic;
 		mapper_set : in std_logic;
 		mapper_evolution : in std_logic;
-		evolution_ss_in : in std_logic_vector(95 downto 0);
 		mapper_in : in std_logic_vector(63 downto 0);
 		mapper_janggun : in std_logic;
 		systeme : in std_logic;

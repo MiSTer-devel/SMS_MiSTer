@@ -297,7 +297,6 @@ architecture Behavioral of system is
 	signal io_state_out_i:  std_logic_vector(31 downto 0);
 	signal active_bios:     std_logic;
 	signal irom_D_out:		std_logic_vector(7 downto 0);
-	signal irom_RD_n:			std_logic := '1';
 
 	signal bank0:				std_logic_vector(7 downto 0);
 	signal bank1:				std_logic_vector(7 downto 0);
@@ -325,7 +324,6 @@ architecture Behavioral of system is
 	signal PSG2_outL:			std_logic_vector(10 downto 0);
 	signal PSG2_outR:			std_logic_vector(10 downto 0);
 	signal psg2_WR_n:			std_logic;
-	signal bal2_WR_n:			std_logic;
 
 	signal FM_out:				std_logic_vector(13 downto 0);
 	signal FM_gated:			std_logic_vector(12 downto 0);
@@ -344,8 +342,6 @@ architecture Behavioral of system is
 	signal det_WR_n:	   	std_logic;
 
 	signal HL:					std_logic;
-	signal TH_Ain:				std_logic;
-	signal TH_Bin:				std_logic;
 	signal sc_multicart_page:	std_logic_vector(6 downto 0);
 	signal io_cycle:			std_logic;
 	signal evolution_io_port:	std_logic;
@@ -389,7 +385,6 @@ architecture Behavioral of system is
 	signal detect_zemina_static : std_logic;
 	signal detect_codies_static : std_logic;
 	signal detect_castle : std_logic;
-	signal detect_dahjee_a : std_logic;
 	signal detect_linear : std_logic;
 	signal detect_wonderkid : std_logic;
 	signal detect_sega_locked : std_logic;
@@ -516,7 +511,7 @@ begin
 			detect_zemina_static_o => detect_zemina_static,
 			detect_codies_static_o => detect_codies_static,
 			detect_castle_o => detect_castle,
-			detect_dahjee_a_o => detect_dahjee_a,
+			detect_dahjee_a_o => open,
 			detect_linear_o => detect_linear,
 			detect_wonderkid_o => detect_wonderkid,
 			detect_sega_locked_o => detect_sega_locked,
@@ -551,7 +546,6 @@ begin
 		clk        => clk_sys,
 		reset_n    => RESET_n,
 		enable     => mapper_evolution,
-		bios_active => not bootloader_n,
 		cpu_a      => A,
 		mreq_n     => MREQ_n,
 		iorq_n     => IORQ_n,
@@ -849,7 +843,6 @@ end process;
 mix : entity work.AudioMix
 port map(
 	clk => clk_sys,
-	reset_n => RESET_n,
     ss_phase_out => audio_phase_out, ss_phase_in => audio_phase_in, ss_phase_set => audio_phase_set,
 	audio_in_l1 => signed(mix_inL & "000"),
 	audio_in_l2 => signed(mix2_inL & "000"),
@@ -1136,9 +1129,7 @@ port map(
 			D_in       => D_in,
 			D_out      => eeprom_D_out,
 			WR_n       => WR_n,
-			RD_n       => RD_n,
 			MREQ_n     => MREQ_n,
-			M1_n       => M1_n,
 			enabled    => eeprom_enabled,
 			mapper_eeprom => mapper_eeprom,
 			bus_active => eeprom_bus_active,
@@ -1406,7 +1397,6 @@ port map(
 			evolution_game_launch => evolution_game_launch,
 			mapper_set => mapper_set,
 			mapper_evolution => mapper_evolution,
-			evolution_ss_in => evolution_ss_in,
 			mapper_in => mapper_in,
 			mapper_janggun => mapper_janggun,
 			systeme => systeme,
