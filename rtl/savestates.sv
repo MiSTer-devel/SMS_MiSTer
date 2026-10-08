@@ -375,6 +375,236 @@ task vram_restore_byte;
 endtask
 // End VRAM transfer routing.
 
+// One registered DDRAM transaction; FSM advances only on receiving-edge acceptance.
+wire ddram_pending = DDRAM_RD || DDRAM_WE;
+wire ddram_accepted = ddram_pending && !DDRAM_BUSY;
+reg ddram_cmd_rd, ddram_cmd_we;
+reg [28:0] ddram_cmd_addr;
+reg [63:0] ddram_cmd_data;
+reg [7:0] ddram_cmd_be;
+wire ddram_step = ddram_accepted || (!ddram_pending && !ddram_cmd_rd && !ddram_cmd_we);
+
+// Request preview mirrors only the existing FSM request routes. No state is changed.
+task ddram_cmd_write;
+    input [28:0] addr;
+    input [63:0] data;
+    input [7:0] be;
+    begin
+        ddram_cmd_we = 1; ddram_cmd_rd = 0;
+        ddram_cmd_addr = addr; ddram_cmd_data = data; ddram_cmd_be = be;
+    end
+endtask
+task ddram_cmd_read;
+    input [28:0] addr;
+    begin
+        ddram_cmd_rd = 1; ddram_cmd_we = 0;
+        ddram_cmd_addr = addr; ddram_cmd_data = 0; ddram_cmd_be = 8'hFF;
+    end
+endtask
+always @(*) begin
+    ddram_cmd_rd = 0; ddram_cmd_we = 0;
+    ddram_cmd_addr = 0; ddram_cmd_data = 0; ddram_cmd_be = 0;
+    case (state)
+        ST_WAIT_RESTORE_BOUNDARY: if (! DDRAM_BUSY) if (is_old_format ? mapper_snap [ 48 ] : has_nvram) ddram_cmd_read ( base_addr + 29'h0D01 ) ;
+        ST_SAVE_HDR: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd1 , { cur_game_id , cur_magic } , 8'hFF ) ;
+        ST_SAVE_CPU0: begin
+            if (! DDRAM_BUSY) begin
+                case (cpu_idx)
+                    3'd0: ddram_cmd_write ( base_addr + 29'd2 , z80_snap [ 63 : 0 ] , 8'hFF ) ;
+                    3'd1: ddram_cmd_write ( base_addr + 29'd3 , z80_snap [ 127 : 64 ] , 8'hFF ) ;
+                    3'd2: ddram_cmd_write ( base_addr + 29'd4 , z80_snap [ 191 : 128 ] , 8'hFF ) ;
+                    3'd3: ddram_cmd_write ( base_addr + 29'd5 , { 26'd0 , z80_snap [ 229 : 192 ] } , 8'hFF ) ;
+                    default: begin end
+                endcase
+            end
+        end
+        ST_SAVE_VDP0: begin
+            if (! DDRAM_BUSY) begin
+                case (vdp_idx [ 0 ])
+                    1'b0: ddram_cmd_write ( base_addr + 29'd6 , vdp_snap [ 63 : 0 ] , 8'hFF ) ;
+                    1'b1: ddram_cmd_write ( base_addr + 29'd7 , vdp_snap [ 127 : 64 ] , 8'hFF ) ;
+                endcase
+            end
+        end
+        ST_SAVE_CRAM0: begin
+            if (! DDRAM_BUSY) begin
+                case (cram_idx)
+                    3'd0: ddram_cmd_write ( base_addr + 29'd8 , cram_snap [ 63 : 0 ] , 8'hFF ) ;
+                    3'd1: ddram_cmd_write ( base_addr + 29'd9 , cram_snap [ 127 : 64 ] , 8'hFF ) ;
+                    3'd2: ddram_cmd_write ( base_addr + 29'd10 , cram_snap [ 191 : 128 ] , 8'hFF ) ;
+                    3'd3: ddram_cmd_write ( base_addr + 29'd11 , cram_snap [ 255 : 192 ] , 8'hFF ) ;
+                    3'd4: ddram_cmd_write ( base_addr + 29'd12 , cram_snap [ 319 : 256 ] , 8'hFF ) ;
+                    3'd5: ddram_cmd_write ( base_addr + 29'd13 , cram_snap [ 383 : 320 ] , 8'hFF ) ;
+                    default: begin end
+                endcase
+            end
+        end
+        ST_SAVE_PSG: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd14 , { 8'd0 , psg_snap } , 8'hFF ) ;
+        ST_SAVE_MAPPER: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd15 , mapper_snap , 8'hFF ) ;
+        ST_SAVE_IO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h019 , { evolution_snap [ 31 : 0 ] , io_snap } , 8'hFF ) ;
+        ST_SAVE_VIDEO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01a , { 42'd0 , video_snap } , 8'hFF ) ;
+        ST_SAVE_EEPROM: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01b , evolution_snap [ 31 : 16 ] == 16'hE132 ? evolution_snap [ 95 : 32 ] : eeprom_snap , 8'hFF ) ;
+        ST_SAVE_VDP2REG: begin
+            if (! DDRAM_BUSY) begin
+                case (vdp_idx [ 0 ])
+                    1'b0: ddram_cmd_write ( base_addr + 29'h10 , vdp2_snap [ 63 : 0 ] , 8'hFF ) ;
+                    1'b1: ddram_cmd_write ( base_addr + 29'h11 , vdp2_snap [ 127 : 64 ] , 8'hFF ) ;
+                endcase
+            end
+        end
+        ST_SAVE_CRAM2: begin
+            if (! DDRAM_BUSY) begin
+                case (cram_idx)
+                    3'd0: ddram_cmd_write ( base_addr + 29'h12 , cram2_snap [ 63 : 0 ] , 8'hFF ) ;
+                    3'd1: ddram_cmd_write ( base_addr + 29'h13 , cram2_snap [ 127 : 64 ] , 8'hFF ) ;
+                    3'd2: ddram_cmd_write ( base_addr + 29'h14 , cram2_snap [ 191 : 128 ] , 8'hFF ) ;
+                    3'd3: ddram_cmd_write ( base_addr + 29'h15 , cram2_snap [ 255 : 192 ] , 8'hFF ) ;
+                    3'd4: ddram_cmd_write ( base_addr + 29'h16 , cram2_snap [ 319 : 256 ] , 8'hFF ) ;
+                    3'd5: ddram_cmd_write ( base_addr + 29'h17 , cram2_snap [ 383 : 320 ] , 8'hFF ) ;
+                    default: begin end
+                endcase
+            end
+        end
+        ST_SAVE_PSG2: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h18 , { 8'h0 , psg2_snap } , 8'h7F ) ;
+        ST_SAVE_VRAM , ST_SAVE_VRAM1_PASSIVE , ST_SAVE_VRAM2 , ST_SAVE_VRAM2_PASSIVE: if (!(vram_pipe < 3'd2)) if (vram_byte_cnt < 7 || ! DDRAM_BUSY) if (vram_byte_cnt == 7) ddram_cmd_write ( base_addr + vram_ddr_offset + { 17'd0 , word_cnt } , { vram_d_latched ? vram_d_latch : vram_save_data , vram_word_buf [ 63 : 8 ] } , 8'hFF ) ;
+        ST_SAVE_WRAM: if (!(wram_pipe < 2'd2)) if (wram_byte_cnt < 7 || ! DDRAM_BUSY) if (wram_byte_cnt == 7) ddram_cmd_write ( base_addr + 29'h901 + { 17'd0 , word_cnt } , { wram_d_latched ? wram_d_latch : wram_D , wram_word_buf [ 63 : 8 ] } , 8'hFF ) ;
+        ST_SAVE_NVRAM: if (!(nvram_pipe < 2'd2)) if (nvram_byte_cnt < 7 || ! DDRAM_BUSY) if (nvram_byte_cnt == 7) ddram_cmd_write ( base_addr + 29'h0D01 + { 17'd0 , word_cnt } , { nvram_d_latched ? nvram_d_latch : nvram_D , nvram_word_buf [ 63 : 8 ] } , 8'hFF ) ;
+        ST_SAVE_DONE: if (!(cur_bios_mode)) if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd0 , { NEW_SS_WORDS , ss_change_det } , 8'hFF ) ;
+        ST_LOAD_HDR_RD: if (! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'd0 ) ;
+        ST_LOAD_HDR_WT: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'd1 ) ;
+        ST_LOAD_HDR_WT2: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) if (dout_latch [ 31 : 0 ] == cur_magic && ( is_old_format || dout_latch [ 63 : 32 ] == cur_game_id )) ddram_cmd_read ( base_addr + 29'd2 ) ;
+        ST_LOAD_CPU0: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    case (cpu_idx)
+                        3'd0: ddram_cmd_read ( base_addr + 29'd3 ) ;
+                        3'd1: ddram_cmd_read ( base_addr + 29'd4 ) ;
+                        3'd2: ddram_cmd_read ( base_addr + 29'd5 ) ;
+                        3'd3: ddram_cmd_read ( base_addr + 29'd6 ) ;
+                        default: begin end
+                    endcase
+                end
+            end
+        end
+        ST_LOAD_VDP0: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    case (vdp_idx [ 0 ])
+                        1'b0: ddram_cmd_read ( base_addr + 29'd7 ) ;
+                        1'b1: ddram_cmd_read ( base_addr + 29'd8 ) ;
+                    endcase
+                end
+            end
+        end
+        ST_LOAD_CRAM: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    case (cram_idx)
+                        3'd0: ddram_cmd_read ( base_addr + 29'd9 ) ;
+                        3'd1: ddram_cmd_read ( base_addr + 29'd10 ) ;
+                        3'd2: ddram_cmd_read ( base_addr + 29'd11 ) ;
+                        3'd3: ddram_cmd_read ( base_addr + 29'd12 ) ;
+                        3'd4: ddram_cmd_read ( base_addr + 29'd13 ) ;
+                        3'd5: ddram_cmd_read ( base_addr + 29'd14 ) ;
+                        default: begin end
+                    endcase
+                end
+            end
+        end
+        ST_LOAD_PSG: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'd15 ) ;
+        ST_LOAD_MAPPER: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    if (is_old_format) begin
+                        ddram_cmd_read ( base_addr + 29'h101 ) ;
+                    end else begin
+                        ddram_cmd_read ( base_addr + 29'h019 ) ;
+                    end
+                end
+            end
+        end
+        ST_LOAD_IO: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'h01a ) ;
+        ST_LOAD_VIDEO: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'h01b ) ;
+        ST_LOAD_EEPROM: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    if (systeme) begin
+                        ddram_cmd_read ( base_addr + 29'h10 ) ;
+                    end else begin
+                        ddram_cmd_read ( base_addr + 29'h101 ) ;
+                    end
+                end
+            end
+        end
+        ST_LOAD_VDP2REG: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    case (cram_idx)
+                        3'd0: ddram_cmd_read ( base_addr + 29'h11 ) ;
+                        3'd1: ddram_cmd_read ( base_addr + 29'h12 ) ;
+                        default: begin end
+                    endcase
+                end
+            end
+        end
+        ST_LOAD_CRAM2: begin
+            if (!(DDRAM_DOUT_READY && dout_expected)) begin
+                if (! dout_expected && ! DDRAM_BUSY) begin
+                    case (cram_idx)
+                        3'd0: ddram_cmd_read ( base_addr + 29'h13 ) ;
+                        3'd1: ddram_cmd_read ( base_addr + 29'h14 ) ;
+                        3'd2: ddram_cmd_read ( base_addr + 29'h15 ) ;
+                        3'd3: ddram_cmd_read ( base_addr + 29'h16 ) ;
+                        3'd4: ddram_cmd_read ( base_addr + 29'h17 ) ;
+                        3'd5: ddram_cmd_read ( base_addr + 29'h18 ) ;
+                        default: begin end
+                    endcase
+                end
+            end
+        end
+        ST_LOAD_PSG2: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'h101 ) ;
+        ST_LOAD_VRAM , ST_LOAD_VRAM1_PASSIVE , ST_LOAD_VRAM2 , ST_LOAD_VRAM2_PASSIVE: begin
+            if (!(! vram_load_active)) begin
+                if (!(vram_byte_cnt < 7)) begin
+                    if (! DDRAM_BUSY) begin
+                        if (word_cnt < 12'd2047) begin
+                            ddram_cmd_read ( base_addr + vram_ddr_offset + { 17'd0 , word_cnt + 12'd1 } ) ;
+                        end else begin
+                            case (state)
+                                ST_LOAD_VRAM: begin
+                                    if (systeme) begin
+                                        ddram_cmd_read ( base_addr + 29'h1901 ) ;
+                                    end else begin
+                                        ddram_cmd_read ( base_addr + 29'h901 ) ;
+                                    end
+                                end
+                                ST_LOAD_VRAM1_PASSIVE: ddram_cmd_read ( base_addr + 29'h901 ) ;
+                                ST_LOAD_VRAM2: ddram_cmd_read ( base_addr + 29'h2101 ) ;
+                                default: begin end
+                            endcase
+                        end
+                    end
+                end
+            end
+        end
+        ST_LOAD_WRAM: begin
+            if (!(! wram_load_active)) begin
+                if (!(wram_byte_cnt < 7)) begin
+                    if (! DDRAM_BUSY) begin
+                        if (word_cnt < ( systeme ? 12'd2047 : 12'd1023 )) begin
+                            ddram_cmd_read ( base_addr + 29'h901 + { 17'd0 , word_cnt + 12'd1 } ) ;
+                        end else begin
+                            if (systeme) ddram_cmd_read ( base_addr + 29'h1101 ) ;
+                        end
+                    end
+                end
+            end
+        end
+        ST_LOAD_NVRAM: if (!(! nvram_load_active)) if (!(nvram_byte_cnt < 7)) if (! DDRAM_BUSY) if (word_cnt < ( nvram_size_minus_1 >> 3 )) ddram_cmd_read ( base_addr + 29'h0D01 + { 17'd0 , word_cnt + 12'd1 } ) ;
+        default: begin end
+    endcase
+end
+
 // -----------------------------------------------------------------------
 // DDRAM helper tasks (inline)
 // -----------------------------------------------------------------------
@@ -491,6 +721,7 @@ always @(posedge clk or negedge reset_n) begin
         end else
             ddram_watchdog <= 0;
 
+        if (ddram_step) begin
         case (state)
         // ---------------------------------------------------------------
         ST_IDLE: begin
@@ -1517,6 +1748,35 @@ always @(posedge clk or negedge reset_n) begin
         end
         default: state <= ST_IDLE;
         endcase
+        end // ddram_step
+
+        // The existing FSM helpers execute only on acceptance. Transport owns
+        // the registered request throughout the wait and clears it exactly once.
+        if (ddram_pending) begin
+            DDRAM_RD <= DDRAM_BUSY && DDRAM_RD;
+            DDRAM_WE <= DDRAM_BUSY && DDRAM_WE;
+            DDRAM_ADDR <= DDRAM_ADDR;
+            DDRAM_DIN <= DDRAM_DIN;
+            DDRAM_BE <= DDRAM_BE;
+            DDRAM_BURSTCNT <= DDRAM_BURSTCNT;
+        end else if (ddram_cmd_rd || ddram_cmd_we) begin
+            DDRAM_RD <= ddram_cmd_rd; DDRAM_WE <= ddram_cmd_we;
+            DDRAM_ADDR <= ddram_cmd_addr; DDRAM_DIN <= ddram_cmd_data;
+            DDRAM_BE <= ddram_cmd_be; DDRAM_BURSTCNT <= 8'd1;
+            // Synchronous RAM lookahead may change byte 7 while acceptance waits.
+            // Preserve the byte already captured in the registered write request.
+            if (ddram_cmd_we && vram_byte_cnt == 7 &&
+                (state==ST_SAVE_VRAM || state==ST_SAVE_VRAM1_PASSIVE ||
+                 state==ST_SAVE_VRAM2 || state==ST_SAVE_VRAM2_PASSIVE)) begin
+                vram_d_latch <= ddram_cmd_data[63:56]; vram_d_latched <= 1;
+            end
+            if (ddram_cmd_we && state==ST_SAVE_WRAM && wram_byte_cnt==7) begin
+                wram_d_latch <= ddram_cmd_data[63:56]; wram_d_latched <= 1;
+            end
+            if (ddram_cmd_we && state==ST_SAVE_NVRAM && nvram_byte_cnt==7) begin
+                nvram_d_latch <= ddram_cmd_data[63:56]; nvram_d_latched <= 1;
+            end
+        end
     end
 end
 
