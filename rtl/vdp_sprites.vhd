@@ -29,8 +29,7 @@ port (
 	overflow			: out std_logic;
 	color				: out STD_LOGIC_VECTOR (3 downto 0);
 	-- Save-state: reset scanner to clean state when '1' (held one cycle)
-	ss_regs_set		: in  STD_LOGIC := '0';
-	ss_reset		: in  STD_LOGIC := '0');
+	ss_regs_set		: in  STD_LOGIC := '0');
 end vdp_sprites;
 
 architecture Behavioral of vdp_sprites is
@@ -90,7 +89,7 @@ begin
 			spr_d3=> spr_d3(i),
 			color => spr_color(i),
 			active=> spr_active(i),
-			ss_regs_set => ss_regs_set or ss_reset
+			ss_regs_set => ss_regs_set
 		);
 
 	end generate;
@@ -123,7 +122,7 @@ begin
 		if rising_edge(clk_sys) then
 			-- Save-state restore: reset scanner fully so first frame after load
 			-- uses correct sprite data for y=0 (no stale phantom sprites/state).
-			if ss_regs_set = '1' or ss_reset = '1' then
+			if ss_regs_set = '1' then
 				count    <= 0;
 				enable   <= (others => false);
 				state    <= WAITING;
