@@ -224,8 +224,6 @@ begin
 		x					=> x,
 		y					=> y,
 		ss_regs_set		    => ss_regs_set,
-		ss_line_reset		=> ss_regs_set,
-		ss_sprite_reset		=> ss_regs_set,
 
 		color				=> color,
 		palettemode			=> palettemode,
