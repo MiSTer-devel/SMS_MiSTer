@@ -24,12 +24,9 @@ entity cart_eeprom is
         D_in     : in  std_logic_vector(7 downto 0);
         D_out    : out std_logic_vector(7 downto 0);
         WR_n     : in  std_logic;
-        RD_n     : in  std_logic;
         MREQ_n   : in  std_logic;
-        M1_n     : in  std_logic := '1';
         enabled  : in  std_logic;
         mapper_eeprom : in std_logic := '1';
-        nvram_e  : in  std_logic := '0';
         -- Bus drive indicator: '1' when cart_eeprom is actively driving D_out
         bus_active : out std_logic;
         -- NVRAM (byte-wide, 128×8-bit)

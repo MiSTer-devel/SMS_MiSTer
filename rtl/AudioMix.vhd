@@ -10,7 +10,6 @@ entity AudioMix is
 port
 (
 	clk : in std_logic;
-	reset_n : in std_logic;
 	audio_in_l1 : in signed(15 downto 0);
 	audio_in_l2 : in signed(15 downto 0);
 	audio_in_r1 : in signed(15 downto 0);
