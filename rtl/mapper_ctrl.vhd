@@ -408,14 +408,12 @@ begin
 						if mapper_codies_force = '0' and mapper_codies_lock = '0' and detect_codies_static = '0' then
 							mapper_codies <= '0' ;
 						end if;
-						if (mapper_codies = '0' and (detect_codies_static = '0' or bootloader_n = '0')) or mapper_eeprom = '1' then
+						if (mapper_codies = '0' and (detect_codies_static = '0' or bootloader_n = '0')) then
 							case A(1 downto 0) is
 								when "00" => 
-									if mapper_eeprom = '0' then
-										nvram_ex <= D_in(4);
-										nvram_e  <= D_in(3);
-										nvram_p  <= D_in(2);
-									end if;
+									nvram_ex <= D_in(4);
+									nvram_e  <= D_in(3);
+									nvram_p  <= D_in(2);
 								when "01" => bank0 <= D_in;
 								when "10" => bank1 <= D_in;
 								when "11" => bank2 <= D_in ; 
@@ -430,13 +428,13 @@ begin
 									bank0 <= D_in ;
 								end if;
 							when x"4000" => 
-								if (mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1') and mapper_eeprom = '0' then
+								if (mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1') then
 									bank1(6 downto 0) <= D_in(6 downto 0) ;
 									bank1(7) <= '0' ;
 									nvram_cme <= D_in(7) ;
 								end if ;
 							when x"8000" => 
-								if (mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or mapper_wonderkid = '1') and mapper_eeprom = '0' then
+								if (mapper_codies = '1' or detect_codies_static = '1' or mapper_codies_force = '1' or mapper_wonderkid = '1') then
 									bank2 <= D_in ; 
 								end if;
 							-- Korean mapper (Sangokushi 3, Dodgeball King (Dallyeora Pigu-Wang), Jang Pung II, Jang Pung 3)
