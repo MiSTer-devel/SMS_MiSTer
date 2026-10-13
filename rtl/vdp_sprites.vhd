@@ -78,7 +78,9 @@ begin
 			-- between x=255 and x=511 in some way inside the shifters, or we'll have spurious
 			-- signals difficult to filter outside them. The compare operators are kept
 			-- outside the module to avoid to have them duplicated 64 times.
-			load  => shift='0' and x<256, --load range
+			-- Mode 4 X=0 stores FF: load at x=511, not the x=255 alias.
+			load  => shift='0' and ((smode_M4='1' and (x<255 or x=511)) or
+									 (smode_M4='0' and x<256)),
 			x248  => shift='1' and (x<248 or x>=504) and smode_M4='1', --load range for shifted sprites
 			x224  => smode_M4='0' and (x<223 or x>=480), -- load range for shifted mode2 spr
 			m4 => smode_M4='1',
