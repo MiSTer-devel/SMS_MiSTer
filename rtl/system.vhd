@@ -1297,6 +1297,7 @@ port map(
 	memory_decode_inst : entity work.memory_decode
 		port map (
 			gg => gg,
+			mapper_evolution => mapper_evolution,
 			gg_bios_en => gg_bios_en,
 			bios_en => bios_en,
 			ext_bios_sel => ext_bios_sel,

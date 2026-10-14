@@ -5,6 +5,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity memory_decode is
 	port (
 		gg : in std_logic;
+		mapper_evolution : in std_logic := '0';
 		gg_bios_en : in std_logic;
 		bios_en : in std_logic;
 		ext_bios_sel : in std_logic;
@@ -63,13 +64,16 @@ begin
 	-- A full external SMS BIOS also owns banking writes at $FFFC-$FFFF:
 	-- do not restrict that ownership to CPU ROM addresses below $C000.
 	-- Internal/GG BIOSes only cover the first 16KB; retain their existing decode.
+	-- SMS cartridge enable is independent of BIOS presence. Preserve the
+	-- existing BIOS-qualified behavior for Evolution and non-SMS platforms.
 	cart_memory_selected <= '0' when bootloader_n='0' and
 	                           ((gg_bios_en='1' and ext_gg_bios_loaded='1' and A(15 downto 14)="00") or
 	                            (gg_bios_en='0' and cart_precedence='0' and
 	                             (A(15 downto 14)="00" or (ext_bios_sel='1' and ext_bios_loaded='1')))) else
 	                        '0' when bootloader_n='1' and
-	                           (dbr='0' or (bios_en='1' and gg='0' and gg_bios_en='0' and
-	                            ext_bios_sel='1' and ext_bios_loaded='1' and media_control(6)='1')) else
+	                           (dbr='0' or (gg='0' and gg_bios_en='0' and media_control(6)='1' and
+	                            ((mapper_evolution='0' and systeme='0' and sc3000_en='0') or
+	                             (bios_en='1' and ext_bios_sel='1' and ext_bios_loaded='1')))) else
 	                        '1';
 	dahjee_cart_access <= mapper_dahjee_a and cart_memory_selected;
 
