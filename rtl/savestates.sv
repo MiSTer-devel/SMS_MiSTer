@@ -159,7 +159,7 @@ module savestates (
 
     // ---- IO snapshot / restore ----
     input      [31:0] io_out,
-    output reg [31:0] io_in,
+    output     [31:0] io_in,
     output reg        io_set,
 
     // ---- Video State snapshot / restore ----
@@ -328,6 +328,7 @@ reg [127:0] vdp2_snap;
 reg [383:0] cram2_snap;
 reg  [55:0] psg2_snap;
 reg  [31:0] io_snap;
+assign io_in = io_snap;
 reg  [21:0] video_snap;
 reg  [63:0] eeprom_snap;
 
@@ -751,7 +752,6 @@ always @(posedge clk or negedge reset_n) begin
         vram2_en        <= 0;
         vram2_WE        <= 0;
         dout_latch      <= 64'd0;
-        io_in           <= 32'd0;
         io_set          <= 0;
         io_snap         <= 32'd0;
         video_state_in  <= 22'd0;
@@ -1872,7 +1872,6 @@ always @(posedge clk or negedge reset_n) begin
                     audio_ext_set <= 1;
                 end
                 if (!is_old_format) begin
-                    io_in        <= io_snap;
                     io_set       <= 1;
                     video_state_in  <= video_snap;
                     video_state_set <= 1;
