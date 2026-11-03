@@ -164,7 +164,7 @@ module savestates (
 
     // ---- Video State snapshot / restore ----
     input      [21:0] video_state_out,
-    output reg [21:0] video_state_in,
+    output     [21:0] video_state_in,
     output reg        video_state_set,
 
     // ---- DDRAM interface ----
@@ -330,6 +330,7 @@ reg  [55:0] psg2_snap;
 reg  [31:0] io_snap;
 assign io_in = io_snap;
 reg  [21:0] video_snap;
+assign video_state_in = video_snap;
 reg  [63:0] eeprom_snap;
 
 // VRAM DMA pipelining: address issued, wait 2 clocks for data
@@ -754,7 +755,6 @@ always @(posedge clk or negedge reset_n) begin
         dout_latch      <= 64'd0;
         io_set          <= 0;
         io_snap         <= 32'd0;
-        video_state_in  <= 22'd0;
         video_state_set <= 0;
         video_snap      <= 22'd0;
         dout_expected   <= 0;
@@ -1873,7 +1873,6 @@ always @(posedge clk or negedge reset_n) begin
                 end
                 if (!is_old_format) begin
                     io_set       <= 1;
-                    video_state_in  <= video_snap;
                     video_state_set <= 1;
                 end
                 // System E: restore second VDP/PSG
