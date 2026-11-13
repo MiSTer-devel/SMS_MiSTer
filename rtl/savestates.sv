@@ -20,10 +20,20 @@
 //   Words 0x1901-0x2100: VDP1 passive 16KB (System E only; inline; written to SD)
 //   Words 0x2101-0x2900: VDP2 passive 16KB (System E only; inline; written to SD)
 //
+//   FM savestate format v1: 0x2997 descriptor; 0x2998..0x29c9 = 100 32-bit state words.
+//   Video word 0x01a upper bits: [63:40]=0x484311, [39:22]=0.
+//
 // Slot size = 0x3000 words = 96KB.  Up to 4 slots.
 // Base word address = 29'h07C00000 + slot * 29'h3000
 
 module savestates (
+    output [7:0] fm_state_addr,
+    output fm_state_read, fm_state_write,
+    output [31:0] fm_state_wdata,
+    input [31:0] fm_state_rdata,
+    input fm_initialized,
+    output fm_legacy_reset, fm_initialization_run,
+
     input             clk,
     input             reset_n,
 
@@ -277,6 +287,135 @@ localparam ST_SAVE_AUDIO_INVALID = 7'd66, ST_SAVE_AUDIO_PAYLOAD = 7'd67,
            ST_SAVE_AUDIO_DESC = 7'd68, ST_SAVE_AUDIO_COMMIT = 7'd69,
            ST_LOAD_AUDIO_DESC = 7'd70, ST_LOAD_AUDIO_PAYLOAD = 7'd71,
            ST_SAVE_AUDIO_DRAIN = 7'd72;
+// FM savestate format v1: dedicated free tail of the existing 96 KiB slot.
+// All master regions end at or below 0x2900 (System E passive VRAM).
+// 32 KiB NVRAM ends at 0x1d00; FM ends at 0x29c9, below 0x3000.
+// Upper video-word tag discovers this extension; untagged images never read it.
+localparam [28:0] FM_DESC_ADDR=29'h2997, FM_DATA_ADDR=29'h2998;
+localparam [23:0] FM_MAGIC = 24'h484311;
+// FM descriptor: format version 1, 100 32-bit state words.
+localparam [63:0] FM_DESC = {16'd100,8'd1,8'd1,32'h464d5331};
+localparam ST_FM_CAPTURE=7'd111, ST_FM_SAVE_FETCH=7'd112, ST_FM_SAVE_WAIT=7'd113,
+ ST_FM_SAVE_WRITE=7'd114, ST_FM_SAVE_DESC=7'd115, ST_FM_LOAD_DESC=7'd116,
+ ST_FM_LOAD=7'd117, ST_FM_LOAD_STORE=7'd118, ST_FM_LOAD_NEXT=7'd119,
+ ST_FM_APPLY=7'd120, ST_FM_APPLY_WAIT=7'd121;
+reg fm_capture,fm_apply,fm_legacy,fm_bulk_read,fm_bulk_write,has_fm;
+reg [6:0] fm_word;
+// Shared DDRAM response latch, declared before the FM transport connection.
+reg [63:0] dout_latch;
+wire [63:0] fm_bulk_rdata;
+wire fm_done,fm_busy;
+opll_snapshot fm_snapshot(.clk(clk),.reset_n(reset_n),.capture(fm_capture),.apply_state(fm_apply),.legacy(fm_legacy),
+ .initialized(fm_initialized),.legacy_reset(fm_legacy_reset),.initialization_run(fm_initialization_run),
+ .bulk_read(fm_bulk_read),.bulk_write(fm_bulk_write),.bulk_addr(fm_word),.bulk_wdata(dout_latch),
+ .bulk_rdata(fm_bulk_rdata),.done(fm_done),.busy(fm_busy),.state_addr(fm_state_addr),
+ .state_read(fm_state_read),.state_write(fm_state_write),.state_wdata(fm_state_wdata),.state_rdata(fm_state_rdata));
+function fm_word_valid;
+input [7:0] address;input [31:0] data;begin
+case(address)
+8'd0:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd1:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd2:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd3:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd4:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd5:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd6:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd7:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd8:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd9:fm_word_valid=(data & ~32'hffffffff)==0;
+8'd10:fm_word_valid=(data & ~32'h0000000f)==0;
+8'd11:fm_word_valid=(data & ~32'hfc08ffff)==0;
+8'd12:fm_word_valid=(data & ~32'h0000000f)==0;
+8'd13:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd14:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd15:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd16:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd17:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd18:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd19:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd20:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd21:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd22:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd23:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd24:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd25:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd26:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd27:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd28:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd29:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd30:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd31:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd32:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd33:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd34:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd35:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd36:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd37:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd38:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd39:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd40:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd41:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd42:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd43:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd44:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd45:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd46:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd47:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd48:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd49:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd50:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd51:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd52:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd53:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd54:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd55:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd56:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd57:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd58:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd59:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd60:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd61:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd62:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd63:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd64:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd65:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd66:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd67:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd68:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd69:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd70:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd71:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd72:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd73:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd74:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd75:fm_word_valid=(data & ~32'h000003ff)==0;
+8'd76:fm_word_valid=(data & ~32'h000001ff)==0;
+8'd77:fm_word_valid=(data & ~32'h0001ffff)==0;
+8'd78:fm_word_valid=(data & ~32'h0000007f)==0 && data[6:0] < 72;
+8'd79:fm_word_valid=(data & ~32'h7fffffff)==0 && data[5:2] < 9 && data[10:6] < 18;
+8'd80:fm_word_valid=(data & ~32'hffffffff)==0;
+8'd81:fm_word_valid=(data & ~32'h0000ffff)==0 && data[7:4] < 9 && data[13:8] < 38;
+8'd82:fm_word_valid=(data & ~32'hffffffff)==0;
+8'd83:fm_word_valid=(data & ~32'h07ffffff)==0;
+8'd84:fm_word_valid=(data & ~32'h7fffffff)==0;
+8'd85:fm_word_valid=(data & ~32'h0fffffff)==0;
+8'd86:fm_word_valid=(data & ~32'h7fffffff)==0 && data[4:0] < 18;
+8'd87:fm_word_valid=(data & ~32'h7fffffff)==0;
+8'd88:fm_word_valid=(data & ~32'h000fffff)==0;
+8'd89:fm_word_valid=(data & ~32'h01ffffff)==0;
+8'd90:fm_word_valid=(data & ~32'h0003ffff)==0;
+8'd91:fm_word_valid=(data & ~32'h003fffff)==0;
+8'd92:fm_word_valid=(data & ~32'h00001fff)==0;
+8'd93:fm_word_valid=(data & ~32'hffffffff)==0;
+8'd94:fm_word_valid=(data & ~32'h0007ffff)==0;
+8'd95:fm_word_valid=(data & ~32'h000fffff)==0;
+8'd96:fm_word_valid=(data & ~32'h7fffffff)==0;
+8'd97:fm_word_valid=(data & ~32'h0003ffff)==0 && data[3:0] < 9;
+8'd98:fm_word_valid=(data & ~32'h00ffffff)==0;
+8'd99:fm_word_valid=(data & ~32'h007fffff)==0;
+default:fm_word_valid=0;endcase
+end endfunction
+
 reg [95:0] psg_ext_snap, psg2_ext_snap;
 reg [3:0] audio_div_snap;
 reg [10:0] audio_control_snap;
@@ -366,9 +505,6 @@ reg         nvram_load_active;
 reg  [7:0]  nvram_d_latch;
 reg         nvram_d_latched;
 
-// Shared latch for DDRAM read data (LOAD path)
-reg [63:0]  dout_latch;
-
 // Guard flag: set when a ddram_read is issued, cleared when DOUT_READY is consumed.
 // Prevents stale DOUT_READY pulses (from pre-freeze scaler reads) from
 // being misinterpreted as responses to our own load-path read requests.
@@ -441,6 +577,10 @@ always @(*) begin
     ddram_cmd_rd = 0; ddram_cmd_we = 0;
     ddram_cmd_addr = 0; ddram_cmd_data = 0; ddram_cmd_be = 0;
     case (state)
+        ST_FM_SAVE_WRITE: if(!DDRAM_BUSY) ddram_cmd_write(base_addr+FM_DATA_ADDR+fm_word,fm_bulk_rdata,8'hff);
+        ST_FM_SAVE_DESC: if(!DDRAM_BUSY) ddram_cmd_write(base_addr+FM_DESC_ADDR,FM_DESC,8'hff);
+        ST_FM_LOAD_DESC: if(!DDRAM_DOUT_READY && !dout_expected && !DDRAM_BUSY && dout_latch==FM_DESC) ddram_cmd_read(base_addr+FM_DATA_ADDR);
+        ST_FM_LOAD_NEXT: if(!DDRAM_BUSY) ddram_cmd_read(base_addr+(fm_word==49?29'h01b:FM_DATA_ADDR+fm_word+29'd1));
         ST_WAIT_RESTORE_BOUNDARY: if (! DDRAM_BUSY) if (is_old_format ? mapper_snap [ 48 ] : has_nvram) ddram_cmd_read ( base_addr + 29'h0D01 ) ;
         ST_SAVE_HDR: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd1 , { cur_game_id , cur_magic } , 8'hFF ) ;
         ST_SAVE_CPU0: begin
@@ -478,7 +618,7 @@ always @(*) begin
         ST_SAVE_PSG: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd14 , { 8'd0 , psg_snap } , 8'hFF ) ;
         ST_SAVE_MAPPER: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd15 , mapper_snap , 8'hFF ) ;
         ST_SAVE_IO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h019 , { evolution_snap [ 31 : 0 ] , io_snap } , 8'hFF ) ;
-        ST_SAVE_VIDEO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01a , { 42'd0 , video_snap } , 8'hFF ) ;
+        ST_SAVE_VIDEO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01a , { FM_MAGIC, 18'd0, video_snap } , 8'hFF ) ;
         ST_SAVE_EEPROM: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01b , evolution_snap [ 31 : 16 ] == 16'hE132 ? evolution_snap [ 95 : 32 ] : eeprom_snap , 8'hFF ) ;
         ST_SAVE_VDP2REG: begin
             if (! DDRAM_BUSY) begin
@@ -604,7 +744,9 @@ always @(*) begin
             end
         end
         ST_LOAD_IO: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'h01a ) ;
-        ST_LOAD_VIDEO: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'h01b ) ;
+        ST_LOAD_VIDEO: if (!(DDRAM_DOUT_READY && dout_expected)) if (!dout_expected && !DDRAM_BUSY)
+            if(dout_latch[63:40]!=FM_MAGIC || dout_latch[39:22]==0)
+                ddram_cmd_read(base_addr+(dout_latch[63:40]==FM_MAGIC?FM_DESC_ADDR:29'h01b));
         ST_LOAD_EEPROM: begin
             if (!(DDRAM_DOUT_READY && dout_expected)) begin
                 if (! dout_expected && ! DDRAM_BUSY) begin
@@ -726,6 +868,7 @@ endtask
 // -----------------------------------------------------------------------
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
+        fm_capture<=0;fm_apply<=0;fm_legacy<=0;fm_bulk_read<=0;fm_bulk_write<=0;has_fm<=0;fm_word<=0;
         state           <= ST_IDLE;
         ss_freeze       <= 0;
         ss_change_det   <= 0;
@@ -775,6 +918,7 @@ always @(posedge clk or negedge reset_n) begin
         DDRAM_RD        <= 0;
         DDRAM_BURSTCNT  <= 8'd1;
     end else begin
+        fm_capture<=0;fm_apply<=0;fm_legacy<=0;fm_bulk_read<=0;fm_bulk_write<=0;
         // default: clear one-cycle strobes
         z80_set      <= 0;
         vdp_regs_set <= 0;
@@ -812,7 +956,7 @@ always @(posedge clk or negedge reset_n) begin
         // ---------------------------------------------------------------
         ST_IDLE: begin
             ss_freeze   <= 0;
-            is_old_format <= 0;
+            is_old_format <= 0; has_fm<=0;
             has_audio_ext <= 0;
              if (op_cooldown != 0)
                  op_cooldown <= op_cooldown - 28'd1;
@@ -838,7 +982,7 @@ always @(posedge clk or negedge reset_n) begin
             //   - ISet=00   : no prefix active (not mid-way through CB/DD/ED/FD sequence)
             //   - cpu_ce     : only act on an actual CPU tick, not on held bus
             //                  levels between ticks.
-            if (cpu_ce && !z80_m1_n && !z80_mreq_n && z80_iset == 2'b00 && vblank && x < 9'd256) begin
+            if (fm_initialized && cpu_ce && !z80_m1_n && !z80_mreq_n && z80_iset == 2'b00 && vblank && x < 9'd256) begin
                 base_addr <= ss_bios_mode ? bios_slot_base(cur_slot) : slot_base(cur_slot);
                 cur_bios_mode <= ss_bios_mode;
                 cur_magic <= ss_bios_mode ? MAGIC_BIOS : MAGIC;
@@ -913,7 +1057,7 @@ always @(posedge clk or negedge reset_n) begin
                 audio_control_snap <= audio_control_out;
                 audio_phase_snap <= audio_phase_out;
                 audio_word <= 0;
-                state <= ST_SAVE_AUDIO_INVALID;
+                fm_capture<=1; state<=ST_FM_CAPTURE;
             end
         end
 
@@ -950,6 +1094,37 @@ always @(posedge clk or negedge reset_n) begin
         // ===============================================================
         // SAVE
         // ===============================================================
+
+        ST_FM_CAPTURE: if(fm_done)state<=ST_SAVE_AUDIO_INVALID;
+        ST_FM_SAVE_FETCH: begin fm_bulk_read<=1;state<=ST_FM_SAVE_WAIT;end
+        ST_FM_SAVE_WAIT: if(fm_done)state<=ST_FM_SAVE_WRITE;
+        ST_FM_SAVE_WRITE: if(!DDRAM_BUSY)begin
+            ddram_write(base_addr+FM_DATA_ADDR+fm_word,fm_bulk_rdata,8'hff);
+            if(fm_word==49)state<=ST_FM_SAVE_DESC;
+            else begin fm_word<=fm_word+7'd1;state<=ST_FM_SAVE_FETCH;end
+        end
+        ST_FM_SAVE_DESC: if(!DDRAM_BUSY)begin ddram_write(base_addr+FM_DESC_ADDR,FM_DESC,8'hff);state<=ST_SAVE_EEPROM;end
+        ST_FM_LOAD_DESC,ST_FM_LOAD: begin
+            if(DDRAM_DOUT_READY&&dout_expected)begin dout_expected<=0;dout_latch<=DDRAM_DOUT;end
+            else if(!dout_expected&&!DDRAM_BUSY)begin
+                if(state==ST_FM_LOAD_DESC)begin
+                    if(dout_latch!=FM_DESC)state<=ST_ERROR;
+                    else begin fm_word<=0;ddram_read(base_addr+FM_DATA_ADDR);state<=ST_FM_LOAD;end
+                end else if(!fm_word_valid({fm_word,1'b0},dout_latch[31:0])||!fm_word_valid({fm_word,1'b1},dout_latch[63:32]))state<=ST_ERROR;
+                else if(fm_word==39 && dout_latch[33] && (dout_latch[1:0]!=2'b00))state<=ST_ERROR;
+                else begin fm_bulk_write<=1;state<=ST_FM_LOAD_STORE;end
+            end
+        end
+        ST_FM_LOAD_STORE: if(fm_done)state<=ST_FM_LOAD_NEXT;
+        ST_FM_LOAD_NEXT: if(!DDRAM_BUSY)begin
+            if(fm_word==49)begin ddram_read(base_addr+29'h01b);state<=ST_LOAD_EEPROM;end
+            else begin fm_word<=fm_word+7'd1;ddram_read(base_addr+FM_DATA_ADDR+fm_word+29'd1);state<=ST_FM_LOAD;end
+        end
+        ST_FM_APPLY: begin
+            if(has_fm)fm_apply<=1;else fm_legacy<=1;
+            state<=ST_FM_APPLY_WAIT;
+        end
+        ST_FM_APPLY_WAIT: if(fm_done)state<=ST_PRE_UNFREEZE;
 
         ST_SAVE_HDR: begin
             if (!DDRAM_BUSY) begin
@@ -1032,8 +1207,8 @@ always @(posedge clk or negedge reset_n) begin
 
         ST_SAVE_VIDEO: begin
             if (!DDRAM_BUSY) begin
-                ddram_write(base_addr + 29'h01a, {42'd0, video_snap}, 8'hFF);
-                state <= ST_SAVE_EEPROM;
+                ddram_write(base_addr + 29'h01a, {FM_MAGIC, 18'd0, video_snap}, 8'hFF);
+                fm_word<=0; state<=ST_FM_SAVE_FETCH;
             end
         end
 
@@ -1598,8 +1773,12 @@ always @(posedge clk or negedge reset_n) begin
                 dout_latch    <= DDRAM_DOUT;
             end else if (!dout_expected && !DDRAM_BUSY) begin
                 video_snap       <= dout_latch[21:0];
-                ddram_read(base_addr + 29'h01b);
-                state            <= ST_LOAD_EEPROM;
+                has_fm <= dout_latch[63:40]==FM_MAGIC;
+                if(dout_latch[63:40]==FM_MAGIC && dout_latch[39:22]!=0) state<=ST_ERROR;
+                else begin
+                    ddram_read(base_addr+(dout_latch[63:40]==FM_MAGIC?FM_DESC_ADDR:29'h01b));
+                    state<=dout_latch[63:40]==FM_MAGIC?ST_FM_LOAD_DESC:ST_LOAD_EEPROM;
+                end
             end
         end
 
@@ -1902,7 +2081,7 @@ always @(posedge clk or negedge reset_n) begin
 
         ST_FLUSH_PIPELINE: begin
             if (flush_cnt == FLUSH_MAX) begin
-                state <= ST_PRE_UNFREEZE;
+                state <= do_save ? ST_PRE_UNFREEZE : ST_FM_APPLY;
             end else begin
                 flush_cnt <= flush_cnt + 20'd1;
             end

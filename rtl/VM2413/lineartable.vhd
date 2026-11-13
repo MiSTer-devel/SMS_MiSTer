@@ -42,7 +42,7 @@ entity linear_table_mul is
     port (
         i0      : in    std_logic_vector( 5 downto 0 );     --  •„†–³‚µ 6bit (¬”•”  6bit)
         i1      : in    std_logic_vector( 9 downto 0 );     --  •„†•t‚«10bit (®”•” 10bit)
-        o       : out   std_logic_vector( 9 downto 0 )      --  •„†•t‚«10bit (®”•” 10bit)
+        o       : buffer   std_logic_vector( 9 downto 0 )      --  •„†•t‚«10bit (®”•” 10bit)
     );
 end linear_table_mul;
 
@@ -65,7 +65,7 @@ entity LinearTable is
         clk     : in    std_logic;
         reset   : in    std_logic;
         addr    : in    std_logic_vector( 13 downto 0 );    --  ®”•” 8bit, ¬”•” 6bit
-        data    : out   signed_li_type
+        data    : buffer   signed_li_type
     );
 end LinearTable;
 
@@ -75,7 +75,7 @@ architecture rtl of lineartable is
         port (
             i0      : in    std_logic_vector( 5 downto 0 );
             i1      : in    std_logic_vector( 9 downto 0 );
-            o       : out   std_logic_vector( 9 downto 0 )
+            o       : buffer   std_logic_vector( 9 downto 0 )
         );
     end component;
 
