@@ -38,6 +38,7 @@ library ieee;
     use ieee.std_logic_unsigned.all;
     use work.vm2413.all;
 
+use ieee.std_logic_arith.conv_std_logic_vector;
 entity Operator is
     port (
         clk     : in    std_logic;
@@ -55,11 +56,20 @@ entity Operator is
         pgout   : in    std_logic_vector( 17 downto 0 );    --  整数部 9bit, 小数部 9bit
         egout   : in    std_logic_vector( 12 downto 0 );
 
-        faddr   : out   CH_TYPE;
+        faddr   : buffer   CH_TYPE;
         fdata   : in    SIGNED_LI_TYPE;
 
-        opout   : out   std_logic_vector( 13 downto 0 )     -- 整数部 8bit, 小数部 6bit
-    );
+        opout   : buffer   std_logic_vector( 13 downto 0 )     -- 整数部 8bit, 小数部 6bit
+    ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
 end Operator;
 
 architecture rtl of Operator is
@@ -70,8 +80,17 @@ architecture rtl of Operator is
             clkena  : in    std_logic;
             wf      : in    std_logic;
             addr    : in    std_logic_vector( 17 downto 0 );    --  整数部 9bit, 小数部 9bit
-            data    : out   std_logic_vector( 13 downto 0 )     --  整数部 8bit, 小数部 6bit
-        );
+            data    : buffer   std_logic_vector( 13 downto 0 )     --  整数部 8bit, 小数部 6bit
+        ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
     end component;
 
     signal addr         : std_logic_vector( 17 downto 0 );
@@ -81,6 +100,10 @@ architecture rtl of Operator is
     signal w_modula_c   : std_logic_vector( LI_TYPE'high + 2 + 9 downto 0 );
     signal w_modula     : std_logic_vector( LI_TYPE'high + 2 + 9 downto 0 );
     signal ff_egout     : std_logic_vector( 12 downto 0 );
+    signal ss_local_data : std_logic_vector(31 downto 0) := (others=>'0');
+    signal ss_u_sine_table_data : std_logic_vector(31 downto 0);
+    signal ss_u_sine_table_ready : std_logic;
+
 begin
 
     --  サイン波（対数表現）--------------------------------------------------
@@ -98,7 +121,8 @@ begin
         wf      => wf,
         addr    => addr,
         data    => data
-    );
+    ,
+ss_hold=>ss_hold, ss_addr=>ss_addr, ss_read=>ss_read, ss_write=>ss_write, ss_wdata=>ss_wdata, ss_rdata=>ss_u_sine_table_data, ss_initialized=>ss_u_sine_table_ready);
 
     w_is_carrier    <=  slot(0);
     w_modula_m      <=  (others => '0') when( fb = "000" )else
@@ -107,24 +131,71 @@ begin
     w_modula        <=  w_modula_c  when( w_is_carrier = '1' )else
                         w_modula_m;
 
-    process( reset, clk )
+    process(clk,reset)
+
         variable opout_buf  : std_logic_vector( 13 downto 0 );  --  整数部 8bit, 小数部 6bit
-    begin
-        if( reset = '1' )then
+
+variable ss_v_addr : std_logic_vector(17 downto 0);
+variable ss_v_ff_egout : std_logic_vector(12 downto 0);
+variable ss_v_faddr : std_logic_vector(3 downto 0);
+variable ss_v_opout : std_logic_vector(13 downto 0);
+variable ss_response : std_logic_vector(31 downto 0);
+begin
+if reset='1' then
+ss_local_data <= (others=>'0');
+
             opout       <= (others => '0');
             ff_egout    <= (others => '0');
-        elsif rising_edge(clk) then
+
+elsif rising_edge(clk) then
+
+ss_response := (others=>'0');
+if ss_hold='1' and (ss_read='1' or ss_write='1') then
+ss_v_addr := addr;
+ss_v_ff_egout := ff_egout;
+ss_v_faddr := conv_std_logic_vector(faddr,4);
+ss_v_opout := opout;
+
+if ss_read='1' then
+case conv_integer(ss_addr) is
+when 96 =>
+ss_response(17 downto 0) := addr(17 downto 0);
+ss_response(30 downto 18) := ff_egout(12 downto 0);
+when 97 =>
+ss_response(3 downto 0) := ss_v_faddr(3 downto 0);
+ss_response(17 downto 4) := opout(13 downto 0);
+when others => null; end case;
+end if;
+if ss_write='1' then
+case conv_integer(ss_addr) is
+when 96 =>
+ss_v_addr(17 downto 0) := ss_wdata(17 downto 0);
+addr <= ss_v_addr;
+ss_v_ff_egout(12 downto 0) := ss_wdata(30 downto 18);
+ff_egout <= ss_v_ff_egout;
+when 97 =>
+ss_v_faddr(3 downto 0) := ss_wdata(3 downto 0);
+faddr <= conv_integer(ss_v_faddr);
+ss_v_opout(13 downto 0) := ss_wdata(17 downto 4);
+opout <= ss_v_opout;
+when others => null; end case;
+end if;
+end if;
+ss_local_data <= ss_response;
+
+if ss_hold='0' then
+
             if( clkena = '1' )then
                 if( stage = "00" )then
-                    --  サイン波の参照アドレス（位相）を決定するステージ
-                    if(    rhythm = '1' and ( slot = 14 or slot = 17 ))then -- HH or CYM
+
+                    if(    rhythm = '1' and ( slot = 14 or slot = 17 ))then
                         addr <= (not noise) & "01111111" & "000000000";
-                    elsif( rhythm = '1' and slot = 15 )then -- SD
+                    elsif( rhythm = '1' and slot = 15 )then
                         addr <= (not pgout(pgout'high)) & "01111111" & "000000000";
-                    elsif( rhythm = '1' and slot = 16 )then -- TOM
+                    elsif( rhythm = '1' and slot = 16 )then
                         addr <= pgout;
                     else
-                        if( fdata.sign = '0' )then      -- modula は fdata の絶対値をシフトした値だから、ここで符号処理してる
+                        if( fdata.sign = '0' )then
                             addr <= pgout + w_modula(pgout'range);
                         else
                             addr <= pgout - w_modula(pgout'range);
@@ -132,29 +203,36 @@ begin
                     end if;
 
                 elsif( stage = "01" )then
-                    --  決定された参照アドレスが u_sine_table へ供給されるステージ
+
                 elsif( stage = "10" )then
                     ff_egout <= egout;
 
-                    --  フィードバックメモリのアドレスを決めるステージ
+
                     if( slot(0) = '1' )then
                         if( conv_integer(slot)/2 = 8 )then
                             faddr <= 0;
                         else
-                            faddr <= conv_integer(slot)/2 + 1;  --  次のモジュレータのアドレスなので +1
+                            faddr <= conv_integer(slot)/2 + 1;
                         end if;
                     end if;
                 elsif( stage = "11" )then
-                    -- SineTable からデータが出てくるステージ
+
                     if ( ( '0' & ff_egout ) + ('0'& data(12 downto 0) ) ) < "10000000000000" then
                         opout_buf := data(13) & (ff_egout + data(12 downto 0) );
                     else
                         opout_buf := data(13) & "1111111111111";
                     end if;
                     opout <= opout_buf;
-                    --  決定されたフィードバックメモリアドレスが FeedBackMemory へ供給されるステージ
+
                 end if;
             end if;
-        end if;
-    end process;
+
+
+end if;
+end if;
+end process;
+
+ss_rdata <= ss_local_data or ss_u_sine_table_data;
+ss_initialized <= '1' and ss_u_sine_table_ready;
+
 end rtl;

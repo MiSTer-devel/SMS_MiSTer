@@ -136,15 +136,24 @@ package VM2413 is
 
   component Opll port(
     XIN     : in std_logic;
-    XOUT    : out std_logic;
+    XOUT    : buffer std_logic;
     XENA    : in std_logic;
     D       : in std_logic_vector(7 downto 0);
     A       : in std_logic;
     CS_n    : in std_logic;
     WE_n    : in std_logic;
     IC_n    : in std_logic;
-    mixout  : out std_logic_vector(13 downto 0)
-  );
+    mixout  : buffer std_logic_vector(13 downto 0)
+  ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
   end component;
 
 end VM2413;

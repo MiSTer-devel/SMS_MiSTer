@@ -39,6 +39,9 @@ assign BUTTONS   = osd_btn;
 assign VGA_SCALER= 0;
 assign VGA_DISABLE = 0;
 wire ss_freeze;
+wire [7:0] ss_fm_addr;
+wire [31:0] ss_fm_rdata, ss_fm_wdata;
+wire ss_fm_read, ss_fm_write, ss_fm_initialized, ss_fm_legacy_reset, ss_fm_initialization_run;
 reg  ss_freeze_r;
 always @(posedge clk_sys) begin
 	ss_freeze_r <= ss_freeze;
@@ -970,7 +973,10 @@ wire  [7:0] ss_nvram_WD;   // DMA write data
 system #(63) system
 (
 	.clk_sys(clk_sys),
-	.ss_freeze(ss_freeze),
+	.fm_state_addr(ss_fm_addr), .fm_state_read(ss_fm_read), .fm_state_write(ss_fm_write),
+    .fm_state_wdata(ss_fm_wdata), .fm_state_rdata(ss_fm_rdata), .fm_initialized(ss_fm_initialized),
+    .fm_legacy_reset(ss_fm_legacy_reset), .fm_initialization_run(ss_fm_initialization_run),
+    .ss_freeze(ss_freeze),
 	.ce_cpu(ss_freeze ? 1'b0 : (ce_cpu & ~se_pause_gate)),
 	.ce_vdp(ss_freeze ? 1'b0 : ce_vdp),
 	.ce_pix(ss_freeze ? 1'b0 : ce_pix),
@@ -1201,7 +1207,10 @@ savestates savestates_inst (
 	.ss_slot         (ss_slot),
 	.ss_bios_mode    (ss_bios_mode),
 	.ss_game_id      (ss_game_id),
-	.ss_freeze       (ss_freeze),
+	.fm_state_addr(ss_fm_addr), .fm_state_read(ss_fm_read), .fm_state_write(ss_fm_write),
+    .fm_state_wdata(ss_fm_wdata), .fm_state_rdata(ss_fm_rdata), .fm_initialized(ss_fm_initialized),
+    .fm_legacy_reset(ss_fm_legacy_reset), .fm_initialization_run(ss_fm_initialization_run),
+    .ss_freeze(ss_freeze),
 	.vblank          (VBlank),
 	.x               (x),
 	// Z80
