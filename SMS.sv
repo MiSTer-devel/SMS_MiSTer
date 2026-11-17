@@ -1288,6 +1288,8 @@ savestates savestates_inst (
 	.nvram_WD        (ss_nvram_WD),
 	// System E mode (enables VDP2/PSG2/VRAM2 save-restore)
 	.systeme         (systeme),
+	.sc3000_mode     (sc3000_en),
+	.eeprom_present  (eeprom_active),
 	// VDP2 registers (System E)
 	.vdp2_regs       (ss_vdp2_regs),
 	.vdp2_regs_in    (ss_vdp2_regs_in),

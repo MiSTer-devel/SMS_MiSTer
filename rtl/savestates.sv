@@ -15,13 +15,15 @@
 //   Words 0x101-0x900: VRAM 16KB       (2048 × 64-bit words)
 //   Words 0x901-0xD00: WRAM 8KB        (1024 × 64-bit words) [SMS/GG]
 //   Words 0x901-0x1100: WRAM 16KB      (2048 × 64-bit words) [System E; reuses NVRAM region]
-//   Words 0xD01-0x1100: NVRAM 8KB (Dahjee A only; mutually exclusive with System E)
+//   Words 0xD01-0x1D00: complete physical Sega SRAM 32KB when explicitly tagged;
+//                        legacy 8/16/32KB NVRAM and System E layouts are preserved.
 //   Words 0x1101-0x1900: VRAM2 16KB    (System E only; 2048 × 64-bit words)
 //   Words 0x1901-0x2100: VDP1 passive 16KB (System E only; inline; written to SD)
 //   Words 0x2101-0x2900: VDP2 passive 16KB (System E only; inline; written to SD)
 //
 //   FM savestate format v1: 0x2997 descriptor; 0x2998..0x29c9 = 100 32-bit state words.
-//   Video word 0x01a upper bits: [63:40]=0x484311, [39:22]=0.
+//   Video word 0x01a: [63:40]=0x484311 (FM) or 0x484314 (FM+full SRAM),
+//   [39:22]=0. SRAM completion additionally requires the audio commit marker.
 //
 // Slot size = 0x3000 words = 96KB.  Up to 4 slots.
 // Base word address = 29'h07C00000 + slot * 29'h3000
@@ -142,6 +144,8 @@ module savestates (
 
     // ---- System E mode (enables VDP2 / PSG2 / VRAM2 save-restore) ----
     input             systeme,
+    input             sc3000_mode,    // avoid changing SC cartridge RAM handling
+    input             eeprom_present, // EEPROM shares the physical NVRAM backing
 
     // ---- VDP2 registers (System E second VDP) ----
     input     [127:0] vdp2_regs,
@@ -293,6 +297,7 @@ localparam ST_SAVE_AUDIO_INVALID = 7'd66, ST_SAVE_AUDIO_PAYLOAD = 7'd67,
 // Upper video-word tag discovers this extension; untagged images never read it.
 localparam [28:0] FM_DESC_ADDR=29'h2997, FM_DATA_ADDR=29'h2998;
 localparam [23:0] FM_MAGIC = 24'h484311;
+localparam [23:0] FM_SRAM_MAGIC = 24'h484314; // independently versioned full-SRAM format
 // FM descriptor: format version 1, 100 32-bit state words.
 localparam [63:0] FM_DESC = {16'd100,8'd1,8'd1,32'h464d5331};
 localparam ST_FM_CAPTURE=7'd111, ST_FM_SAVE_FETCH=7'd112, ST_FM_SAVE_WAIT=7'd113,
@@ -300,9 +305,12 @@ localparam ST_FM_CAPTURE=7'd111, ST_FM_SAVE_FETCH=7'd112, ST_FM_SAVE_WAIT=7'd113
  ST_FM_LOAD=7'd117, ST_FM_LOAD_STORE=7'd118, ST_FM_LOAD_NEXT=7'd119,
  ST_FM_APPLY=7'd120, ST_FM_APPLY_WAIT=7'd121;
 reg fm_capture,fm_apply,fm_legacy,fm_bulk_read,fm_bulk_write,has_fm;
+reg has_full_sram;
 reg [6:0] fm_word;
 // Shared DDRAM response latch, declared before the FM transport connection.
 reg [63:0] dout_latch;
+wire fm_video_tag = dout_latch[63:40] == FM_MAGIC ||
+                    dout_latch[63:40] == FM_SRAM_MAGIC;
 wire [63:0] fm_bulk_rdata;
 wire fm_done,fm_busy;
 opll_snapshot fm_snapshot(.clk(clk),.reset_n(reset_n),.capture(fm_capture),.apply_state(fm_apply),.legacy(fm_legacy),
@@ -426,19 +434,24 @@ wire [63:0] audio_descriptor = {15'd0, audio_words, audio_phase_snap,
                                audio_div_snap, systeme, 8'd1, AUDIO_MAGIC};
 
 
+reg do_save; // 1=save, 0=load
 // NVRAM size calculation helpers
 wire evolution_state = evolution_snap[31:16] == 16'hE132;
 wire has_nvram_8k  = !evolution_state && (mapper_snap[48] | mapper_snap[53]); // Dahjee A / Codemasters CME
 wire has_nvram_16k = !evolution_state && mapper_snap[50];                    // Sega mapper nvram_e
 wire has_nvram_32k = !evolution_state && (mapper_snap[51] | mapper_snap[52] | mapper_snap[61]); // nvram_ex / nvram_p / The Castle
 wire has_nvram     = has_nvram_8k | has_nvram_16k | has_nvram_32k;
+// Physical memory persists even when the mapper currently hides it.
+// Do not touch SC, EEPROM, System E or Evolution's distinct backings.
+wire sram_eligible = !systeme && !sc3000_mode && !eeprom_present && !evolution_state;
+wire transfer_full_sram = sram_eligible && (do_save || has_full_sram);
+wire transfer_nvram = transfer_full_sram || has_nvram;
 
-wire [14:0] nvram_size_minus_1 = has_nvram_32k ? 15'd32767 :
+wire [14:0] nvram_size_minus_1 = (transfer_full_sram || has_nvram_32k) ? 15'd32767 :
                                  has_nvram_16k ? 15'd16383 :
                                                  15'd8191;
 
 reg [6:0]  state;
-reg        do_save;     // 1=save, 0=load
 reg [1:0]  cur_slot;
 reg [28:0] base_addr;
 reg [31:0] ss_change_det; // MiSTer framework change detector (increment to trigger save-to-disk)
@@ -581,7 +594,7 @@ always @(*) begin
         ST_FM_SAVE_DESC: if(!DDRAM_BUSY) ddram_cmd_write(base_addr+FM_DESC_ADDR,FM_DESC,8'hff);
         ST_FM_LOAD_DESC: if(!DDRAM_DOUT_READY && !dout_expected && !DDRAM_BUSY && dout_latch==FM_DESC) ddram_cmd_read(base_addr+FM_DATA_ADDR);
         ST_FM_LOAD_NEXT: if(!DDRAM_BUSY) ddram_cmd_read(base_addr+(fm_word==49?29'h01b:FM_DATA_ADDR+fm_word+29'd1));
-        ST_WAIT_RESTORE_BOUNDARY: if (! DDRAM_BUSY) if (is_old_format ? mapper_snap [ 48 ] : has_nvram) ddram_cmd_read ( base_addr + 29'h0D01 ) ;
+        ST_WAIT_RESTORE_BOUNDARY: if (! DDRAM_BUSY) if (is_old_format ? mapper_snap [ 48 ] : transfer_nvram) ddram_cmd_read ( base_addr + 29'h0D01 ) ;
         ST_SAVE_HDR: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd1 , { cur_game_id , cur_magic } , 8'hFF ) ;
         ST_SAVE_CPU0: begin
             if (! DDRAM_BUSY) begin
@@ -618,7 +631,7 @@ always @(*) begin
         ST_SAVE_PSG: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd14 , { 8'd0 , psg_snap } , 8'hFF ) ;
         ST_SAVE_MAPPER: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'd15 , mapper_snap , 8'hFF ) ;
         ST_SAVE_IO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h019 , { evolution_snap [ 31 : 0 ] , io_snap } , 8'hFF ) ;
-        ST_SAVE_VIDEO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01a , { FM_MAGIC, 18'd0, video_snap } , 8'hFF ) ;
+        ST_SAVE_VIDEO: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01a , { (sram_eligible ? FM_SRAM_MAGIC : FM_MAGIC), 18'd0, video_snap } , 8'hFF ) ;
         ST_SAVE_EEPROM: if (! DDRAM_BUSY) ddram_cmd_write ( base_addr + 29'h01b , evolution_snap [ 31 : 16 ] == 16'hE132 ? evolution_snap [ 95 : 32 ] : eeprom_snap , 8'hFF ) ;
         ST_SAVE_VDP2REG: begin
             if (! DDRAM_BUSY) begin
@@ -745,8 +758,9 @@ always @(*) begin
         end
         ST_LOAD_IO: if (!(DDRAM_DOUT_READY && dout_expected)) if (! dout_expected && ! DDRAM_BUSY) ddram_cmd_read ( base_addr + 29'h01a ) ;
         ST_LOAD_VIDEO: if (!(DDRAM_DOUT_READY && dout_expected)) if (!dout_expected && !DDRAM_BUSY)
-            if(dout_latch[63:40]!=FM_MAGIC || dout_latch[39:22]==0)
-                ddram_cmd_read(base_addr+(dout_latch[63:40]==FM_MAGIC?FM_DESC_ADDR:29'h01b));
+            if(!fm_video_tag || (dout_latch[39:22]==0 && has_audio_ext &&
+               (dout_latch[63:40]!=FM_SRAM_MAGIC || (!is_old_format && sram_eligible))))
+                ddram_cmd_read(base_addr+(fm_video_tag?FM_DESC_ADDR:29'h01b));
         ST_LOAD_EEPROM: begin
             if (!(DDRAM_DOUT_READY && dout_expected)) begin
                 if (! dout_expected && ! DDRAM_BUSY) begin
@@ -868,7 +882,7 @@ endtask
 // -----------------------------------------------------------------------
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
-        fm_capture<=0;fm_apply<=0;fm_legacy<=0;fm_bulk_read<=0;fm_bulk_write<=0;has_fm<=0;fm_word<=0;
+        fm_capture<=0;fm_apply<=0;fm_legacy<=0;fm_bulk_read<=0;fm_bulk_write<=0;has_fm<=0;has_full_sram<=0;fm_word<=0;
         state           <= ST_IDLE;
         ss_freeze       <= 0;
         ss_change_det   <= 0;
@@ -956,7 +970,7 @@ always @(posedge clk or negedge reset_n) begin
         // ---------------------------------------------------------------
         ST_IDLE: begin
             ss_freeze   <= 0;
-            is_old_format <= 0; has_fm<=0;
+            is_old_format <= 0; has_fm<=0; has_full_sram<=0;
             has_audio_ext <= 0;
              if (op_cooldown != 0)
                  op_cooldown <= op_cooldown - 28'd1;
@@ -1077,7 +1091,7 @@ always @(posedge clk or negedge reset_n) begin
                 // Old format only ever wrote NVRAM for Dahjee-A (mapper_snap[48]);
                 // reading the broadened has_nvram region for other mappers would
                 // DMA an unwritten slot area over live cartridge SRAM.
-                if (is_old_format ? mapper_snap[48] : has_nvram) begin
+                if (is_old_format ? mapper_snap[48] : transfer_nvram) begin
                     nvram_load_addr   <= 0;
                     nvram_byte_cnt    <= 0;
                     nvram_load_active <= 0;
@@ -1207,7 +1221,7 @@ always @(posedge clk or negedge reset_n) begin
 
         ST_SAVE_VIDEO: begin
             if (!DDRAM_BUSY) begin
-                ddram_write(base_addr + 29'h01a, {FM_MAGIC, 18'd0, video_snap}, 8'hFF);
+                ddram_write(base_addr + 29'h01a, {(sram_eligible ? FM_SRAM_MAGIC : FM_MAGIC), 18'd0, video_snap}, 8'hFF);
                 fm_word<=0; state<=ST_FM_SAVE_FETCH;
             end
         end
@@ -1420,8 +1434,8 @@ always @(posedge clk or negedge reset_n) begin
                             word_cnt       <= 0;
                             vram_d_latched <= 0;
                             state          <= ST_SAVE_VRAM2;
-                        end else if (has_nvram) begin
-                            // Save NVRAM (up to 32KB)
+                        end else if (transfer_nvram) begin
+                            // Save full physical SRAM or existing NVRAM footprint
                             nvram_save_addr <= 0;
                             nvram_byte_cnt  <= 0;
                             nvram_word_buf  <= 0;
@@ -1773,11 +1787,17 @@ always @(posedge clk or negedge reset_n) begin
                 dout_latch    <= DDRAM_DOUT;
             end else if (!dout_expected && !DDRAM_BUSY) begin
                 video_snap       <= dout_latch[21:0];
-                has_fm <= dout_latch[63:40]==FM_MAGIC;
-                if(dout_latch[63:40]==FM_MAGIC && dout_latch[39:22]!=0) state<=ST_ERROR;
+                has_fm <= fm_video_tag;
+                has_full_sram <= dout_latch[63:40]==FM_SRAM_MAGIC;
+                // Both owned FM tags require the audio completion commit. An
+                // interrupted overwrite can still have the older FM-only tag.
+                // Untagged legacy images retain their existing fallback path.
+                if ((fm_video_tag && (dout_latch[39:22]!=0 || !has_audio_ext)) ||
+                    (dout_latch[63:40]==FM_SRAM_MAGIC &&
+                     (is_old_format || !sram_eligible))) state<=ST_ERROR;
                 else begin
-                    ddram_read(base_addr+(dout_latch[63:40]==FM_MAGIC?FM_DESC_ADDR:29'h01b));
-                    state<=dout_latch[63:40]==FM_MAGIC?ST_FM_LOAD_DESC:ST_LOAD_EEPROM;
+                    ddram_read(base_addr+(fm_video_tag?FM_DESC_ADDR:29'h01b));
+                    state<=fm_video_tag?ST_FM_LOAD_DESC:ST_LOAD_EEPROM;
                 end
             end
         end
