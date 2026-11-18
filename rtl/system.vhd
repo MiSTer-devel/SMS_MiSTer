@@ -214,6 +214,12 @@ entity system is
 		-- System E hardware pause: gates Z80 clock independently of ce_pix
 		-- (ce_pix keeps running so VDP scanout and sync are unaffected)
 		se_pause      : in  STD_LOGIC := '0';
+		fm_state_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        fm_state_read, fm_state_write : in std_logic := '0';
+        fm_state_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        fm_state_rdata : out std_logic_vector(31 downto 0);
+        fm_initialized : out std_logic;
+        fm_legacy_reset, fm_initialization_run : in std_logic := '0';
 		ss_freeze     : in  STD_LOGIC := '0'
 	);
 end system;
@@ -331,6 +337,7 @@ architecture Behavioral of system is
 	alias FM_adj:				std_logic is FM_out(12);
 	signal fm_a:            std_logic;
 	signal fm_d:            std_logic_vector(7 downto 0);
+    signal fm_local_rdata, fm_wrapper_rdata : std_logic_vector(31 downto 0);
 	signal fm_WR_n:	   	std_logic;
 
 	signal mix_inL:			std_logic_vector(12 downto 0);
@@ -793,17 +800,23 @@ begin
 		a        => fm_a,
 		cs_n     => '0',
 		we_n		=> '0',
-		ic_n		=> RESET_n,
-		mixout   => FM_out
+		ic_n		=> RESET_n and not fm_legacy_reset,
+		mixout   => FM_out,
+        ss_hold => ss_freeze and not fm_initialization_run,
+        ss_addr => fm_state_addr, ss_read => fm_state_read,
+        ss_write => fm_state_write, ss_wdata => fm_state_wdata,
+        ss_rdata => fm_local_rdata, ss_initialized => fm_initialized
 	);
 	
 	process (clk_sys)
 	begin
 		if rising_edge(clk_sys) then
-			if RESET_n='0' then
+			if RESET_n='0' or fm_legacy_reset='1' then
 				fm_d <= (others => '0');
 				fm_a <= '0';
-			elsif ss_freeze = '0' and fm_WR_n='0' then
+			elsif ss_freeze='1' and fm_state_write='1' and fm_state_addr=x"4c" then
+                fm_a <= fm_state_wdata(0); fm_d <= fm_state_wdata(8 downto 1);
+            elsif ss_freeze = '0' and fm_WR_n='0' then
 				fm_d <= D_in;
 				fm_a <= A(0);
 			end if;
@@ -811,6 +824,17 @@ begin
 	end process;
 	
 	
+fm_state_rdata <= fm_local_rdata or fm_wrapper_rdata;
+    process(clk_sys)
+    begin
+        if rising_edge(clk_sys) then
+            fm_wrapper_rdata <= (others=>'0');
+            if ss_freeze='1' and fm_state_read='1' and fm_state_addr=x"4c" then
+                fm_wrapper_rdata <= (31 downto 9=>'0') & fm_d & fm_a;
+            end if;
+        end if;
+    end process;
+
 -- AMR - Clamped volume boosting - if the top two bits match, truncate the topmost bit.
 -- If the top two bits don't match, duplicate the second bit across the output.
 

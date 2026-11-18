@@ -34,6 +34,7 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use ieee.std_logic_arith.all;
 use WORK.VM2413.ALL;
 
+use ieee.std_logic_arith.conv_std_logic_vector;
 entity TemporalMixer is
   port (
     clk    : in std_logic;
@@ -45,11 +46,20 @@ entity TemporalMixer is
 
     rhythm : in std_logic;
 
-    maddr : out SLOT_TYPE;
+    maddr : buffer SLOT_TYPE;
     mdata : in SIGNED_LI_TYPE;
 
-    mixout : out std_logic_vector(13 downto 0)
-  );
+    mixout : buffer std_logic_vector(13 downto 0)
+  ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
 end TemporalMixer;
 
 architecture RTL of TemporalMixer is
@@ -57,40 +67,51 @@ architecture RTL of TemporalMixer is
   signal mute : std_logic;
   signal mix  : std_logic_vector(13 downto 0);
 
+    signal ss_local_data : std_logic_vector(31 downto 0) := (others=>'0');
+
 begin
 
-  process (clk, reset)
-  begin
+  process(clk,reset)
 
-    if reset = '1' then
+
+begin
+if reset='1' then
+ss_local_data <= (others=>'0');
+
 
       maddr  <= (others => '0');
       mute   <= '1';
 		mix    <= (others =>'0');
 		mixout <= (others =>'0');
 
-    elsif rising_edge(clk) then if clkena='1' then
+
+elsif rising_edge(clk) then
+
+ss_local_data <= (others=>'0');
+
+if ss_hold='0' then
+ if clkena='1' then
 
       if stage = 0 then
 
         if rhythm = '0' then
 
           case slot is
-            when "00000" => maddr <= "00001"; mute <='0'; -- CH0
-            when "00001" => maddr <= "00011"; mute <='0'; -- CH1
-            when "00010" => maddr <= "00101"; mute <='0'; -- CH2
+            when "00000" => maddr <= "00001"; mute <='0';
+            when "00001" => maddr <= "00011"; mute <='0';
+            when "00010" => maddr <= "00101"; mute <='0';
             when "00011" => mute <= '1';
             when "00100" => mute <= '1';
             when "00101" => mute <= '1';
-            when "00110" => maddr <= "00111"; mute<='0'; -- CH3
-            when "00111" => maddr <= "01001"; mute<='0'; -- CH4
-            when "01000" => maddr <= "01011"; mute<='0'; -- CH5
+            when "00110" => maddr <= "00111"; mute<='0';
+            when "00111" => maddr <= "01001"; mute<='0';
+            when "01000" => maddr <= "01011"; mute<='0';
             when "01001" => mute <= '1';
             when "01010" => mute <= '1';
             when "01011" => mute <= '1';
-            when "01100" => maddr <= "01101"; mute<='0'; -- CH6
-            when "01101" => maddr <= "01111"; mute<='0'; -- CH7
-            when "01110" => maddr <= "10001"; mute<='0'; -- CH8
+            when "01100" => maddr <= "01101"; mute<='0';
+            when "01101" => maddr <= "01111"; mute<='0';
+            when "01110" => maddr <= "10001"; mute<='0';
             when "01111" => mute <= '1';
             when "10000" => mute <= '1';
             when "10001" => mute <= '1';
@@ -100,23 +121,23 @@ begin
         else
 
           case slot is
-            when "00000" => maddr <= "00001"; mute <='0'; -- CH0
-            when "00001" => maddr <= "00011"; mute <='0'; -- CH1
-            when "00010" => maddr <= "00101"; mute <='0'; -- CH2
-            when "00011" => maddr <= "01111"; mute <='0'; -- SD
-            when "00100" => maddr <= "10001"; mute <='0'; -- CYM
+            when "00000" => maddr <= "00001"; mute <='0';
+            when "00001" => maddr <= "00011"; mute <='0';
+            when "00010" => maddr <= "00101"; mute <='0';
+            when "00011" => maddr <= "01111"; mute <='0';
+            when "00100" => maddr <= "10001"; mute <='0';
             when "00101" =>                   mute <='1';
-            when "00110" => maddr <= "00111"; mute <='0'; -- CH3
-            when "00111" => maddr <= "01001"; mute <='0'; -- CH4
-            when "01000" => maddr <= "01011"; mute <='0'; -- CH5
-            when "01001" => maddr <= "01110"; mute <='0'; -- HH
-            when "01010" => maddr <= "10000"; mute <='0'; -- TOM
-            when "01011" => maddr <= "01101"; mute <='0'; -- BD
-            when "01100" => maddr <= "01111"; mute <='0'; -- SD
-            when "01101" => maddr <= "10001"; mute <='0'; -- CYM
-            when "01110" => maddr <= "01110"; mute <='0'; -- HH
-            when "01111" => maddr <= "10000"; mute <='0'; -- TOM
-            when "10000" => maddr <= "01101"; mute <='0'; -- BD
+            when "00110" => maddr <= "00111"; mute <='0';
+            when "00111" => maddr <= "01001"; mute <='0';
+            when "01000" => maddr <= "01011"; mute <='0';
+            when "01001" => maddr <= "01110"; mute <='0';
+            when "01010" => maddr <= "10000"; mute <='0';
+            when "01011" => maddr <= "01101"; mute <='0';
+            when "01100" => maddr <= "01111"; mute <='0';
+            when "01101" => maddr <= "10001"; mute <='0';
+            when "01110" => maddr <= "01110"; mute <='0';
+            when "01111" => maddr <= "10000"; mute <='0';
+            when "10000" => maddr <= "01101"; mute <='0';
             when "10001" =>                   mute <='1';
             when others  =>                   mute <='1';
           end case;
@@ -141,8 +162,14 @@ begin
 
       end if;
 
-    end if; end if;
+    end if;
 
-  end process;
+end if;
+end if;
+end process;
 
-end RTL;
+
+ss_rdata <= ss_local_data;
+ss_initialized <= '1';
+
+end rtl;

@@ -67,6 +67,7 @@ library ieee;
     use ieee.std_logic_unsigned.all;
     use work.vm2413.all;
 
+use ieee.std_logic_arith.conv_std_logic_vector;
 entity controller is port (
 
     clk     : in    std_logic;
@@ -81,25 +82,34 @@ entity controller is port (
     data    : in    std_logic_vector( 7 downto 0 );
 
     -- output parameters for phasegenerator and envelopegenerator
-    am      : out   am_type;
-    pm      : out   pm_type;
-    wf      : out   wf_type;
-    ml      : out   ml_type;
-    tl      : out   db_type;
-    fb      : out   fb_type;
-    ar      : out   ar_type;
-    dr      : out   dr_type;
-    sl      : out   sl_type;
-    rr      : out   rr_type;
+    am      : buffer   am_type;
+    pm      : buffer   pm_type;
+    wf      : buffer   wf_type;
+    ml      : buffer   ml_type;
+    tl      : buffer   db_type;
+    fb      : buffer   fb_type;
+    ar      : buffer   ar_type;
+    dr      : buffer   dr_type;
+    sl      : buffer   sl_type;
+    rr      : buffer   rr_type;
 
-    blk     : out   blk_type;
-    fnum    : out   fnum_type;
-    rks     : out   rks_type;
+    blk     : buffer   blk_type;
+    fnum    : buffer   fnum_type;
+    rks     : buffer   rks_type;
 
-    key     : out   std_logic;
-    rhythm  : out   std_logic
+    key     : buffer   std_logic;
+    rhythm  : buffer   std_logic
 
-    -- slot_out : out slot_id
+    -- slot_out : buffer slot_id
+;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
 );
 end controller;
 
@@ -112,8 +122,17 @@ architecture rtl of controller is
             addr    : in    std_logic_vector(  3 downto 0 );
             wr      : in    std_logic;
             idata   : in    std_logic_vector( 23 downto 0 );
-            odata   : out   std_logic_vector( 23 downto 0 )
-        );
+            odata   : buffer   std_logic_vector( 23 downto 0 )
+        ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
     end component;
 
     component voicememory port (
@@ -123,8 +142,17 @@ architecture rtl of controller is
         wr       : in std_logic;
         rwaddr : in voice_id_type;
         roaddr : in voice_id_type;
-        odata   : out voice_type;
-        rodata : out voice_type );
+        odata   : buffer voice_type;
+        rodata : buffer voice_type ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
     end component;
 
     -- the array which caches instrument number of each channel.
@@ -159,6 +187,12 @@ architecture rtl of controller is
     signal w_channel            : std_logic_vector(  3 downto 0 );
 --  signal w_is_carrier         : std_logic;
 
+    signal ss_local_data : std_logic_vector(31 downto 0) := (others=>'0');
+    signal ss_u_register_memory_data : std_logic_vector(31 downto 0);
+    signal ss_u_register_memory_ready : std_logic;
+    signal ss_vmem_data : std_logic_vector(31 downto 0);
+    signal ss_vmem_ready : std_logic;
+
 begin   -- rtl
 
     --  レジスタ設定値を保持するためのメモリ
@@ -170,53 +204,21 @@ begin   -- rtl
         wr      => regs_wr,
         idata   => regs_wdata,
         odata   => regs_rdata
-    );
+    ,
+ss_hold=>ss_hold, ss_addr=>ss_addr, ss_read=>ss_read, ss_write=>ss_write, ss_wdata=>ss_wdata, ss_rdata=>ss_u_register_memory_data, ss_initialized=>ss_u_register_memory_ready);
 
     vmem : voicememory port map (
         clk, reset, user_voice_wdata, user_voice_wr, user_voice_addr, slot_voice_addr,
-        user_voice_rdata, slot_voice_data );
+        user_voice_rdata, slot_voice_data ,
+ss_hold,ss_addr,ss_read,ss_write,ss_wdata,ss_vmem_data,ss_vmem_ready);
 
     --  レジスタアドレスラッチ (第１ステージ)
-    process( reset, clk )
-    begin
-        if( reset = '1' )then
-            regs_addr   <= (others => '0');
-        elsif rising_edge(clk) then
-            if clkena='1' then
-                if( stage = "00" )then
-                    regs_addr <= slot( 4 downto 1 );
-                else
-                    --  hold
-                end if;
-            end if;
-        end if;
-    end process;
+    process(clk,reset)
 
-    --  現在のスロットの音色データ読み出しアドレスラッチ (第１ステージ)
-    process( reset, clk )
-    begin
-        if( reset = '1' )then
-            slot_voice_addr <= 0;
-        elsif rising_edge(clk) then
-            if clkena='1' then
-                if( stage = "00" )then
-                    if( rflag(5) = '1' and w_channel >= "0110" )then
-                        --  リズムモードで ch6 以降
-                        slot_voice_addr <= conv_integer(slot) - 12 + 32;
-                    else
-                        slot_voice_addr <= inst_cache(conv_integer(slot)/2) * 2 + conv_integer(slot) mod 2;
-                    end if;
-                else
-                    --  hold
-                end if;
-            end if;
-        end if;
-    end process;
 
-    w_channel       <= slot( 4 downto 1 );
---  w_is_carrier    <= slot( 0 );
 
-    process (clk, reset)
+
+
 
         variable kflag : std_logic;
         variable tll : std_logic_vector(db_type'high+1 downto 0);
@@ -231,9 +233,44 @@ begin   -- rtl
         variable extra_mode : std_logic;
         variable vindex : voice_id_type;
 
-    begin   -- process
 
-        if(reset = '1') then
+variable ss_v_inst_cache : std_logic_vector(35 downto 0);
+variable ss_v_regs_addr : std_logic_vector(3 downto 0);
+variable ss_v_slot_voice_addr : std_logic_vector(5 downto 0);
+variable ss_v_user_voice_addr : std_logic_vector(5 downto 0);
+variable ss_v_user_voice_wr : std_logic_vector(0 downto 0);
+variable ss_v_user_voice_wdata : std_logic_vector(35 downto 0);
+variable ss_v_regs_wr : std_logic_vector(0 downto 0);
+variable ss_v_regs_wdata : std_logic_vector(23 downto 0);
+variable ss_v_rflag : std_logic_vector(7 downto 0);
+variable ss_v_am : std_logic_vector(0 downto 0);
+variable ss_v_pm : std_logic_vector(0 downto 0);
+variable ss_v_wf : std_logic_vector(0 downto 0);
+variable ss_v_ml : std_logic_vector(3 downto 0);
+variable ss_v_tl : std_logic_vector(6 downto 0);
+variable ss_v_fb : std_logic_vector(2 downto 0);
+variable ss_v_ar : std_logic_vector(3 downto 0);
+variable ss_v_dr : std_logic_vector(3 downto 0);
+variable ss_v_sl : std_logic_vector(3 downto 0);
+variable ss_v_rr : std_logic_vector(3 downto 0);
+variable ss_v_blk : std_logic_vector(2 downto 0);
+variable ss_v_fnum : std_logic_vector(8 downto 0);
+variable ss_v_rks : std_logic_vector(3 downto 0);
+variable ss_v_key : std_logic_vector(0 downto 0);
+variable ss_v_rhythm : std_logic_vector(0 downto 0);
+variable ss_v_extra_mode : std_logic_vector(0 downto 0);
+variable ss_v_vindex : std_logic_vector(5 downto 0);
+variable ss_response : std_logic_vector(31 downto 0);
+begin
+if reset='1' then
+ss_local_data <= (others=>'0');
+
+            regs_addr   <= (others => '0');
+
+
+            slot_voice_addr <= 0;
+
+
 
             key <= '0';
             rhythm <= '0';
@@ -260,47 +297,234 @@ begin   -- rtl
             extra_mode := '0';
             vindex := 0;
 
-        elsif rising_edge(clk) then if clkena='1' then
+
+elsif rising_edge(clk) then
+
+ss_response := (others=>'0');
+if ss_hold='1' and (ss_read='1' or ss_write='1') then
+ss_v_inst_cache(3 downto 0) := conv_std_logic_vector(inst_cache(0),4);
+ss_v_inst_cache(7 downto 4) := conv_std_logic_vector(inst_cache(1),4);
+ss_v_inst_cache(11 downto 8) := conv_std_logic_vector(inst_cache(2),4);
+ss_v_inst_cache(15 downto 12) := conv_std_logic_vector(inst_cache(3),4);
+ss_v_inst_cache(19 downto 16) := conv_std_logic_vector(inst_cache(4),4);
+ss_v_inst_cache(23 downto 20) := conv_std_logic_vector(inst_cache(5),4);
+ss_v_inst_cache(27 downto 24) := conv_std_logic_vector(inst_cache(6),4);
+ss_v_inst_cache(31 downto 28) := conv_std_logic_vector(inst_cache(7),4);
+ss_v_inst_cache(35 downto 32) := conv_std_logic_vector(inst_cache(8),4);
+ss_v_regs_addr := regs_addr;
+ss_v_slot_voice_addr := conv_std_logic_vector(slot_voice_addr,6);
+ss_v_user_voice_addr := conv_std_logic_vector(user_voice_addr,6);
+ss_v_user_voice_wr := (0 => user_voice_wr);
+ss_v_user_voice_wdata := CONV_VOICE_VECTOR(user_voice_wdata);
+ss_v_regs_wr := (0 => regs_wr);
+ss_v_regs_wdata := regs_wdata;
+ss_v_rflag := rflag;
+ss_v_am := (0 => am);
+ss_v_pm := (0 => pm);
+ss_v_wf := (0 => wf);
+ss_v_ml := ml;
+ss_v_tl := tl;
+ss_v_fb := fb;
+ss_v_ar := ar;
+ss_v_dr := dr;
+ss_v_sl := sl;
+ss_v_rr := rr;
+ss_v_blk := blk;
+ss_v_fnum := fnum;
+ss_v_rks := rks;
+ss_v_key := (0 => key);
+ss_v_rhythm := (0 => rhythm);
+ss_v_extra_mode := (0 => extra_mode);
+ss_v_vindex := conv_std_logic_vector(vindex,6);
+
+if ss_read='1' then
+case conv_integer(ss_addr) is
+when 80 =>
+ss_response(31 downto 0) := ss_v_inst_cache(31 downto 0);
+when 81 =>
+ss_response(3 downto 0) := ss_v_inst_cache(35 downto 32);
+ss_response(7 downto 4) := regs_addr(3 downto 0);
+ss_response(13 downto 8) := ss_v_slot_voice_addr(5 downto 0);
+ss_response(14) := ss_v_user_voice_addr(0);
+ss_response(15) := user_voice_wr;
+when 82 =>
+ss_response(31 downto 0) := ss_v_user_voice_wdata(31 downto 0);
+when 83 =>
+ss_response(3 downto 0) := ss_v_user_voice_wdata(35 downto 32);
+ss_response(4) := regs_wr;
+ss_response(26 downto 5) := regs_wdata(23 downto 16) & regs_wdata(13 downto 0);
+when 84 =>
+ss_response(5 downto 0) := rflag(5 downto 0);
+ss_response(6) := am;
+ss_response(7) := pm;
+ss_response(8) := wf;
+ss_response(12 downto 9) := ml(3 downto 0);
+ss_response(19 downto 13) := tl(6 downto 0);
+ss_response(22 downto 20) := fb(2 downto 0);
+ss_response(26 downto 23) := ar(3 downto 0);
+ss_response(30 downto 27) := dr(3 downto 0);
+when 85 =>
+ss_response(3 downto 0) := sl(3 downto 0);
+ss_response(7 downto 4) := rr(3 downto 0);
+ss_response(10 downto 8) := blk(2 downto 0);
+ss_response(19 downto 11) := fnum(8 downto 0);
+ss_response(23 downto 20) := rks(3 downto 0);
+ss_response(24) := key;
+ss_response(25) := rhythm;
+ss_response(26) := extra_mode;
+ss_response(27) := ss_v_vindex(0);
+when others => null; end case;
+end if;
+if ss_write='1' then
+case conv_integer(ss_addr) is
+when 80 =>
+ss_v_inst_cache(31 downto 0) := ss_wdata(31 downto 0);
+inst_cache(0) <= conv_integer(ss_v_inst_cache(3 downto 0));
+inst_cache(1) <= conv_integer(ss_v_inst_cache(7 downto 4));
+inst_cache(2) <= conv_integer(ss_v_inst_cache(11 downto 8));
+inst_cache(3) <= conv_integer(ss_v_inst_cache(15 downto 12));
+inst_cache(4) <= conv_integer(ss_v_inst_cache(19 downto 16));
+inst_cache(5) <= conv_integer(ss_v_inst_cache(23 downto 20));
+inst_cache(6) <= conv_integer(ss_v_inst_cache(27 downto 24));
+inst_cache(7) <= conv_integer(ss_v_inst_cache(31 downto 28));
+inst_cache(8) <= conv_integer(ss_v_inst_cache(35 downto 32));
+when 81 =>
+ss_v_inst_cache(35 downto 32) := ss_wdata(3 downto 0);
+inst_cache(0) <= conv_integer(ss_v_inst_cache(3 downto 0));
+inst_cache(1) <= conv_integer(ss_v_inst_cache(7 downto 4));
+inst_cache(2) <= conv_integer(ss_v_inst_cache(11 downto 8));
+inst_cache(3) <= conv_integer(ss_v_inst_cache(15 downto 12));
+inst_cache(4) <= conv_integer(ss_v_inst_cache(19 downto 16));
+inst_cache(5) <= conv_integer(ss_v_inst_cache(23 downto 20));
+inst_cache(6) <= conv_integer(ss_v_inst_cache(27 downto 24));
+inst_cache(7) <= conv_integer(ss_v_inst_cache(31 downto 28));
+inst_cache(8) <= conv_integer(ss_v_inst_cache(35 downto 32));
+ss_v_regs_addr(3 downto 0) := ss_wdata(7 downto 4);
+regs_addr <= ss_v_regs_addr;
+ss_v_slot_voice_addr(5 downto 0) := ss_wdata(13 downto 8);
+slot_voice_addr <= conv_integer(ss_v_slot_voice_addr);
+ss_v_user_voice_addr(0) := ss_wdata(14);
+user_voice_addr <= conv_integer(ss_v_user_voice_addr);
+ss_v_user_voice_wr(0) := ss_wdata(15);
+user_voice_wr <= ss_v_user_voice_wr(0);
+when 82 =>
+ss_v_user_voice_wdata(31 downto 0) := ss_wdata(31 downto 0);
+user_voice_wdata <= CONV_VOICE(ss_v_user_voice_wdata);
+when 83 =>
+ss_v_user_voice_wdata(35 downto 32) := ss_wdata(3 downto 0);
+user_voice_wdata <= CONV_VOICE(ss_v_user_voice_wdata);
+ss_v_regs_wr(0) := ss_wdata(4);
+regs_wr <= ss_v_regs_wr(0);
+ss_v_regs_wdata(15 downto 14) := "00"; ss_v_regs_wdata(13 downto 0) := ss_wdata(18 downto 5); ss_v_regs_wdata(23 downto 16) := ss_wdata(26 downto 19);
+regs_wdata <= ss_v_regs_wdata;
+when 84 =>
+ss_v_rflag(5 downto 0) := ss_wdata(5 downto 0);
+rflag <= ss_v_rflag;
+ss_v_am(0) := ss_wdata(6);
+am <= ss_v_am(0);
+ss_v_pm(0) := ss_wdata(7);
+pm <= ss_v_pm(0);
+ss_v_wf(0) := ss_wdata(8);
+wf <= ss_v_wf(0);
+ss_v_ml(3 downto 0) := ss_wdata(12 downto 9);
+ml <= ss_v_ml;
+ss_v_tl(6 downto 0) := ss_wdata(19 downto 13);
+tl <= ss_v_tl;
+ss_v_fb(2 downto 0) := ss_wdata(22 downto 20);
+fb <= ss_v_fb;
+ss_v_ar(3 downto 0) := ss_wdata(26 downto 23);
+ar <= ss_v_ar;
+ss_v_dr(3 downto 0) := ss_wdata(30 downto 27);
+dr <= ss_v_dr;
+when 85 =>
+ss_v_sl(3 downto 0) := ss_wdata(3 downto 0);
+sl <= ss_v_sl;
+ss_v_rr(3 downto 0) := ss_wdata(7 downto 4);
+rr <= ss_v_rr;
+ss_v_blk(2 downto 0) := ss_wdata(10 downto 8);
+blk <= ss_v_blk;
+ss_v_fnum(8 downto 0) := ss_wdata(19 downto 11);
+fnum <= ss_v_fnum;
+ss_v_rks(3 downto 0) := ss_wdata(23 downto 20);
+rks <= ss_v_rks;
+ss_v_key(0) := ss_wdata(24);
+key <= ss_v_key(0);
+ss_v_rhythm(0) := ss_wdata(25);
+rhythm <= ss_v_rhythm(0);
+ss_v_extra_mode(0) := ss_wdata(26);
+extra_mode := ss_v_extra_mode(0);
+ss_v_vindex(0) := ss_wdata(27);
+vindex := conv_integer(ss_v_vindex);
+when others => null; end case;
+end if;
+end if;
+ss_local_data <= ss_response;
+
+if ss_hold='0' then
+
+            if clkena='1' then
+                if( stage = "00" )then
+                    regs_addr <= slot( 4 downto 1 );
+                else
+
+                end if;
+            end if;
+
+
+            if clkena='1' then
+                if( stage = "00" )then
+                    if( rflag(5) = '1' and w_channel >= "0110" )then
+
+                        slot_voice_addr <= conv_integer(slot) - 12 + 32;
+                    else
+                        slot_voice_addr <= inst_cache(conv_integer(slot)/2) * 2 + conv_integer(slot) mod 2;
+                    end if;
+                else
+
+                end if;
+            end if;
+
+ if clkena='1' then
 
             case stage is
-            --------------------------------------------------------------------------
-            -- 1st stage (setting up a read request for register and voice memories.)
-            --------------------------------------------------------------------------
+
+
+
             when "00" =>
 
---              if extra_mode = '0' then
-                    -- alternately read modulator or carrior.
+
+
                      vindex := conv_integer(slot) mod 2;
---              else
---                  if vindex = voice_id_type'high then
---                      vindex:= 0;
---                  else
---                      vindex:= vindex + 1;
---                  end if;
---              end if;
+
+
+
+
+
+
+
 
                 user_voice_addr <= vindex;
                 regs_wr <= '0';
                 user_voice_wr <='0';
 
-            --------------------------------------------------------------------------
-            -- 2nd stage (just a wait for register and voice memories.)
-            --------------------------------------------------------------------------
+
+
+
             when "01" =>
                 null;
 
-            --------------------------------------------------------------------------
-            -- 3rd stage (updating a register and voice parameters.)
-            --------------------------------------------------------------------------
+
+
+
             when "10" =>
 
                 if wr='1' then
 
---                  if ( extra_mode = '0' and conv_integer(addr) < 8 ) or
---                       ( extra_mode = '1' and ( conv_integer(addr) - 64 ) / 8 = vindex / 2 ) then
+
+
                     if( extra_mode = '0' and conv_integer(addr) < 8 )then
 
-                        -- update user voice parameter.
+
                         user_voice_tmp := user_voice_rdata;
 
                         case addr(2 downto 1) is
@@ -359,18 +583,18 @@ begin   -- rtl
                         if( conv_integer(addr(3 downto 0) ) = conv_integer(slot) / 2 ) then
                             regs_tmp := regs_rdata;
                             case addr( 5 downto 4 ) is
-                                when "01" => -- 10h～18h の場合（下位 F-Number）
-                                    regs_tmp(7 downto 0) := data;               --  F-Number
+                                when "01" =>
+                                    regs_tmp(7 downto 0) := data;
                                     regs_wr <= '1';
-                                when "10" => -- 20h～28h の場合（Sus, Key, Block, F-Number MSB）
-                                    regs_tmp(13) := data(5);                    --  Sus
-                                    regs_tmp(12) := data(4);                    --  Key
-                                    regs_tmp(11 downto 9) := data(3 downto 1);  --  Block
-                                    regs_tmp(8) := data(0);                     --  F-Number
+                                when "10" =>
+                                    regs_tmp(13) := data(5);
+                                    regs_tmp(12) := data(4);
+                                    regs_tmp(11 downto 9) := data(3 downto 1);
+                                    regs_tmp(8) := data(0);
                                     regs_wr <= '1';
-                                when "11" => -- 30h～38h の場合（Inst, Vol）
-                                    regs_tmp(23 downto 20) := data(7 downto 4); --  Inst
-                                    regs_tmp(19 downto 16) := data(3 downto 0); --  Vol
+                                when "11" =>
+                                    regs_tmp(23 downto 20) := data(7 downto 4);
+                                    regs_tmp(19 downto 16) := data(3 downto 0);
                                     regs_wr <='1';
                                 when others =>
                                     null;
@@ -390,31 +614,31 @@ begin   -- rtl
 
                 end if;
 
-            --------------------------------------------------------------------------
-            -- 4th stage (updating a register and voice parameters.)
-            --------------------------------------------------------------------------
+
+
+
             when "11" =>
 
-                -- output slot number (for explicit synchonization with other units).
-                -- slot_out <= slot;
 
-                -- updating insturument cache
+
+
+
                 inst_cache(conv_integer(slot)/2) <= conv_integer(regs_rdata(23 downto 20));
 
                 rhythm <= rflag(5);
 
-                -- updating rhythm status and key flag
+
                 if rflag(5) = '1' and 12 <= slot then
                     case slot is
-                        when "01100" | "01101" => -- bd
+                        when "01100" | "01101" =>
                             kflag := rflag(4);
-                        when "01110" =>                 -- hh
+                        when "01110" =>
                             kflag := rflag(0);
-                        when "01111" =>                 -- sd
+                        when "01111" =>
                             kflag := rflag(3);
-                        when "10000" =>                 -- tom
+                        when "10000" =>
                             kflag := rflag(2);
-                        when "10001" =>                 -- cym
+                        when "10001" =>
                             kflag := rflag(1);
                         when others => null;
                     end case;
@@ -424,7 +648,7 @@ begin   -- rtl
 
                 kflag := kflag or regs_rdata(12);
 
-                -- calculate key-scale attenuation amount.
+
                 kll := (("0"&kl_table(conv_integer(regs_rdata(8 downto 5))))
                          - ("0"&("111"-regs_rdata(11 downto 9))&"000")) & '0';
 
@@ -434,13 +658,13 @@ begin   -- rtl
                     kll := shr(kll, "11" - slot_voice_data.kl );
                 end if;
 
-                -- calculate base total level from volume register value.
-                if rflag(5) = '1' and (slot = "01110" or slot = "10000") then -- hh and cym
+
+                if rflag(5) = '1' and (slot = "01110" or slot = "10000") then
                     tll := ('0' & regs_rdata(23 downto 20) & "000");
                 elsif( slot(0) = '0' )then
-                    tll := ('0' & slot_voice_data.tl & '0'); -- mod
+                    tll := ('0' & slot_voice_data.tl & '0');
                 else
-                    tll := ('0' & regs_rdata(19 downto 16) & "000");         -- car
+                    tll := ('0' & regs_rdata(19 downto 16) & "000");
                 end if;
 
                 tll := tll + kll;
@@ -451,7 +675,7 @@ begin   -- rtl
                     tl <= tll(tl'range);
                 end if;
 
-                -- output rks, f-number, block and key-status.
+
                 fnum <= regs_rdata(8 downto 0);
                 blk <= regs_rdata(11 downto 9);
                 key <= kflag;
@@ -470,10 +694,10 @@ begin   -- rtl
                     end if;
                 end if;
 
-                -- output voice parameters
-                -- note that wf and fb output must keep its value
-                -- at least 3 clocks since the operator module will fetch
-                -- the wf and fb 2 clocks later of this stage.
+
+
+
+
                 am <= slot_voice_data.am;
                 pm <= slot_voice_data.pm;
                 ml <= slot_voice_data.ml;
@@ -485,14 +709,14 @@ begin   -- rtl
                 dr <= slot_voice_data.dr;
                 sl <= slot_voice_data.sl;
 
-                -- output release rate (depends on the sustine and envelope type).
-                if( kflag = '1' ) then -- key on
+
+                if( kflag = '1' ) then
                     if slot_voice_data.eg = '1' then
                         rr <= "0000";
                     else
                         rr <= slot_voice_data.rr;
                     end if;
-                else -- key off
+                else
                     if (slot(0) = '0') and not ( rflag(5) = '1' and (7 <= conv_integer(slot)/2) ) then
                         rr  <= "0000";
                     elsif regs_rdata(13) = '1' then
@@ -506,8 +730,22 @@ begin   -- rtl
 
             end case;
 
-        end if; end if;
+        end if;
 
-    end process;
+end if;
+end if;
+end process;
+
+
+    --  現在のスロットの音色データ読み出しアドレスラッチ (第１ステージ)
+
+
+    w_channel       <= slot( 4 downto 1 );
+--  w_is_carrier    <= slot( 0 );
+
+
+
+ss_rdata <= ss_local_data or ss_u_register_memory_data or ss_vmem_data;
+ss_initialized <= '1' and ss_u_register_memory_ready and ss_vmem_ready;
 
 end rtl;

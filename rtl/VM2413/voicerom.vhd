@@ -40,7 +40,7 @@ entity VoiceRom is
   port (
     clk    : in std_logic;
     addr : in VOICE_ID_TYPE;
-    data  : out VOICE_TYPE
+    data  : buffer VOICE_TYPE
   );
 end VoiceRom;
 

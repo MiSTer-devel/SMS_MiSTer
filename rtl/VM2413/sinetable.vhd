@@ -42,7 +42,7 @@ entity interpolate_mul is
     port (
         i0      : in    std_logic_vector(  8 downto 0 );    --  •„†–³‚µ 9bit (®”•” 0bit, ¬”•” 9bit)
         i1      : in    std_logic_vector( 11 downto 0 );    --  •„†•t‚«12bit (®”•” 8bit, ¬”•” 4bit)
-        o       : out   std_logic_vector( 13 downto 0 )     --  •„†•t‚« 7bit (®”•” 8bit, ¬”•” 6bit)
+        o       : buffer   std_logic_vector( 13 downto 0 )     --  •„†•t‚« 7bit (®”•” 8bit, ¬”•” 6bit)
     );
 end interpolate_mul;
 
@@ -60,14 +60,24 @@ library ieee;
     use ieee.std_logic_unsigned.all;
     use ieee.std_logic_arith.all;                           --  conv_integer()
 
+use ieee.std_logic_arith.conv_std_logic_vector;
 entity SineTable is
     port (
         clk     : in    std_logic;
         clkena  : in    std_logic;
         wf      : in    std_logic;
         addr    : in    std_logic_vector( 17 downto 0 );    --  ®”•” 9bit, ¬”•” 9bit
-        data    : out   std_logic_vector( 13 downto 0 )     --  ®”•” 8bit, ¬”•” 6bit
-    );
+        data    : buffer   std_logic_vector( 13 downto 0 )     --  ®”•” 8bit, ¬”•” 6bit
+    ;
+        -- FM savestate access: fixed-latency 32-bit interface; no emulated clock enables.
+        ss_hold : in std_logic := '0';
+        ss_addr : in std_logic_vector(7 downto 0) := (others=>'0');
+        ss_read : in std_logic := '0';
+        ss_write : in std_logic := '0';
+        ss_wdata : in std_logic_vector(31 downto 0) := (others=>'0');
+        ss_rdata : out std_logic_vector(31 downto 0);
+        ss_initialized : out std_logic
+);
 end SineTable;
 
 architecture rtl of sinetable is
@@ -76,7 +86,7 @@ architecture rtl of sinetable is
         port (
             i0      : in    std_logic_vector(  8 downto 0 );    --  •„†–³‚µ 9bit (®”•” 0bit, ¬”•” 9bit)
             i1      : in    std_logic_vector( 11 downto 0 );    --  •„†•t‚« 8bit (®”•” 8bit)
-            o       : out   std_logic_vector( 13 downto 0 )     --  •„†–³‚µ 7bit (®”•” 8bit)
+            o       : buffer   std_logic_vector( 13 downto 0 )     --  •„†–³‚µ 7bit (®”•” 8bit)
         );
     end component;
 
@@ -130,6 +140,8 @@ architecture rtl of sinetable is
     signal w_mul        : std_logic_vector( 13 downto 0 );  --  •„†•t‚«®”•” 8bit, ¬”•” 6bit
     signal w_inter      : std_logic_vector( 13 downto 0 );
     signal ff_data      : std_logic_vector( 13 downto 0 );
+    signal ss_local_data : std_logic_vector(31 downto 0) := (others=>'0');
+
 begin
 
     w_xor   <= (others => addr(16));
@@ -139,27 +151,93 @@ begin
                (addr( 15 downto 9 ) + 1) xor w_xor;
 
     --  ”gŒ`ƒƒ‚ƒŠ
-    process( clk )
-    begin
-        if rising_edge(clk) then
+    process(clk)
+
+
+
+
+
+
+variable ss_v_ff_data0 : std_logic_vector(10 downto 0);
+variable ss_v_ff_data1 : std_logic_vector(10 downto 0);
+variable ss_v_ff_sign : std_logic_vector(0 downto 0);
+variable ss_v_ff_wf : std_logic_vector(0 downto 0);
+variable ss_v_ff_weight : std_logic_vector(8 downto 0);
+variable ss_v_ff_data : std_logic_vector(13 downto 0);
+variable ss_response : std_logic_vector(31 downto 0);
+begin
+if rising_edge(clk) then
+
+ss_response := (others=>'0');
+if ss_hold='1' and (ss_read='1' or ss_write='1') then
+ss_v_ff_data0 := ff_data0;
+ss_v_ff_data1 := ff_data1;
+ss_v_ff_sign := (0 => ff_sign);
+ss_v_ff_wf := (0 => ff_wf);
+ss_v_ff_weight := ff_weight;
+ss_v_ff_data := ff_data;
+
+if ss_read='1' then
+case conv_integer(ss_addr) is
+when 98 =>
+ss_response(10 downto 0) := ff_data0(10 downto 0);
+ss_response(21 downto 11) := ff_data1(10 downto 0);
+ss_response(22) := ff_sign;
+ss_response(23) := ff_wf;
+when 99 =>
+ss_response(8 downto 0) := ff_weight(8 downto 0);
+ss_response(22 downto 9) := ff_data(13 downto 0);
+when others => null; end case;
+end if;
+if ss_write='1' then
+case conv_integer(ss_addr) is
+when 98 =>
+ss_v_ff_data0(10 downto 0) := ss_wdata(10 downto 0);
+ff_data0 <= ss_v_ff_data0;
+ss_v_ff_data1(10 downto 0) := ss_wdata(21 downto 11);
+ff_data1 <= ss_v_ff_data1;
+ss_v_ff_sign(0) := ss_wdata(22);
+ff_sign <= ss_v_ff_sign(0);
+ss_v_ff_wf(0) := ss_wdata(23);
+ff_wf <= ss_v_ff_wf(0);
+when 99 =>
+ss_v_ff_weight(8 downto 0) := ss_wdata(8 downto 0);
+ff_weight <= ss_v_ff_weight;
+ss_v_ff_data(13 downto 0) := ss_wdata(22 downto 9);
+ff_data <= ss_v_ff_data;
+when others => null; end case;
+end if;
+end if;
+ss_local_data <= ss_response;
+
+if ss_hold='0' then
+
             if( clkena = '1' )then
                 ff_data0 <= sin_data( conv_integer( w_addr0 ) );
                 ff_data1 <= sin_data( conv_integer( w_addr1 ) );
             end if;
-        end if;
-    end process;
 
-    --  Cüî•ñ‚Ì’x‰„i”gŒ`ƒƒ‚ƒŠ‚Ì“Ç‚Ýo‚µ’x‰„‚É‚ ‚í‚¹‚éj
-    process( clk )
-    begin
-        if rising_edge(clk) then
+
             if( clkena = '1' )then
                 ff_sign     <= addr(17);
                 ff_wf       <= wf and addr(17);
                 ff_weight   <= addr( 8 downto 0 );
             end if;
-        end if;
-    end process;
+
+
+            if( clkena = '1' )then
+
+                ff_data <= (ff_sign & w_inter(12 downto 0)) or w_wf;
+            end if;
+
+
+end if;
+end if;
+end process;
+
+
+    --  Cüî•ñ‚Ì’x‰„i”gŒ`ƒƒ‚ƒŠ‚Ì“Ç‚Ýo‚µ’x‰„‚É‚ ‚í‚¹‚éj
+
 
     --  •âŠÔ    (¦•„†‚ð‚Ü‚½‚ª‚éêŠ‚Å‚Í 0 ‚É‚È‚é‚©‚ç ff_sign ‚Í‹C‚É‚µ‚È‚¢j
     --  o = i0 * (1 - k) + i1 * w = i0 - w * i0 + w * i1 = i0 + w * (i1 - i0)
@@ -176,15 +254,7 @@ begin
     w_inter <= (ff_data0 & "00") + w_mul;   --  "00" ‚ÍŒ…‚ ‚í‚¹
     w_wf    <= (others => ff_wf);
 
-    process( clk )
-    begin
-        if rising_edge(clk) then
-            if( clkena = '1' )then
-                --  •âŠÔ‰‰ŽZ‚ÌŒ‹‰Ê‚ð‚¢‚Á‚½‚ñ FF ‚É“ü‚ê‚Ä‰‰ŽZ’x‰„‚ð‹zŽû
-                ff_data <= (ff_sign & w_inter(12 downto 0)) or w_wf;
-            end if;
-        end if;
-    end process;
+
 
     data <= ff_data;
 
@@ -211,4 +281,7 @@ begin
     --
     --  ƒAƒhƒŒƒXŽw’è‚³‚ê‚Ä‚©‚çA‚»‚ê‚É‘Î‰ž‚·‚é’l‚ª“¾‚ç‚ê‚é‚Ü‚Å 2cycle ‚Ì’x‰„
     --
+ss_rdata <= ss_local_data;
+ss_initialized <= '1';
+
 end rtl;
